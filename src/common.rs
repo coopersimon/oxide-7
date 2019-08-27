@@ -21,6 +21,9 @@ macro_rules! make24 {
     ($hi:expr, $lo:expr) => {
         (($hi as u32) << 16) | ($lo as u32)
     };
+    ($hi:expr, $mid:expr, $lo:expr) => {
+        (($hi as u32) << 16) | (($mid as u32) << 8) | ($lo as u32)
+    };
 }
 
 // Make a 16-bit value from two 8-bit values.
