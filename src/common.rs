@@ -22,3 +22,38 @@ macro_rules! make24 {
         (($hi as u32) << 16) | ($lo as u32)
     };
 }
+
+// Make a 16-bit value from two 8-bit values.
+macro_rules! make16 {
+    ($hi:expr, $lo:expr) => {
+        (($hi as u16) << 8) | ($lo as u16)
+    };
+}
+
+// Get the low byte of a 16-bit value.
+macro_rules! lo {
+    ($val:expr) => {
+        $val as u8
+    };
+}
+
+// Set the low byte of a 16-bit value.
+macro_rules! set_lo {
+    ($val:expr, $lo:expr) => {
+        ($val & 0xFF00) | ($lo as u16)
+    };
+}
+
+// Get the high byte of a 16-bit value.
+macro_rules! hi {
+    ($val:expr) => {
+        ($val >> 8) as u8
+    };
+}
+
+// Set the high byte of a 16-bit value.
+macro_rules! set_hi {
+    ($val:expr, $hi:expr) => {
+        ($val & 0x00FF) | (($hi as u16) << 8)
+    };
+}
