@@ -63,7 +63,7 @@ enum DataAddrMode {
 }
 
 // Addressing modes for branches and jumps
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum JumpAddrMode {
     Abs,
     AbsPtrPbr,
@@ -391,43 +391,48 @@ impl CPU {
 
             0xF4 => self.pe(Imm),       // PEA
             0xD4 => self.pe(Mode(Dir)), // PEI
-            0x62 => self.pe(Mode(Abs)), // PER
+            0x62 => self.per(),
 
-            0x48 => self.ph(self.a, Some(PFlags::M)),     // PHA
-            0xDA => self.ph(self.x, Some(PFlags::X)),     // PHX
-            0x5A => self.ph(self.y, Some(PFlags::X)),     // PHY
-            0x68 => self.a = self.pl(Some(PFlags::M)),    // PLA
-            0xFA => self.x = self.pl(Some(PFlags::X)),    // PLX
-            0x7A => self.y = self.pl(Some(PFlags::X)),    // PLY
+            0x48 => self.ph(self.a, self.is_m_set()),     // PHA
+            0xDA => self.ph(self.x, self.is_x_set()),     // PHX
+            0x5A => self.ph(self.y, self.is_x_set()),     // PHY
+            0x68 => self.a = self.pl(self.is_m_set()),    // PLA
+            0xFA => self.x = self.pl(self.is_x_set()),    // PLX
+            0x7A => self.y = self.pl(self.is_x_set()),    // PLY
 
-            0x8B => self.ph(self.db as u16, Some(PFlags::default())),       // PHB
-            0x0B => self.ph(self.dp, None),                                 // PHD
-            0x4B => self.ph(self.pb as u16, Some(PFlags::default())),       // PHK
-            0x08 => self.ph(self.p.bits() as u16, Some(PFlags::default())), // PHP
-            0xAB => self.db = self.pl(Some(PFlags::default())) as u8,                               // PLB
-            0x2B => self.dp = self.pl(None),                                                        // PLD
-            0x28 => self.p = PFlags::from_bits_truncate(self.pl(Some(PFlags::default())) as u8),    // PLP
+            0x8B => self.ph(self.db as u16, true),       // PHB
+            0x0B => self.ph(self.dp, false),             // PHD
+            0x4B => self.ph(self.pb as u16, true),       // PHK
+            0x08 => self.ph(self.p.bits() as u16, true), // PHP
+            0xAB => self.db = self.pl(false) as u8,      // PLB
+            0x2B => self.dp = self.pl(true),             // PLD
+            0x28 => self.p = PFlags::from_bits_truncate(self.pl(false) as u8),    // PLP
 
             0xDB => self.stp(),
             0xCB => self.wai(),
 
-            0xAA => self.x = self.transfer(self.a, Some(self.x), Some(PFlags::X)),  // TAX
-            0xA8 => self.y = self.transfer(self.a, Some(self.y), Some(PFlags::X)),  // TAY
-            0xBA => self.x = self.transfer(self.s, Some(self.x), Some(PFlags::X)),  // TSX
-            0x8A => self.a = self.transfer(self.x, Some(self.a), Some(PFlags::M)),  // TXA
-            0x9A => self.s = self.transfer(self.x, Some(0x0100), None),             // TXS
-            0x9B => self.y = self.transfer(self.x, Some(self.y), Some(PFlags::X)),  // TXY
-            0x98 => self.a = self.transfer(self.y, Some(self.a), Some(PFlags::M)),  // TYA
-            0xBB => self.x = self.transfer(self.y, Some(self.x), Some(PFlags::X)),  // TYX
+            0xAA => self.x = self.transfer(self.a, self.x, self.is_x_set(), true),  // TAX
+            0xA8 => self.y = self.transfer(self.a, self.y, self.is_x_set(), true),  // TAY
+            0xBA => self.x = self.transfer(self.s, self.x, self.is_x_set(), true),  // TSX
+            0x8A => self.a = self.transfer(self.x, self.a, self.is_m_set(), true),  // TXA
+            0x9A => self.s = self.transfer(self.x, 0, self.is_x_set() && !self.is_e_set(), false),  // TXS
+            0x9B => self.y = self.transfer(self.x, self.y, self.is_x_set(), true),  // TXY
+            0x98 => self.a = self.transfer(self.y, self.a, self.is_m_set(), true),  // TYA
+            0xBB => self.x = self.transfer(self.y, self.x, self.is_x_set(), true),  // TYX
 
-            0x5B => self.dp = self.transfer(self.a, None, Some(PFlags::M)), // TCD
-            0x1B => self.s = self.transfer(self.a, Some(0x0100), None),     // TCS
-            0x7B => self.a = self.transfer(self.dp, None, Some(PFlags::M)), // TDC
-            0x3B => self.a = self.transfer(self.s, None, Some(PFlags::M)),  // TSC
+            0x5B => self.dp = self.transfer(self.a, 0, false, true),                // TCD
+            0x1B => self.s = self.transfer(self.a, 0x0100, self.is_e_set(), false), // TCS
+            0x7B => self.a = self.transfer(self.dp, 0, false, true),                // TDC
+            0x3B => self.a = self.transfer(self.s, 0, false, true),                 // TSC
 
             0xEB => self.xba(),
             0xFB => self.xce(),
         }
+    }
+
+    // Clock
+    fn clock_inc(&mut self) {
+
     }
 }
 
@@ -435,10 +440,10 @@ impl CPU {
 impl CPU {
     // TODO: bcd mode.
     fn adc(&mut self, data_mode: DataMode) {
-        let op = self.read_op(data_mode, PFlags::M);
+        let op = self.read_op(data_mode, self.is_m_set());
         let result = self.a.wrapping_add(op).wrapping_add((self.p & PFlags::C).bits() as u16);
 
-        self.a = if self.p.contains(PFlags::M) {
+        self.a = if self.is_m_set() {
             let result8 = result & 0xFF;
             let full_wraparound = (result8 == self.a) && (op != 0);
             self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
@@ -459,10 +464,10 @@ impl CPU {
     }
 
     fn sbc(&mut self, data_mode: DataMode) {
-        let op = self.read_op(data_mode, PFlags::M);
+        let op = self.read_op(data_mode, self.is_m_set());
         let result = self.a.wrapping_sub(op).wrapping_sub(1).wrapping_add((self.p & PFlags::C).bits() as u16);
 
-        self.a = if self.p.contains(PFlags::M) {
+        self.a = if self.is_m_set() {
             let result8 = result & 0xFF;
             let full_wraparound = (result8 == self.a) && (op != 0);
             self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
@@ -495,73 +500,73 @@ impl CPU {
     }
 
     fn dec(&mut self, data_mode: DataMode) {
-        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, self.is_m_set());
         let result = op.wrapping_sub(1);
 
-        let data = self.set_nz(result, self.p.contains(PFlags::M));
+        let data = self.set_nz(result, self.is_m_set());
 
-        self.write_op(data, write_mode, PFlags::M);
+        self.write_op(data, write_mode, self.is_m_set());
     }
 
     fn dex(&mut self) {
         let result = self.x.wrapping_sub(1);
 
-        self.x = self.set_nz(result, self.p.contains(PFlags::X));
+        self.x = self.set_nz(result, self.is_x_set());
     }
 
     fn dey(&mut self) {
         let result = self.y.wrapping_sub(1);
 
-        self.y = self.set_nz(result, self.p.contains(PFlags::X));
+        self.y = self.set_nz(result, self.is_x_set());
     }
 
     fn inc(&mut self, data_mode: DataMode) {
-        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, self.is_m_set());
         let result = op.wrapping_add(1);
 
-        let data = self.set_nz(result, self.p.contains(PFlags::M));
+        let data = self.set_nz(result, self.is_m_set());
 
-        self.write_op(data, write_mode, PFlags::M);
+        self.write_op(data, write_mode, self.is_m_set());
     }
 
     fn inx(&mut self) {
         let result = self.x.wrapping_add(1);
 
-        self.x = self.set_nz(result, self.p.contains(PFlags::X));
+        self.x = self.set_nz(result, self.is_x_set());
     }
 
     fn iny(&mut self) {
         let result = self.y.wrapping_add(1);
 
-        self.y = self.set_nz(result, self.p.contains(PFlags::X));
+        self.y = self.set_nz(result, self.is_x_set());
     }
 
     fn and(&mut self, data_mode: DataMode) {
-        let op = self.read_op(data_mode, PFlags::M);
+        let op = self.read_op(data_mode, self.is_m_set());
         let result = self.a & op;
 
-        self.a = self.set_nz(result, self.p.contains(PFlags::M));
+        self.a = self.set_nz(result, self.is_m_set());
     }
 
     fn eor(&mut self, data_mode: DataMode) {
-        let op = self.read_op(data_mode, PFlags::M);
+        let op = self.read_op(data_mode, self.is_m_set());
         let result = self.a ^ op;
 
-        self.a = self.set_nz(result, self.p.contains(PFlags::M));
+        self.a = self.set_nz(result, self.is_m_set());
     }
 
     fn ora(&mut self, data_mode: DataMode) {
-        let op = self.read_op(data_mode, PFlags::M);
+        let op = self.read_op(data_mode, self.is_m_set());
         let result = self.a | op;
 
-        self.a = self.set_nz(result, self.p.contains(PFlags::M));
+        self.a = self.set_nz(result, self.is_m_set());
     }
 
     fn bit(&mut self, data_mode: DataMode) {
-        let op = self.read_op(data_mode, PFlags::M);
+        let op = self.read_op(data_mode, self.is_m_set());
         let result = self.a & op;
 
-        if self.p.contains(PFlags::M) {
+        if self.is_m_set() {
             let result8 = result & 0xFF;
             self.p.set(PFlags::Z, result8 == 0);
 
@@ -586,88 +591,110 @@ impl CPU {
     }
 
     fn trb(&mut self, data_mode: DataMode) {
-        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, self.is_m_set());
         let result = self.a & op;
 
         self.set_z(result);
 
+        self.clock_inc();
+
         let write_data = op & (!self.a);
-        self.write_op(write_data, write_mode, PFlags::M);
+        self.write_op(write_data, write_mode, self.is_m_set());
     }
 
     fn tsb(&mut self, data_mode: DataMode) {
-        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, self.is_m_set());
         let result = self.a & op;
 
         self.set_z(result);
 
+        self.clock_inc();
+
         let write_data = op | self.a;
-        self.write_op(write_data, write_mode, PFlags::M);
+        self.write_op(write_data, write_mode, self.is_m_set());
     }
 
     fn asl(&mut self, data_mode: DataMode) {
-        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, self.is_m_set());
         let result = op << 1;
 
-        self.p.set(PFlags::C, if self.p.contains(PFlags::M) {
+        self.p.set(PFlags::C, if self.is_m_set() {
             (op & bit!(7, u16)) != 0
         } else {
             (op & bit!(15, u16)) != 0
         });
 
-        let write_data = self.set_nz(result, self.p.contains(PFlags::M));
-        self.write_op(write_data, write_mode, PFlags::M);
+        self.clock_inc();
+
+        let write_data = self.set_nz(result, self.is_m_set());
+        self.write_op(write_data, write_mode, self.is_m_set());
     }
 
     fn lsr(&mut self, data_mode: DataMode) {
-        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, self.is_m_set());
         let result = op >> 1;
 
         self.p.set(PFlags::C, (op & bit!(0, u16)) != 0);
 
-        let write_data = self.set_nz(result, self.p.contains(PFlags::M));
-        self.write_op(write_data, write_mode, PFlags::M);
+        self.clock_inc();
+
+        let write_data = self.set_nz(result, self.is_m_set());
+        self.write_op(write_data, write_mode, self.is_m_set());
     }
 
     fn rol(&mut self, data_mode: DataMode) {
-        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, self.is_m_set());
         let result = (op << 1) | ((self.p & PFlags::C).bits() as u16);
 
-        self.p.set(PFlags::C, if self.p.contains(PFlags::M) {
+        self.p.set(PFlags::C, if self.is_m_set() {
             (op & bit!(7, u16)) != 0
         } else {
             (op & bit!(15, u16)) != 0
         });
 
-        let write_data = self.set_nz(result, self.p.contains(PFlags::M));
-        self.write_op(write_data, write_mode, PFlags::M);
+        self.clock_inc();
+
+        let write_data = self.set_nz(result, self.is_m_set());
+        self.write_op(write_data, write_mode, self.is_m_set());
     }
 
     fn ror(&mut self, data_mode: DataMode) {
-        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
-        let carry = ((self.p & PFlags::C).bits() as u16) << (if self.p.contains(PFlags::M) {7} else {15});
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, self.is_m_set());
+        let carry = ((self.p & PFlags::C).bits() as u16) << (if self.is_m_set() {7} else {15});
         let result = (op >> 1) | carry;
 
         self.p.set(PFlags::C, (op & bit!(0, u16)) != 0);
 
-        let write_data = self.set_nz(result, self.p.contains(PFlags::M));
-        self.write_op(write_data, write_mode, PFlags::M);
+        self.clock_inc();
+
+        let write_data = self.set_nz(result, self.is_m_set());
+        self.write_op(write_data, write_mode, self.is_m_set());
     }
 }
 
 // Internal: Branch/Jump instructions
 impl CPU {
     fn branch(&mut self, flag_check: PFlags, set: bool) {
-        if self.p.contains(flag_check) == set {
-            let imm = (self.fetch() as i8) as i16;
+        let imm = (self.fetch() as i8) as i16;
 
-            self.pc = self.pc.wrapping_add(imm as u16);
+        if self.p.contains(flag_check) == set {
+            let pc = self.pc.wrapping_add(imm as u16);
+
+            if self.is_e_set() && (hi!(pc) != hi!(self.pc)) {
+                self.clock_inc();
+            }
+
+            self.clock_inc();
+
+            self.pc = pc;
         }
     }
 
     fn brl(&mut self) {
         let imm_lo = self.fetch();
         let imm_hi = self.fetch();
+
+        self.clock_inc();
 
         self.pc = self.pc.wrapping_add(make16!(imm_hi, imm_lo));
     }
@@ -688,6 +715,10 @@ impl CPU {
         let addr = self.get_jump_addr(addr_mode);
 
         let pc = self.pc.wrapping_sub(1);
+
+        if addr_mode != JumpAddrMode::AbsPtrXPbr {
+            self.clock_inc();
+        }
 
         match addr {
             Addr::Full(a) => {
@@ -710,6 +741,9 @@ impl CPU {
         let pc_hi = self.stack_pop();
         let pb = self.stack_pop();
 
+        self.clock_inc();
+        self.clock_inc();
+
         self.pc = make16!(pc_hi, pc_lo).wrapping_add(1);
         self.pb = pb;
     }
@@ -718,15 +752,19 @@ impl CPU {
         let pc_lo = self.stack_pop();
         let pc_hi = self.stack_pop();
 
+        self.clock_inc();
+        self.clock_inc();
+        self.clock_inc();
+
         self.pc = make16!(pc_hi, pc_lo).wrapping_add(1);
     }
 
     fn brk(&mut self) {
-
+        // TODO
     }
 
     fn cop(&mut self) {
-
+        // TODO
     }
 
     fn rti(&mut self) {
@@ -736,7 +774,10 @@ impl CPU {
 
         self.pc = make16!(pc_hi, pc_lo);
 
-        if !self.pe.contains(PFlags::E) {
+        self.clock_inc();
+        self.clock_inc();
+
+        if !self.is_e_set() {
             self.pb = self.stack_pop();
         }
     }
@@ -746,14 +787,16 @@ impl CPU {
 impl CPU {
     fn flag(&mut self, flag: PFlags, set: bool) {
         self.p.set(flag, set);
+        self.clock_inc();
     }
 
     fn rep(&mut self) {
         let imm = self.fetch();
 
         self.p &= PFlags::from_bits_truncate(!imm);
+        self.clock_inc();
 
-        if self.pe.contains(PFlags::E) {
+        if self.is_e_set() {
             self.p |= PFlags::M | PFlags::X;
         }
     }
@@ -762,22 +805,24 @@ impl CPU {
         let imm = self.fetch();
 
         self.p |= PFlags::from_bits_truncate(imm);
+        self.clock_inc();
     }
 
     fn nop(&mut self) {
-
+        self.clock_inc();
     }
 
     fn wdm(&mut self) {
         self.pc = self.pc.wrapping_add(1);
+        self.clock_inc();
     }
 
     fn stp(&mut self) {
-
+        // TODO
     }
 
     fn wai(&mut self) {
-
+        // TODO
     }
 
     fn xba(&mut self) {
@@ -791,7 +836,7 @@ impl CPU {
 
     fn xce(&mut self) {
         let c_set = self.p.contains(PFlags::C);
-        let e_set = self.pe.contains(PFlags::E);
+        let e_set = self.is_e_set();
         self.pe.set(PFlags::E, c_set);
         self.p.set(PFlags::C, e_set);
 
@@ -807,37 +852,37 @@ impl CPU {
 // Internal: Data moving ops
 impl CPU {
     fn lda(&mut self, data_mode: DataMode) {
-        let data = self.read_op(data_mode, PFlags::M);
+        let data = self.read_op(data_mode, self.is_m_set());
 
-        self.a = self.set_nz(data, self.p.contains(PFlags::M));
+        self.a = self.set_nz(data, self.is_m_set());
     }
 
     fn ldx(&mut self, data_mode: DataMode) {
-        let data = self.read_op(data_mode, PFlags::X);
+        let data = self.read_op(data_mode, self.is_x_set());
 
-        self.x = self.set_nz(data, self.p.contains(PFlags::X));
+        self.x = self.set_nz(data, self.is_x_set());
     }
 
     fn ldy(&mut self, data_mode: DataMode) {
-        let data = self.read_op(data_mode, PFlags::X);
+        let data = self.read_op(data_mode, self.is_x_set());
 
-        self.y = self.set_nz(data, self.p.contains(PFlags::X));
+        self.y = self.set_nz(data, self.is_x_set());
     }
 
     fn sta(&mut self, data_mode: DataMode) {
-        self.write_op(self.a, data_mode, PFlags::M);
+        self.write_op(self.a, data_mode, self.is_m_set());
     }
 
     fn stx(&mut self, data_mode: DataMode) {
-        self.write_op(self.x, data_mode, PFlags::X);
+        self.write_op(self.x, data_mode, self.is_x_set());
     }
 
     fn sty(&mut self, data_mode: DataMode) {
-        self.write_op(self.y, data_mode, PFlags::X);
+        self.write_op(self.y, data_mode, self.is_x_set());
     }
 
     fn stz(&mut self, data_mode: DataMode) {
-        self.write_op(0, data_mode, PFlags::M);
+        self.write_op(0, data_mode, self.is_m_set());
     }
 
     fn mvn(&mut self) {
@@ -854,6 +899,9 @@ impl CPU {
         self.y = self.y.wrapping_add(1);
 
         self.a = self.a.wrapping_sub(1);
+
+        self.clock_inc();
+        self.clock_inc();
 
         if self.a != 0xFFFF {
             self.pc = self.pc.wrapping_sub(3);
@@ -881,25 +929,36 @@ impl CPU {
     }
 
     fn pe(&mut self, data_mode: DataMode) {
-        let data = self.read_op(data_mode, PFlags::default());
+        let data = self.read_op(data_mode, true);
 
         self.stack_push(hi!(data));
         self.stack_push(lo!(data));
     }
 
-    fn ph(&mut self, reg: u16, flag_check: Option<PFlags>) {
-        if flag_check.map_or(false, |f| self.p.contains(f)) {
+    fn per(&mut self) {
+        let imm = self.immediate(true);
+
+        let data = self.pc.wrapping_add(imm);
+
+        self.clock_inc();
+
+        self.stack_push(hi!(data));
+        self.stack_push(lo!(data));
+    }
+
+    fn ph(&mut self, reg: u16, byte: bool) {
+        if byte {
             self.stack_push(reg as u8);
         } else {
             self.stack_push(hi!(reg));
             self.stack_push(lo!(reg));
         }
+
+        self.clock_inc();
     }
 
-    fn pl(&mut self, flag_check: Option<PFlags>) -> u16 {
-        let check = flag_check.map_or(false, |f| self.p.contains(f));
-
-        let reg = if check {
+    fn pl(&mut self, byte: bool) -> u16 {
+        let reg = if byte {
             self.stack_pop() as u16
         } else {
             let lo = self.stack_pop();
@@ -907,18 +966,20 @@ impl CPU {
             make16!(hi, lo)
         };
 
-        self.set_nz(reg, check)
+        self.clock_inc();
+
+        self.set_nz(reg, byte)
     }
 
-    fn transfer(&mut self, from: u16, to: Option<u16>, flag_check: Option<PFlags>) -> u16 {
-        let result = if let Some(flags) = flag_check {
-            self.set_nz(from, self.p.contains(flags))
+    fn transfer(&mut self, from: u16, to: u16, byte: bool, set_flags: bool) -> u16 {
+        let result = if set_flags {
+            self.set_nz(from, byte)
         } else {
             from
         };
 
-        if to.is_some() && flag_check.map_or_else(|| self.pe.contains(PFlags::E), |f| self.p.contains(f)) {
-            set_lo!(to.unwrap(), result)
+        if byte {
+            set_lo!(to, result)
         } else {
             result
         }
@@ -929,7 +990,7 @@ impl CPU {
 impl CPU {
     // Set N if high bit is 1, set Z if result is zero. Return 8 or 16 bit result.
     fn set_nz(&mut self, result: u16, byte: bool) -> u16 {
-        if byte {//flag_check.map_or(false, |f| self.p.contains(f)) {
+        if byte {
             let result8 = result & 0xFF;
             self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
             self.p.set(PFlags::Z, result8 == 0);
@@ -945,7 +1006,7 @@ impl CPU {
 
     // Set Z if result is zero. Always checks M flag.
     fn set_z(&mut self, result: u16) {
-        if self.p.contains(PFlags::M) {
+        if self.is_m_set() {
             let result8 = result & 0xFF;
             self.p.set(PFlags::Z, result8 == 0);
         } else {
@@ -955,7 +1016,7 @@ impl CPU {
 
     // Compare register with operand, and set flags accordingly.
     fn compare(&mut self, data_mode: DataMode, reg: u16, flag_check: PFlags) {
-        let op = self.read_op(data_mode, flag_check);
+        let op = self.read_op(data_mode, self.p.contains(flag_check));
         let result = reg.wrapping_sub(op);
 
         if self.p.contains(flag_check) {
@@ -969,17 +1030,31 @@ impl CPU {
             self.p.set(PFlags::C, result >= reg);
         }
     }
+
+    fn is_m_set(&self) -> bool {
+        self.p.contains(PFlags::M)
+    }
+
+    fn is_x_set(&self) -> bool {
+        self.p.contains(PFlags::X)
+    }
+
+    fn is_e_set(&self) -> bool {
+        self.pe.contains(PFlags::E)
+    }
 }
 
 // Internal: Memory and Addressing Micro-ops
 impl CPU {
     // Read a byte from the (data) bus.
-    fn read_data(&self, addr: u32) -> u8 {
+    fn read_data(&mut self, addr: u32) -> u8 {
+        self.clock_inc();
         self.mem.read(addr)
     }
 
     // Write a byte to the (data) bus.
     fn write_data(&mut self, addr: u32, data: u8) {
+        self.clock_inc();
         self.mem.write(addr, data);
     }
 
@@ -995,15 +1070,15 @@ impl CPU {
         self.s = self.s.wrapping_sub(1);
     }
 
-    // Read one or two bytes (based on the value of the M or X flag).
-    fn read_addr(&self, addr: Addr, flag_check: PFlags) -> u16 {
+    // Read one or two bytes.
+    fn read_addr(&mut self, addr: Addr, byte: bool) -> u16 {
         use self::Addr::*;
 
         match addr {
             Full(a) => {
                 let data_lo = self.read_data(a);
 
-                let data_hi = if !self.pe.contains(flag_check) {
+                let data_hi = if !byte {
                     self.read_data(a.wrapping_add(1))
                 } else { 0 };
                 
@@ -1013,7 +1088,7 @@ impl CPU {
                 let addr_lo = make24!(0, a);
                 let data_lo = self.read_data(addr_lo);
 
-                let data_hi = if !self.pe.contains(flag_check) {
+                let data_hi = if !byte {
                     let addr_hi = make24!(0, a.wrapping_add(1));
                     self.read_data(addr_hi)
                 } else { 0 };
@@ -1024,14 +1099,14 @@ impl CPU {
     }
 
     // Write one or two bytes (based on the value of the M or X flag).
-    fn write_addr(&mut self, data: u16, addr: Addr, flag_check: PFlags) {
+    fn write_addr(&mut self, data: u16, addr: Addr, byte: bool) {
         use self::Addr::*;
 
         match addr {
             Full(a) => {
                 self.write_data(a, lo!(data));
 
-                if !self.pe.contains(flag_check) {
+                if !byte {
                     self.write_data(a.wrapping_add(1), hi!(data));
                 }
             },
@@ -1039,7 +1114,7 @@ impl CPU {
                 let addr_lo = make24!(0, a);
                 self.write_data(addr_lo, lo!(data));
 
-                if !self.pe.contains(flag_check) {
+                if !byte {
                     let addr_hi = make24!(0, a.wrapping_add(1));
                     self.write_data(addr_hi, hi!(data));
                 }
@@ -1049,29 +1124,28 @@ impl CPU {
 
     // Fetch a byte from the PC.
     fn fetch(&mut self) -> u8 {
-        // Read mem
         let data = self.read_data(make24!(self.pb, self.pc));
         self.pc = self.pc.wrapping_add(1);
         data
     }
 
     // Get an operand using the specified data mode.
-    fn read_op(&mut self, data_mode: DataMode, flag_check: PFlags) -> u16 {
+    fn read_op(&mut self, data_mode: DataMode, byte: bool) -> u16 {
         use self::DataMode::*;
 
         match data_mode {
-            Imm => self.immediate(flag_check),
+            Imm => self.immediate(byte),
             Acc => self.a,
             Mode(m) => {
                 let addr = self.get_data_addr(m);
-                self.read_addr(addr, flag_check)
+                self.read_addr(addr, byte)
             },
             Known(_) => unreachable!() // In practice we never read from known addresses.
         }
     }
 
     // Get an operand using the specified data mode and return the address if an addressing mode was used.
-    fn read_op_and_addr_mode(&mut self, data_mode: DataMode, flag_check: PFlags) -> (u16, DataMode) {
+    fn read_op_and_addr_mode(&mut self, data_mode: DataMode, byte: bool) -> (u16, DataMode) {
         use self::DataMode::*;
 
         match data_mode {
@@ -1079,14 +1153,14 @@ impl CPU {
             Acc => (self.a, Acc),
             Mode(m) => {
                 let addr = self.get_data_addr(m);
-                (self.read_addr(addr, flag_check), Known(addr))
+                (self.read_addr(addr, byte), Known(addr))
             },
             Known(_) => unreachable!() // In practice we never read from known addresses.
         }
     }
 
     // Set an operand using the specified addressing mode.
-    fn write_op(&mut self, data: u16, data_mode: DataMode, flag_check: PFlags) {
+    fn write_op(&mut self, data: u16, data_mode: DataMode, byte: bool) {
         use self::DataMode::*;
 
         match data_mode {
@@ -1094,9 +1168,9 @@ impl CPU {
             Acc => self.a = data,
             Mode(m) => {
                 let addr = self.get_data_addr(m);
-                self.write_addr(data, addr, flag_check);
+                self.write_addr(data, addr, byte);
             },
-            Known(a) => self.write_addr(data, a, flag_check)
+            Known(a) => self.write_addr(data, a, byte)
         }
     }
 
@@ -1141,10 +1215,10 @@ impl CPU {
     // Addressing modes:
 
     // #$vvvv
-    fn immediate(&mut self, flag_check: PFlags) -> u16 {
+    fn immediate(&mut self, byte: bool) -> u16 {
         let imm_lo = self.fetch();
 
-        let imm_hi = if !self.p.contains(flag_check) {
+        let imm_hi = if !byte {
             self.fetch()
         } else { 0 };
 
@@ -1164,7 +1238,14 @@ impl CPU {
         let imm_lo = self.fetch();
         let imm_hi = self.fetch();
 
-        Addr::Full(make24!(self.db, imm_hi, imm_lo).wrapping_add(self.x as u32))
+        let abs_addr = make24!(self.db, imm_hi, imm_lo);
+        let addr = abs_addr.wrapping_add(self.x as u32);
+
+        if !self.is_x_set() || (self.is_x_set() && (abs_addr < addr)) {
+            self.clock_inc();
+        }
+
+        Addr::Full(addr)
     }
 
     // $vvvv, Y
@@ -1172,18 +1253,29 @@ impl CPU {
         let imm_lo = self.fetch();
         let imm_hi = self.fetch();
 
-        Addr::Full(make24!(self.db, imm_hi, imm_lo).wrapping_add(self.y as u32))
+        let abs_addr = make24!(self.db, imm_hi, imm_lo);
+        let addr = abs_addr.wrapping_add(self.y as u32);
+
+        if !self.is_x_set() || (self.is_x_set() && (abs_addr < addr)) {
+            self.clock_inc();
+        }
+
+        Addr::Full(addr)
     }
 
     // $vv
     fn direct(&mut self) -> Addr {
         let imm = self.fetch() as u16;
 
-        /*let addr = if self.pe.contains(PFlags::E) && (lo!(self.dp) == 0) {
-            set_hi!(self.dp, imm)
+        /*let addr = if self.is_e_set() && (lo!(self.dp) == 0) {
+            set_lo!(self.dp, imm)
         } else {
             self.dp.wrapping_add(imm as u16)
         };*/
+        if lo!(self.dp) != 0 {
+            self.clock_inc();
+        }
+
         Addr::ZeroBank(self.dp.wrapping_add(imm))
     }
 
@@ -1191,12 +1283,18 @@ impl CPU {
     fn direct_x(&mut self) -> Addr {
         let imm = self.fetch();
 
-        let addr = if self.pe.contains(PFlags::E) && (lo!(self.dp) == 0) {
+        let addr = if self.is_e_set() && (lo!(self.dp) == 0) {
             let addr_lo = (self.x as u8).wrapping_add(imm);
             set_lo!(self.dp, addr_lo)
         } else {
             self.dp.wrapping_add(self.x).wrapping_add(imm as u16)
         };
+
+        if lo!(self.dp) != 0 {
+            self.clock_inc();
+        }
+
+        self.clock_inc();
 
         Addr::ZeroBank(addr)
     }
@@ -1205,12 +1303,18 @@ impl CPU {
     fn direct_y(&mut self) -> Addr {
         let imm = self.fetch();
 
-        let addr = if self.pe.contains(PFlags::E) && (lo!(self.dp) == 0) {
+        let addr = if self.is_e_set() && (lo!(self.dp) == 0) {
             let addr_lo = (self.y as u8).wrapping_add(imm);
             set_lo!(self.dp, addr_lo)
         } else {
             self.dp.wrapping_add(self.y).wrapping_add(imm as u16)
         };
+
+        if lo!(self.dp) != 0 {
+            self.clock_inc();
+        }
+
+        self.clock_inc();
 
         Addr::ZeroBank(addr)
     }
@@ -1219,12 +1323,16 @@ impl CPU {
     fn direct_ptr_dbr(&mut self) -> Addr {
         let imm = self.fetch();
 
-        let (ptr_lo, ptr_hi) = if self.pe.contains(PFlags::E) && (lo!(self.dp) == 0) {
+        let (ptr_lo, ptr_hi) = if self.is_e_set() && (lo!(self.dp) == 0) {
             (set_lo!(self.dp, imm), set_lo!(self.dp, imm.wrapping_add(1)))
         } else {
             let ptr_lo = self.dp.wrapping_add(imm as u16);
             (ptr_lo, ptr_lo.wrapping_add(1))
         };
+
+        if lo!(self.dp) != 0 {
+            self.clock_inc();
+        }
 
         let addr_lo = self.read_data(make24!(0, ptr_lo));
         let addr_hi = self.read_data(make24!(0, ptr_hi));
@@ -1236,13 +1344,19 @@ impl CPU {
     fn direct_ptr_x_dbr(&mut self) -> Addr {
         let imm = self.fetch();
 
-        let (ptr_lo, ptr_hi) = if self.pe.contains(PFlags::E) && (lo!(self.dp) == 0) {
+        let (ptr_lo, ptr_hi) = if self.is_e_set() && (lo!(self.dp) == 0) {
             let ptr_addr_lo = (self.x as u8).wrapping_add(imm);
             (set_lo!(self.dp, ptr_addr_lo), set_lo!(self.dp, ptr_addr_lo.wrapping_add(1)))
         } else {
             let ptr_lo = self.dp.wrapping_add(self.x).wrapping_add(imm as u16);
             (ptr_lo, ptr_lo.wrapping_add(1))
         };
+
+        if lo!(self.dp) != 0 {
+            self.clock_inc();
+        }
+
+        self.clock_inc();
 
         let addr_lo = self.read_data(make24!(0, ptr_lo));
         let addr_hi = self.read_data(make24!(0, ptr_hi));
@@ -1254,17 +1368,28 @@ impl CPU {
     fn direct_ptr_dbr_y(&mut self) -> Addr {
         let imm = self.fetch();
 
-        let (ptr_lo, ptr_hi) = if self.pe.contains(PFlags::E) && (lo!(self.dp) == 0) {
+        let (ptr_lo, ptr_hi) = if self.is_e_set() && (lo!(self.dp) == 0) {
             (set_lo!(self.dp, imm), set_lo!(self.dp, imm.wrapping_add(1)))
         } else {
             let ptr_lo = self.dp.wrapping_add(imm as u16);
             (ptr_lo, ptr_lo.wrapping_add(1))
         };
 
+        if lo!(self.dp) != 0 {
+            self.clock_inc();
+        }
+
         let addr_lo = self.read_data(make24!(0, ptr_lo));
         let addr_hi = self.read_data(make24!(0, ptr_hi));
 
-        Addr::Full(make24!(self.db, addr_hi, addr_lo).wrapping_add(self.y as u32))
+        let addr = make24!(self.db, addr_hi, addr_lo);
+        let final_addr = addr.wrapping_add(self.y as u32);
+
+        if !self.is_x_set() || (self.is_x_set() && (addr < final_addr)) {
+            self.clock_inc();
+        }
+
+        Addr::Full(final_addr)
     }
 
     // [$vv]
@@ -1276,6 +1401,10 @@ impl CPU {
         let ptr_lo = make24!(0, ptr);
         let ptr_mid = make24!(0, ptr.wrapping_add(1));
         let ptr_hi = make24!(0, ptr.wrapping_add(2));
+
+        if lo!(self.dp) != 0 {
+            self.clock_inc();
+        }
 
         let addr_lo = self.read_data(ptr_lo);
         let addr_mid = self.read_data(ptr_mid);
@@ -1294,6 +1423,10 @@ impl CPU {
         let ptr_mid = make24!(0, ptr.wrapping_add(1));
         let ptr_hi = make24!(0, ptr.wrapping_add(2));
 
+        if lo!(self.dp) != 0 {
+            self.clock_inc();
+        }
+
         let addr_lo = self.read_data(ptr_lo);
         let addr_mid = self.read_data(ptr_mid);
         let addr_hi = self.read_data(ptr_hi);
@@ -1307,6 +1440,8 @@ impl CPU {
 
         let addr = self.s.wrapping_add(imm);
 
+        self.clock_inc();
+
         Addr::ZeroBank(addr)
     }
 
@@ -1318,6 +1453,9 @@ impl CPU {
 
         let ptr_lo = make24!(0, ptr);
         let ptr_hi = make24!(0, ptr.wrapping_add(1));
+
+        self.clock_inc();
+        self.clock_inc();
 
         let addr_lo = self.read_data(ptr_lo);
         let addr_hi = self.read_data(ptr_hi);
@@ -1376,6 +1514,8 @@ impl CPU {
 
         let ptr_lo = make24!(self.pb, ptr);
         let ptr_hi = make24!(self.pb, ptr.wrapping_add(1));
+
+        self.clock_inc();
 
         let addr_lo = self.read_data(ptr_lo);
         let addr_hi = self.read_data(ptr_hi);
