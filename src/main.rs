@@ -4,5 +4,9 @@ mod cpu;
 mod mem;
 
 fn main() {
-    println!("Hello, world!");
+    let mut cpu = cpu::CPU::new();
+
+    loop {
+        cpu.step();
+    }
 }

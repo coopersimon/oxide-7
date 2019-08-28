@@ -86,6 +86,9 @@ pub struct CPU {
     pe:     PFlags, // 6502 Emulator Processor Status
     pc:     u16,    // Program Counter
 
+    // Status
+    halt:   bool,
+
     // Memory
     mem:    MemBus
 }
@@ -95,18 +98,28 @@ impl CPU {
     // Create and initialise new CPU.
     pub fn new() -> Self {
         CPU {
-            a:  0,
-            x:  0,
-            y:  0,
-            s:  0,
-            db: 0,
-            dp: 0,
-            pb: 0,
-            p:  PFlags::default(),
-            pe: PFlags::default(),
-            pc: 0,
+            a:      0,
+            x:      0,
+            y:      0,
+            s:      0,
+            db:     0,
+            dp:     0,
+            pb:     0,
+            p:      PFlags::default(),
+            pe:     PFlags::default(),
+            pc:     0,
 
-            mem: MemBus::new()
+            halt:   false,
+
+            mem:    MemBus::new()
+        }
+    }
+
+    // A single step of the CPU.
+    // Executes an instruction and clocks other components.
+    pub fn step(&mut self) {
+        if !self.halt {
+            self.execute_instruction();
         }
     }
 }
@@ -717,7 +730,15 @@ impl CPU {
     }
 
     fn rti(&mut self) {
+        self.p = PFlags::from_bits_truncate(self.stack_pop());
+        let pc_lo = self.stack_pop();
+        let pc_hi = self.stack_pop();
 
+        self.pc = make16!(pc_hi, pc_lo);
+
+        if !self.pe.contains(PFlags::E) {
+            self.pb = self.stack_pop();
+        }
     }
 }
 
@@ -771,13 +792,14 @@ impl CPU {
     fn xce(&mut self) {
         let c_set = self.p.contains(PFlags::C);
         let e_set = self.pe.contains(PFlags::E);
-        self.pe.set(PFlags::E | PFlags::M | PFlags::X, c_set);
+        self.pe.set(PFlags::E, c_set);
         self.p.set(PFlags::C, e_set);
 
         if c_set {
-            self.x = 0 | (lo!(self.x) as u16);
-            self.y = 0 | (lo!(self.y) as u16);
-            self.s = 0x100 | (lo!(self.s) as u16);
+            self.p.insert(PFlags::M | PFlags::X);
+            self.x = set_hi!(self.x, 0);
+            self.y = set_hi!(self.y, 0);
+            self.s = set_hi!(self.s, 1);
         }
     }
 }
@@ -819,11 +841,43 @@ impl CPU {
     }
 
     fn mvn(&mut self) {
+        let src_bank = self.fetch();
+        let dst_bank = self.fetch();
 
+        let src_addr = make24!(src_bank, self.x);
+        let dst_addr = make24!(dst_bank, self.y);
+
+        let byte = self.read_data(src_addr);
+        self.write_data(dst_addr, byte);
+
+        self.x = self.x.wrapping_add(1);
+        self.y = self.y.wrapping_add(1);
+
+        self.a = self.a.wrapping_sub(1);
+
+        if self.a != 0xFFFF {
+            self.pc = self.pc.wrapping_sub(3);
+        }
     }
 
     fn mvp(&mut self) {
+        let src_bank = self.fetch();
+        let dst_bank = self.fetch();
 
+        let src_addr = make24!(src_bank, self.x);
+        let dst_addr = make24!(dst_bank, self.y);
+
+        let byte = self.read_data(src_addr);
+        self.write_data(dst_addr, byte);
+
+        self.x = self.x.wrapping_sub(1);
+        self.y = self.y.wrapping_sub(1);
+
+        self.a = self.a.wrapping_sub(1);
+
+        if self.a != 0xFFFF {
+            self.pc = self.pc.wrapping_sub(3);
+        }
     }
 
     fn pe(&mut self, data_mode: DataMode) {
@@ -864,7 +918,7 @@ impl CPU {
         };
 
         if to.is_some() && flag_check.map_or_else(|| self.pe.contains(PFlags::E), |f| self.p.contains(f)) {
-            (to.unwrap() & 0xFF00) | result
+            set_lo!(to.unwrap(), result)
         } else {
             result
         }
@@ -1076,7 +1130,7 @@ impl CPU {
         use self::JumpAddrMode::*;
 
         match addr_mode {
-            AbsPbr      => self.absolute_pbr(),
+            Abs         => self.absolute_pbr(),
             AbsPtrPbr   => self.absolute_ptr_pbr(),
             AbsPtrXPbr  => self.absolute_ptr_x_pbr(),
             AbsPtr      => self.absolute_ptr(),
