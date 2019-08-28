@@ -29,7 +29,7 @@ bitflags! {
 enum DataMode {
     Imm,                // Immediate data after the instruction
     Acc,                // Accumulator data
-    Unknown(AddrMode),  // Find the address using the given Addressing mode
+    Mode(AddrMode),     // Find the address using the given Addressing mode
     Known(Addr)         // Use the address provided
 }
 
@@ -111,60 +111,159 @@ impl CPU {
         let instr = self.fetch();
 
         match instr {
-            0x61 => self.adc(Unknown(DirPtrXDBR)),
-            0x63 => self.adc(Unknown(Stack)),
-            0x65 => self.adc(Unknown(Dir)),
-            0x67 => self.adc(Unknown(DirPtr)),
+            0x61 => self.adc(Mode(DirPtrXDBR)),
+            0x63 => self.adc(Mode(Stack)),
+            0x65 => self.adc(Mode(Dir)),
+            0x67 => self.adc(Mode(DirPtr)),
             0x69 => self.adc(Imm),
-            0x6D => self.adc(Unknown(Abs)),
-            0x6F => self.adc(Unknown(Long)),
-            0x71 => self.adc(Unknown(DirPtrDBRY)),
-            0x72 => self.adc(Unknown(DirPtrDBR)),
-            0x73 => self.adc(Unknown(StackPtrDBRY)),
-            0x75 => self.adc(Unknown(DirX)),
-            0x77 => self.adc(Unknown(DirPtrY)),
-            0x79 => self.adc(Unknown(AbsY)),
-            0x7D => self.adc(Unknown(AbsX)),
-            0x7F => self.adc(Unknown(LongX)),
+            0x6D => self.adc(Mode(Abs)),
+            0x6F => self.adc(Mode(Long)),
+            0x71 => self.adc(Mode(DirPtrDBRY)),
+            0x72 => self.adc(Mode(DirPtrDBR)),
+            0x73 => self.adc(Mode(StackPtrDBRY)),
+            0x75 => self.adc(Mode(DirX)),
+            0x77 => self.adc(Mode(DirPtrY)),
+            0x79 => self.adc(Mode(AbsY)),
+            0x7D => self.adc(Mode(AbsX)),
+            0x7F => self.adc(Mode(LongX)),
 
-            0xE1 => self.sbc(Unknown(DirPtrXDBR)),
-            0xE3 => self.sbc(Unknown(Stack)),
-            0xE5 => self.sbc(Unknown(Dir)),
-            0xE7 => self.sbc(Unknown(DirPtr)),
+            0xE1 => self.sbc(Mode(DirPtrXDBR)),
+            0xE3 => self.sbc(Mode(Stack)),
+            0xE5 => self.sbc(Mode(Dir)),
+            0xE7 => self.sbc(Mode(DirPtr)),
             0xE9 => self.sbc(Imm),
-            0xED => self.sbc(Unknown(Abs)),
-            0xEF => self.sbc(Unknown(Long)),
-            0xF1 => self.sbc(Unknown(DirPtrDBRY)),
-            0xF2 => self.sbc(Unknown(DirPtrDBR)),
-            0xF3 => self.sbc(Unknown(StackPtrDBRY)),
-            0xF5 => self.sbc(Unknown(DirX)),
-            0xF7 => self.sbc(Unknown(DirPtrY)),
-            0xF9 => self.sbc(Unknown(AbsY)),
-            0xFD => self.sbc(Unknown(AbsX)),
-            0xFF => self.sbc(Unknown(LongX)),
+            0xED => self.sbc(Mode(Abs)),
+            0xEF => self.sbc(Mode(Long)),
+            0xF1 => self.sbc(Mode(DirPtrDBRY)),
+            0xF2 => self.sbc(Mode(DirPtrDBR)),
+            0xF3 => self.sbc(Mode(StackPtrDBRY)),
+            0xF5 => self.sbc(Mode(DirX)),
+            0xF7 => self.sbc(Mode(DirPtrY)),
+            0xF9 => self.sbc(Mode(AbsY)),
+            0xFD => self.sbc(Mode(AbsX)),
+            0xFF => self.sbc(Mode(LongX)),
 
-            0xC1 => self.cmp(Unknown(DirPtrXDBR)),
-            0xC3 => self.cmp(Unknown(Stack)),
-            0xC5 => self.cmp(Unknown(Dir)),
-            0xC7 => self.cmp(Unknown(DirPtr)),
+            0xC1 => self.cmp(Mode(DirPtrXDBR)),
+            0xC3 => self.cmp(Mode(Stack)),
+            0xC5 => self.cmp(Mode(Dir)),
+            0xC7 => self.cmp(Mode(DirPtr)),
             0xC9 => self.cmp(Imm),
-            0xCD => self.cmp(Unknown(Abs)),
-            0xCF => self.cmp(Unknown(Long)),
-            0xD1 => self.cmp(Unknown(DirPtrDBRY)),
-            0xD2 => self.cmp(Unknown(DirPtrDBR)),
-            0xD3 => self.cmp(Unknown(StackPtrDBRY)),
-            0xD5 => self.cmp(Unknown(DirX)),
-            0xD7 => self.cmp(Unknown(DirPtrY)),
-            0xD9 => self.cmp(Unknown(AbsY)),
-            0xDD => self.cmp(Unknown(AbsX)),
-            0xDF => self.cmp(Unknown(LongX)),
+            0xCD => self.cmp(Mode(Abs)),
+            0xCF => self.cmp(Mode(Long)),
+            0xD1 => self.cmp(Mode(DirPtrDBRY)),
+            0xD2 => self.cmp(Mode(DirPtrDBR)),
+            0xD3 => self.cmp(Mode(StackPtrDBRY)),
+            0xD5 => self.cmp(Mode(DirX)),
+            0xD7 => self.cmp(Mode(DirPtrY)),
+            0xD9 => self.cmp(Mode(AbsY)),
+            0xDD => self.cmp(Mode(AbsX)),
+            0xDF => self.cmp(Mode(LongX)),
 
             0xE0 => self.cpx(Imm),
-            0xE4 => self.cpx(Unknown(Dir)),
-            0xEC => self.cpx(Unknown(Abs)),
+            0xE4 => self.cpx(Mode(Dir)),
+            0xEC => self.cpx(Mode(Abs)),
             0xC0 => self.cpy(Imm),
-            0xC4 => self.cpy(Unknown(Dir)),
-            0xCC => self.cpy(Unknown(Abs)),
+            0xC4 => self.cpy(Mode(Dir)),
+            0xCC => self.cpy(Mode(Abs)),
+
+            0x3A => self.dec(Acc),
+            0xC6 => self.dec(Mode(Dir)),
+            0xCE => self.dec(Mode(Abs)),
+            0xD6 => self.dec(Mode(DirX)),
+            0xDE => self.dec(Mode(AbsX)),
+            0xCA => self.dex(),
+            0x88 => self.dey(),
+            0x1A => self.inc(Acc),
+            0xE6 => self.inc(Mode(Dir)),
+            0xEE => self.inc(Mode(Abs)),
+            0xF6 => self.inc(Mode(DirX)),
+            0xFE => self.inc(Mode(AbsX)),
+            0xE8 => self.inx(),
+            0xC8 => self.iny(),
+
+            0x21 => self.and(Mode(DirPtrXDBR)),
+            0x23 => self.and(Mode(Stack)),
+            0x25 => self.and(Mode(Dir)),
+            0x27 => self.and(Mode(DirPtr)),
+            0x29 => self.and(Imm),
+            0x2D => self.and(Mode(Abs)),
+            0x2F => self.and(Mode(Long)),
+            0x31 => self.and(Mode(DirPtrDBRY)),
+            0x32 => self.and(Mode(DirPtrDBR)),
+            0x33 => self.and(Mode(StackPtrDBRY)),
+            0x35 => self.and(Mode(DirX)),
+            0x37 => self.and(Mode(DirPtrY)),
+            0x39 => self.and(Mode(AbsY)),
+            0x3D => self.and(Mode(AbsX)),
+            0x3F => self.and(Mode(LongX)),
+
+            0x41 => self.eor(Mode(DirPtrXDBR)),
+            0x43 => self.eor(Mode(Stack)),
+            0x45 => self.eor(Mode(Dir)),
+            0x47 => self.eor(Mode(DirPtr)),
+            0x49 => self.eor(Imm),
+            0x4D => self.eor(Mode(Abs)),
+            0x4F => self.eor(Mode(Long)),
+            0x51 => self.eor(Mode(DirPtrDBRY)),
+            0x52 => self.eor(Mode(DirPtrDBR)),
+            0x53 => self.eor(Mode(StackPtrDBRY)),
+            0x55 => self.eor(Mode(DirX)),
+            0x57 => self.eor(Mode(DirPtrY)),
+            0x59 => self.eor(Mode(AbsY)),
+            0x5D => self.eor(Mode(AbsX)),
+            0x5F => self.eor(Mode(LongX)),
+
+            0x01 => self.ora(Mode(DirPtrXDBR)),
+            0x03 => self.ora(Mode(Stack)),
+            0x05 => self.ora(Mode(Dir)),
+            0x07 => self.ora(Mode(DirPtr)),
+            0x09 => self.ora(Imm),
+            0x0D => self.ora(Mode(Abs)),
+            0x0F => self.ora(Mode(Long)),
+            0x11 => self.ora(Mode(DirPtrDBRY)),
+            0x12 => self.ora(Mode(DirPtrDBR)),
+            0x13 => self.ora(Mode(StackPtrDBRY)),
+            0x15 => self.ora(Mode(DirX)),
+            0x17 => self.ora(Mode(DirPtrY)),
+            0x19 => self.ora(Mode(AbsY)),
+            0x1D => self.ora(Mode(AbsX)),
+            0x1F => self.ora(Mode(LongX)),
+
+            0x24 => self.bit(Mode(Dir)),
+            0x2C => self.bit(Mode(Abs)),
+            0x34 => self.bit(Mode(DirX)),
+            0x3C => self.bit(Mode(AbsX)),
+            0x89 => self.bit(Imm),
+
+            0x14 => self.trb(Mode(Dir)),
+            0x1C => self.trb(Mode(Abs)),
+            0x04 => self.tsb(Mode(Dir)),
+            0x0C => self.tsb(Mode(Abs)),
+
+            0x06 => self.asl(Mode(Dir)),
+            0x0A => self.asl(Acc),
+            0x0E => self.asl(Mode(Abs)),
+            0x16 => self.asl(Mode(DirX)),
+            0x1E => self.asl(Mode(AbsX)),
+
+            0x46 => self.lsr(Mode(Dir)),
+            0x4A => self.lsr(Acc),
+            0x4E => self.lsr(Mode(Abs)),
+            0x56 => self.lsr(Mode(DirX)),
+            0x5E => self.lsr(Mode(AbsX)),
+
+            0x26 => self.rol(Mode(Dir)),
+            0x2A => self.rol(Acc),
+            0x2E => self.rol(Mode(Abs)),
+            0x36 => self.rol(Mode(DirX)),
+            0x3E => self.rol(Mode(AbsX)),
+
+            0x66 => self.ror(Mode(Dir)),
+            0x6A => self.ror(Acc),
+            0x6E => self.ror(Mode(Abs)),
+            0x76 => self.ror(Mode(DirX)),
+            0x7E => self.ror(Mode(AbsX)),
+
             _ => unreachable!()
         }
     }
@@ -221,22 +320,6 @@ impl CPU {
         };
     }
 
-    fn compare(&mut self, data_mode: DataMode, reg: u16, flag_check: PFlags) {
-        let op = self.read_op(data_mode, flag_check);
-        let result = reg.wrapping_sub(op);
-
-        if self.p.contains(flag_check) {
-            let result8 = result & 0xFF;
-            self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
-            self.p.set(PFlags::Z, result8 == 0);
-            self.p.set(PFlags::C, result8 >= reg);
-        } else {
-            self.p.set(PFlags::N, (result & bit!(15, u16)) != 0);
-            self.p.set(PFlags::Z, result == 0);
-            self.p.set(PFlags::C, result >= reg);
-        }
-    }
-
     fn cmp(&mut self, data_mode: DataMode) {
         let reg = self.a;
         self.compare(data_mode, reg, PFlags::M)
@@ -253,110 +336,171 @@ impl CPU {
     }
 
     fn dec(&mut self, data_mode: DataMode) {
-        let (op, write_addr) = self.read_op_and_addr(data_mode, PFlags::M);
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
         let result = op.wrapping_sub(1);
 
-        let data = if self.p.contains(PFlags::M) {
-            let result8 = result & 0xFF;
-            self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
-            self.p.set(PFlags::Z, result8 == 0);
+        let data = self.set_nz(result, PFlags::M);
 
-            result8
-        } else {
-            self.p.set(PFlags::N, (result & bit!(15, u16)) != 0);
-            self.p.set(PFlags::Z, result == 0);
-
-            result
-        };
-
-        let write_data_mode = if let Some(addr) = write_addr {
-            DataMode::Known(addr)
-        } else {
-            data_mode
-        };
-        self.write_op(data, write_data_mode, PFlags::M);
+        self.write_op(data, write_mode, PFlags::M);
     }
 
     fn dex(&mut self) {
         let result = self.x.wrapping_sub(1);
 
-        self.x = if self.p.contains(PFlags::X) {
-            let result8 = result & 0xFF;
-            self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
-            self.p.set(PFlags::Z, result8 == 0);
-
-            result8
-        } else {
-            self.p.set(PFlags::N, (result & bit!(15, u16)) != 0);
-            self.p.set(PFlags::Z, result == 0);
-
-            result
-        };
+        self.x = self.set_nz(result, PFlags::X);
     }
 
     fn dey(&mut self) {
         let result = self.y.wrapping_sub(1);
 
-        self.y = if self.p.contains(PFlags::X) {
-            let result8 = result & 0xFF;
-            self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
-            self.p.set(PFlags::Z, result8 == 0);
-
-            result8
-        } else {
-            self.p.set(PFlags::N, (result & bit!(15, u16)) != 0);
-            self.p.set(PFlags::Z, result == 0);
-
-            result
-        };
+        self.y = self.set_nz(result, PFlags::X);
     }
 
     fn inc(&mut self, data_mode: DataMode) {
-        let (op, write_addr) = self.read_op_and_addr(data_mode, PFlags::M);
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
         let result = op.wrapping_add(1);
 
-        let data = if self.p.contains(PFlags::M) {
-            let result8 = result & 0xFF;
-            self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
-            self.p.set(PFlags::Z, result8 == 0);
+        let data = self.set_nz(result, PFlags::M);
 
-            result8
-        } else {
-            self.p.set(PFlags::N, (result & bit!(15, u16)) != 0);
-            self.p.set(PFlags::Z, result == 0);
-
-            result
-        };
-
-        let write_data_mode = if let Some(addr) = write_addr {
-            DataMode::Known(addr)
-        } else {
-            data_mode
-        };
-        self.write_op(data, write_data_mode, PFlags::M);
+        self.write_op(data, write_mode, PFlags::M);
     }
 
     fn inx(&mut self) {
         let result = self.x.wrapping_add(1);
 
-        self.x = if self.p.contains(PFlags::X) {
-            let result8 = result & 0xFF;
-            self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
-            self.p.set(PFlags::Z, result8 == 0);
-
-            result8
-        } else {
-            self.p.set(PFlags::N, (result & bit!(15, u16)) != 0);
-            self.p.set(PFlags::Z, result == 0);
-
-            result
-        };
+        self.x = self.set_nz(result, PFlags::X);
     }
 
     fn iny(&mut self) {
         let result = self.y.wrapping_add(1);
 
-        self.y = if self.p.contains(PFlags::X) {
+        self.y = self.set_nz(result, PFlags::X);
+    }
+
+    fn and(&mut self, data_mode: DataMode) {
+        let op = self.read_op(data_mode, PFlags::M);
+        let result = self.a & op;
+
+        self.a = self.set_nz(result, PFlags::M);
+    }
+
+    fn eor(&mut self, data_mode: DataMode) {
+        let op = self.read_op(data_mode, PFlags::M);
+        let result = self.a ^ op;
+
+        self.a = self.set_nz(result, PFlags::M);
+    }
+
+    fn ora(&mut self, data_mode: DataMode) {
+        let op = self.read_op(data_mode, PFlags::M);
+        let result = self.a | op;
+
+        self.a = self.set_nz(result, PFlags::M);
+    }
+
+    fn bit(&mut self, data_mode: DataMode) {
+        let op = self.read_op(data_mode, PFlags::M);
+        let result = self.a & op;
+
+        if self.p.contains(PFlags::M) {
+            let result8 = result & 0xFF;
+            self.p.set(PFlags::Z, result8 == 0);
+
+            match data_mode {
+                DataMode::Imm => {},
+                _ => {
+                    self.p.set(PFlags::N, (op & bit!(7, u16)) != 0);
+                    self.p.set(PFlags::V, (op & bit!(6, u16)) != 0);
+                }
+            }
+        } else {
+            self.p.set(PFlags::Z, result == 0);
+
+            match data_mode {
+                DataMode::Imm => {},
+                _ => {
+                    self.p.set(PFlags::N, (op & bit!(15, u16)) != 0);
+                    self.p.set(PFlags::V, (op & bit!(14, u16)) != 0);
+                }
+            }
+        }
+    }
+
+    fn trb(&mut self, data_mode: DataMode) {
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
+        let result = self.a & op;
+
+        self.set_z(result);
+
+        let write_data = op & (!self.a);
+        self.write_op(write_data, write_mode, PFlags::M);
+    }
+
+    fn tsb(&mut self, data_mode: DataMode) {
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
+        let result = self.a & op;
+
+        self.set_z(result);
+
+        let write_data = op | self.a;
+        self.write_op(write_data, write_mode, PFlags::M);
+    }
+
+    fn asl(&mut self, data_mode: DataMode) {
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
+        let result = op << 1;
+
+        self.p.set(PFlags::C, if self.p.contains(PFlags::M) {
+            (op & bit!(7, u16)) != 0
+        } else {
+            (op & bit!(15, u16)) != 0
+        });
+
+        let write_data = self.set_nz(result, PFlags::M);
+        self.write_op(write_data, write_mode, PFlags::M);
+    }
+
+    fn lsr(&mut self, data_mode: DataMode) {
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
+        let result = op >> 1;
+
+        self.p.set(PFlags::C, (op & bit!(0, u16)) != 0);
+
+        let write_data = self.set_nz(result, PFlags::M);
+        self.write_op(write_data, write_mode, PFlags::M);
+    }
+
+    fn rol(&mut self, data_mode: DataMode) {
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
+        let result = (op << 1) | ((self.p & PFlags::C).bits() as u16);
+
+        self.p.set(PFlags::C, if self.p.contains(PFlags::M) {
+            (op & bit!(7, u16)) != 0
+        } else {
+            (op & bit!(15, u16)) != 0
+        });
+
+        let write_data = self.set_nz(result, PFlags::M);
+        self.write_op(write_data, write_mode, PFlags::M);
+    }
+
+    fn ror(&mut self, data_mode: DataMode) {
+        let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
+        let carry = ((self.p & PFlags::C).bits() as u16) << (if self.p.contains(PFlags::M) {7} else {15});
+        let result = (op >> 1) | carry;
+
+        self.p.set(PFlags::C, (op & bit!(0, u16)) != 0);
+
+        let write_data = self.set_nz(result, PFlags::M);
+        self.write_op(write_data, write_mode, PFlags::M);
+    }
+}
+
+// Internal: Data and Flag setting Micro-ops
+impl CPU {
+    // Set N if high bit is 1, set Z if result is zero. Return 8 or 16 bit result.
+    fn set_nz(&mut self, result: u16, flag_check: PFlags) -> u16 {
+        if self.p.contains(flag_check) {
             let result8 = result & 0xFF;
             self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
             self.p.set(PFlags::Z, result8 == 0);
@@ -367,7 +511,34 @@ impl CPU {
             self.p.set(PFlags::Z, result == 0);
 
             result
-        };
+        }
+    }
+
+    // Set Z if result is zero. Always checks M flag.
+    fn set_z(&mut self, result: u16) {
+        if self.p.contains(PFlags::M) {
+            let result8 = result & 0xFF;
+            self.p.set(PFlags::Z, result8 == 0);
+        } else {
+            self.p.set(PFlags::Z, result == 0);
+        }
+    }
+
+    // Compare register with operand, and set flags accordingly.
+    fn compare(&mut self, data_mode: DataMode, reg: u16, flag_check: PFlags) {
+        let op = self.read_op(data_mode, flag_check);
+        let result = reg.wrapping_sub(op);
+
+        if self.p.contains(flag_check) {
+            let result8 = result & 0xFF;
+            self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
+            self.p.set(PFlags::Z, result8 == 0);
+            self.p.set(PFlags::C, result8 >= reg);
+        } else {
+            self.p.set(PFlags::N, (result & bit!(15, u16)) != 0);
+            self.p.set(PFlags::Z, result == 0);
+            self.p.set(PFlags::C, result >= reg);
+        }
     }
 }
 
@@ -450,7 +621,7 @@ impl CPU {
         match data_mode {
             Imm => self.immediate(flag_check),
             Acc => self.a,
-            Unknown(m) => {
+            Mode(m) => {
                 let addr = self.get_addr(m);
                 self.read_addr(addr, flag_check)
             },
@@ -459,15 +630,15 @@ impl CPU {
     }
 
     // Get an operand using the specified data mode and return the address if an addressing mode was used.
-    fn read_op_and_addr(&mut self, data_mode: DataMode, flag_check: PFlags) -> (u16, Option<Addr>) {
+    fn read_op_and_addr_mode(&mut self, data_mode: DataMode, flag_check: PFlags) -> (u16, DataMode) {
         use self::DataMode::*;
 
         match data_mode {
-            Imm => (self.immediate(flag_check), None),
-            Acc => (self.a, None),
-            Unknown(m) => {
+            Imm => (self.immediate(flag_check), Imm),   // TODO: is this ever used?
+            Acc => (self.a, Acc),
+            Mode(m) => {
                 let addr = self.get_addr(m);
-                (self.read_addr(addr, flag_check), Some(addr))
+                (self.read_addr(addr, flag_check), Known(addr))
             },
             Known(_) => unreachable!() // In practice we never read from known addresses.
         }
@@ -480,7 +651,7 @@ impl CPU {
         match data_mode {
             Imm => unreachable!(),  // We can't write to immediate data.
             Acc => self.a = data,
-            Unknown(m) => {
+            Mode(m) => {
                 let addr = self.get_addr(m);
                 self.write_addr(data, addr, flag_check);
             },
