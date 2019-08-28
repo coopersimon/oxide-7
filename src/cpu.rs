@@ -24,18 +24,25 @@ bitflags! {
     }
 }
 
+// Addresses
+#[derive(Clone, Copy)]
+enum Addr {
+    Full(u32),      // A full, wrapping, 24-bit address.
+    ZeroBank(u16)   // A 16-bit address that wraps at bank boundaries.
+}
+
 // Data modes
 #[derive(Clone, Copy)]
 enum DataMode {
     Imm,                // Immediate data after the instruction
     Acc,                // Accumulator data
-    Mode(AddrMode),     // Find the address using the given Addressing mode
+    Mode(DataAddrMode), // Find the address using the given Addressing mode
     Known(Addr)         // Use the address provided
 }
 
-// Addressing modes
+// Addressing modes for data
 #[derive(Clone, Copy)]
-enum AddrMode {
+enum DataAddrMode {
     Abs,
     AbsX,
     AbsY,
@@ -43,23 +50,26 @@ enum AddrMode {
     Dir,
     DirX,
     DirY,
-    DirPtrDBR,
-    DirPtrXDBR,
-    DirPtrDBRY,
+    DirPtrDbr,
+    DirPtrXDbr,
+    DirPtrDbrY,
     DirPtr,
     DirPtrY,
 
     Long,
     LongX,
     Stack,
-    StackPtrDBRY
+    StackPtrDbrY
 }
 
-// Addresses
+// Addressing modes for branches and jumps
 #[derive(Clone, Copy)]
-enum Addr {
-    Full(u32),      // A full, wrapping, 24-bit address.
-    ZeroBank(u16)   // A 16-bit address that wraps at bank boundaries.
+enum JumpAddrMode {
+    Abs,
+    AbsPtrPbr,
+    AbsPtrXPbr,
+    AbsPtr,
+    Long
 }
 
 // 65816
@@ -105,54 +115,54 @@ impl CPU {
 impl CPU {
     // Execute a single instruction.
     fn execute_instruction(&mut self) {
-        use self::AddrMode::*;
+        use self::DataAddrMode::*;
         use self::DataMode::*;
 
         let instr = self.fetch();
 
         match instr {
-            0x61 => self.adc(Mode(DirPtrXDBR)),
+            0x61 => self.adc(Mode(DirPtrXDbr)),
             0x63 => self.adc(Mode(Stack)),
             0x65 => self.adc(Mode(Dir)),
             0x67 => self.adc(Mode(DirPtr)),
             0x69 => self.adc(Imm),
             0x6D => self.adc(Mode(Abs)),
             0x6F => self.adc(Mode(Long)),
-            0x71 => self.adc(Mode(DirPtrDBRY)),
-            0x72 => self.adc(Mode(DirPtrDBR)),
-            0x73 => self.adc(Mode(StackPtrDBRY)),
+            0x71 => self.adc(Mode(DirPtrDbrY)),
+            0x72 => self.adc(Mode(DirPtrDbr)),
+            0x73 => self.adc(Mode(StackPtrDbrY)),
             0x75 => self.adc(Mode(DirX)),
             0x77 => self.adc(Mode(DirPtrY)),
             0x79 => self.adc(Mode(AbsY)),
             0x7D => self.adc(Mode(AbsX)),
             0x7F => self.adc(Mode(LongX)),
 
-            0xE1 => self.sbc(Mode(DirPtrXDBR)),
+            0xE1 => self.sbc(Mode(DirPtrXDbr)),
             0xE3 => self.sbc(Mode(Stack)),
             0xE5 => self.sbc(Mode(Dir)),
             0xE7 => self.sbc(Mode(DirPtr)),
             0xE9 => self.sbc(Imm),
             0xED => self.sbc(Mode(Abs)),
             0xEF => self.sbc(Mode(Long)),
-            0xF1 => self.sbc(Mode(DirPtrDBRY)),
-            0xF2 => self.sbc(Mode(DirPtrDBR)),
-            0xF3 => self.sbc(Mode(StackPtrDBRY)),
+            0xF1 => self.sbc(Mode(DirPtrDbrY)),
+            0xF2 => self.sbc(Mode(DirPtrDbr)),
+            0xF3 => self.sbc(Mode(StackPtrDbrY)),
             0xF5 => self.sbc(Mode(DirX)),
             0xF7 => self.sbc(Mode(DirPtrY)),
             0xF9 => self.sbc(Mode(AbsY)),
             0xFD => self.sbc(Mode(AbsX)),
             0xFF => self.sbc(Mode(LongX)),
 
-            0xC1 => self.cmp(Mode(DirPtrXDBR)),
+            0xC1 => self.cmp(Mode(DirPtrXDbr)),
             0xC3 => self.cmp(Mode(Stack)),
             0xC5 => self.cmp(Mode(Dir)),
             0xC7 => self.cmp(Mode(DirPtr)),
             0xC9 => self.cmp(Imm),
             0xCD => self.cmp(Mode(Abs)),
             0xCF => self.cmp(Mode(Long)),
-            0xD1 => self.cmp(Mode(DirPtrDBRY)),
-            0xD2 => self.cmp(Mode(DirPtrDBR)),
-            0xD3 => self.cmp(Mode(StackPtrDBRY)),
+            0xD1 => self.cmp(Mode(DirPtrDbrY)),
+            0xD2 => self.cmp(Mode(DirPtrDbr)),
+            0xD3 => self.cmp(Mode(StackPtrDbrY)),
             0xD5 => self.cmp(Mode(DirX)),
             0xD7 => self.cmp(Mode(DirPtrY)),
             0xD9 => self.cmp(Mode(AbsY)),
@@ -181,48 +191,48 @@ impl CPU {
             0xE8 => self.inx(),
             0xC8 => self.iny(),
 
-            0x21 => self.and(Mode(DirPtrXDBR)),
+            0x21 => self.and(Mode(DirPtrXDbr)),
             0x23 => self.and(Mode(Stack)),
             0x25 => self.and(Mode(Dir)),
             0x27 => self.and(Mode(DirPtr)),
             0x29 => self.and(Imm),
             0x2D => self.and(Mode(Abs)),
             0x2F => self.and(Mode(Long)),
-            0x31 => self.and(Mode(DirPtrDBRY)),
-            0x32 => self.and(Mode(DirPtrDBR)),
-            0x33 => self.and(Mode(StackPtrDBRY)),
+            0x31 => self.and(Mode(DirPtrDbrY)),
+            0x32 => self.and(Mode(DirPtrDbr)),
+            0x33 => self.and(Mode(StackPtrDbrY)),
             0x35 => self.and(Mode(DirX)),
             0x37 => self.and(Mode(DirPtrY)),
             0x39 => self.and(Mode(AbsY)),
             0x3D => self.and(Mode(AbsX)),
             0x3F => self.and(Mode(LongX)),
 
-            0x41 => self.eor(Mode(DirPtrXDBR)),
+            0x41 => self.eor(Mode(DirPtrXDbr)),
             0x43 => self.eor(Mode(Stack)),
             0x45 => self.eor(Mode(Dir)),
             0x47 => self.eor(Mode(DirPtr)),
             0x49 => self.eor(Imm),
             0x4D => self.eor(Mode(Abs)),
             0x4F => self.eor(Mode(Long)),
-            0x51 => self.eor(Mode(DirPtrDBRY)),
-            0x52 => self.eor(Mode(DirPtrDBR)),
-            0x53 => self.eor(Mode(StackPtrDBRY)),
+            0x51 => self.eor(Mode(DirPtrDbrY)),
+            0x52 => self.eor(Mode(DirPtrDbr)),
+            0x53 => self.eor(Mode(StackPtrDbrY)),
             0x55 => self.eor(Mode(DirX)),
             0x57 => self.eor(Mode(DirPtrY)),
             0x59 => self.eor(Mode(AbsY)),
             0x5D => self.eor(Mode(AbsX)),
             0x5F => self.eor(Mode(LongX)),
 
-            0x01 => self.ora(Mode(DirPtrXDBR)),
+            0x01 => self.ora(Mode(DirPtrXDbr)),
             0x03 => self.ora(Mode(Stack)),
             0x05 => self.ora(Mode(Dir)),
             0x07 => self.ora(Mode(DirPtr)),
             0x09 => self.ora(Imm),
             0x0D => self.ora(Mode(Abs)),
             0x0F => self.ora(Mode(Long)),
-            0x11 => self.ora(Mode(DirPtrDBRY)),
-            0x12 => self.ora(Mode(DirPtrDBR)),
-            0x13 => self.ora(Mode(StackPtrDBRY)),
+            0x11 => self.ora(Mode(DirPtrDbrY)),
+            0x12 => self.ora(Mode(DirPtrDbr)),
+            0x13 => self.ora(Mode(StackPtrDbrY)),
             0x15 => self.ora(Mode(DirX)),
             0x17 => self.ora(Mode(DirPtrY)),
             0x19 => self.ora(Mode(AbsY)),
@@ -264,12 +274,151 @@ impl CPU {
             0x76 => self.ror(Mode(DirX)),
             0x7E => self.ror(Mode(AbsX)),
 
-            _ => unreachable!()
+            0x90 => self.branch(PFlags::C, false),  // BCC
+            0xB0 => self.branch(PFlags::C, true),   // BCS
+            0xF0 => self.branch(PFlags::Z, true),   // BEQ
+            0x30 => self.branch(PFlags::N, true),   // BMI
+            0xD0 => self.branch(PFlags::Z, false),  // BNE
+            0x10 => self.branch(PFlags::N, false),  // BPL
+            0x80 => self.branch(PFlags::default(), true),  // BRA
+            0x50 => self.branch(PFlags::V, false),  // BVC
+            0x70 => self.branch(PFlags::V, true),   // BVS
+
+            0x82 => self.brl(),
+
+            0x4C => self.jmp(JumpAddrMode::Abs),
+            0x5C => self.jmp(JumpAddrMode::Long),
+            0x6C => self.jmp(JumpAddrMode::AbsPtrPbr),
+            0x7C => self.jmp(JumpAddrMode::AbsPtrXPbr),
+            0xDC => self.jmp(JumpAddrMode::AbsPtr),
+            0x22 => self.js(JumpAddrMode::Long),        // JSL
+            0x20 => self.js(JumpAddrMode::Abs),         // JSR
+            0xFC => self.js(JumpAddrMode::AbsPtrXPbr),  // JSR
+
+            0x6B => self.rtl(),
+            0x60 => self.rts(),
+
+            0x00 => self.brk(),
+            0x02 => self.cop(),
+
+            0x40 => self.rti(),
+
+            0x18 => self.flag(PFlags::C, false),    // CLC
+            0xD8 => self.flag(PFlags::D, false),    // CLD
+            0x58 => self.flag(PFlags::I, false),    // CLI
+            0xB8 => self.flag(PFlags::V, false),    // CLV
+            0x38 => self.flag(PFlags::C, true),     // SEC
+            0xF8 => self.flag(PFlags::D, true),     // SED
+            0x78 => self.flag(PFlags::I, true),     // SEI
+
+            0xC2 => self.rep(),
+            0xE2 => self.sep(),
+
+            0xA1 => self.lda(Mode(DirPtrXDbr)),
+            0xA3 => self.lda(Mode(Stack)),
+            0xA5 => self.lda(Mode(Dir)),
+            0xA7 => self.lda(Mode(DirPtr)),
+            0xA9 => self.lda(Imm),
+            0xAD => self.lda(Mode(Abs)),
+            0xAF => self.lda(Mode(Long)),
+            0xB1 => self.lda(Mode(DirPtrDbrY)),
+            0xB2 => self.lda(Mode(DirPtrDbr)),
+            0xB3 => self.lda(Mode(StackPtrDbrY)),
+            0xB5 => self.lda(Mode(DirX)),
+            0xB7 => self.lda(Mode(DirPtrY)),
+            0xB9 => self.lda(Mode(AbsY)),
+            0xBD => self.lda(Mode(AbsX)),
+            0xBF => self.lda(Mode(LongX)),
+
+            0xA2 => self.ldx(Imm),
+            0xA6 => self.ldx(Mode(Dir)),
+            0xAE => self.ldx(Mode(Abs)),
+            0xB6 => self.ldx(Mode(DirY)),
+            0xBE => self.ldx(Mode(AbsY)),
+
+            0xA0 => self.ldy(Imm),
+            0xA4 => self.ldy(Mode(Dir)),
+            0xAC => self.ldy(Mode(Abs)),
+            0xB4 => self.ldy(Mode(DirX)),
+            0xBC => self.ldy(Mode(AbsX)),
+
+            0x81 => self.sta(Mode(DirPtrXDbr)),
+            0x83 => self.sta(Mode(Stack)),
+            0x85 => self.sta(Mode(Dir)),
+            0x87 => self.sta(Mode(DirPtr)),
+            0x8D => self.sta(Mode(Abs)),
+            0x8F => self.sta(Mode(Long)),
+            0x91 => self.sta(Mode(DirPtrDbrY)),
+            0x92 => self.sta(Mode(DirPtrDbr)),
+            0x93 => self.sta(Mode(StackPtrDbrY)),
+            0x95 => self.sta(Mode(DirX)),
+            0x97 => self.sta(Mode(DirPtrY)),
+            0x99 => self.sta(Mode(AbsY)),
+            0x9D => self.sta(Mode(AbsX)),
+            0x9F => self.sta(Mode(LongX)),
+
+            0x86 => self.stx(Mode(Dir)),
+            0x8E => self.stx(Mode(Abs)),
+            0x96 => self.stx(Mode(DirY)),
+
+            0x84 => self.sty(Mode(Dir)),
+            0x8C => self.sty(Mode(Abs)),
+            0x94 => self.sty(Mode(DirX)),
+
+            0x64 => self.stz(Mode(Dir)),
+            0x74 => self.stz(Mode(DirX)),
+            0x9C => self.stz(Mode(Abs)),
+            0x9E => self.stz(Mode(AbsX)),
+
+            0x54 => self.mvn(),
+            0x44 => self.mvp(),
+
+            0xEA => self.nop(),
+            0x42 => self.wdm(),
+
+            0xF4 => self.pe(Imm),       // PEA
+            0xD4 => self.pe(Mode(Dir)), // PEI
+            0x62 => self.pe(Mode(Abs)), // PER
+
+            0x48 => self.ph(self.a, Some(PFlags::M)),     // PHA
+            0xDA => self.ph(self.x, Some(PFlags::X)),     // PHX
+            0x5A => self.ph(self.y, Some(PFlags::X)),     // PHY
+            0x68 => self.a = self.pl(Some(PFlags::M)),    // PLA
+            0xFA => self.x = self.pl(Some(PFlags::X)),    // PLX
+            0x7A => self.y = self.pl(Some(PFlags::X)),    // PLY
+
+            0x8B => self.ph(self.db as u16, Some(PFlags::default())),       // PHB
+            0x0B => self.ph(self.dp, None),                                 // PHD
+            0x4B => self.ph(self.pb as u16, Some(PFlags::default())),       // PHK
+            0x08 => self.ph(self.p.bits() as u16, Some(PFlags::default())), // PHP
+            0xAB => self.db = self.pl(Some(PFlags::default())) as u8,                               // PLB
+            0x2B => self.dp = self.pl(None),                                                        // PLD
+            0x28 => self.p = PFlags::from_bits_truncate(self.pl(Some(PFlags::default())) as u8),    // PLP
+
+            0xDB => self.stp(),
+            0xCB => self.wai(),
+
+            0xAA => self.x = self.transfer(self.a, Some(self.x), Some(PFlags::X)),  // TAX
+            0xA8 => self.y = self.transfer(self.a, Some(self.y), Some(PFlags::X)),  // TAY
+            0xBA => self.x = self.transfer(self.s, Some(self.x), Some(PFlags::X)),  // TSX
+            0x8A => self.a = self.transfer(self.x, Some(self.a), Some(PFlags::M)),  // TXA
+            0x9A => self.s = self.transfer(self.x, Some(0x0100), None),             // TXS
+            0x9B => self.y = self.transfer(self.x, Some(self.y), Some(PFlags::X)),  // TXY
+            0x98 => self.a = self.transfer(self.y, Some(self.a), Some(PFlags::M)),  // TYA
+            0xBB => self.x = self.transfer(self.y, Some(self.x), Some(PFlags::X)),  // TYX
+
+            0x5B => self.dp = self.transfer(self.a, None, Some(PFlags::M)), // TCD
+            0x1B => self.s = self.transfer(self.a, Some(0x0100), None),     // TCS
+            0x7B => self.a = self.transfer(self.dp, None, Some(PFlags::M)), // TDC
+            0x3B => self.a = self.transfer(self.s, None, Some(PFlags::M)),  // TSC
+
+            0xEB => self.xba(),
+            0xFB => self.xce(),
         }
     }
 }
 
-// Internal: Instructions
+// Internal: Data instructions
 impl CPU {
     // TODO: bcd mode.
     fn adc(&mut self, data_mode: DataMode) {
@@ -321,25 +470,22 @@ impl CPU {
     }
 
     fn cmp(&mut self, data_mode: DataMode) {
-        let reg = self.a;
-        self.compare(data_mode, reg, PFlags::M)
+        self.compare(data_mode, self.a, PFlags::M);
     }
 
     fn cpx(&mut self, data_mode: DataMode) {
-        let reg = self.x;
-        self.compare(data_mode, reg, PFlags::X)
+        self.compare(data_mode, self.x, PFlags::X);
     }
 
     fn cpy(&mut self, data_mode: DataMode) {
-        let reg = self.y;
-        self.compare(data_mode, reg, PFlags::X)
+        self.compare(data_mode, self.y, PFlags::X);
     }
 
     fn dec(&mut self, data_mode: DataMode) {
         let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
         let result = op.wrapping_sub(1);
 
-        let data = self.set_nz(result, PFlags::M);
+        let data = self.set_nz(result, self.p.contains(PFlags::M));
 
         self.write_op(data, write_mode, PFlags::M);
     }
@@ -347,20 +493,20 @@ impl CPU {
     fn dex(&mut self) {
         let result = self.x.wrapping_sub(1);
 
-        self.x = self.set_nz(result, PFlags::X);
+        self.x = self.set_nz(result, self.p.contains(PFlags::X));
     }
 
     fn dey(&mut self) {
         let result = self.y.wrapping_sub(1);
 
-        self.y = self.set_nz(result, PFlags::X);
+        self.y = self.set_nz(result, self.p.contains(PFlags::X));
     }
 
     fn inc(&mut self, data_mode: DataMode) {
         let (op, write_mode) = self.read_op_and_addr_mode(data_mode, PFlags::M);
         let result = op.wrapping_add(1);
 
-        let data = self.set_nz(result, PFlags::M);
+        let data = self.set_nz(result, self.p.contains(PFlags::M));
 
         self.write_op(data, write_mode, PFlags::M);
     }
@@ -368,34 +514,34 @@ impl CPU {
     fn inx(&mut self) {
         let result = self.x.wrapping_add(1);
 
-        self.x = self.set_nz(result, PFlags::X);
+        self.x = self.set_nz(result, self.p.contains(PFlags::X));
     }
 
     fn iny(&mut self) {
         let result = self.y.wrapping_add(1);
 
-        self.y = self.set_nz(result, PFlags::X);
+        self.y = self.set_nz(result, self.p.contains(PFlags::X));
     }
 
     fn and(&mut self, data_mode: DataMode) {
         let op = self.read_op(data_mode, PFlags::M);
         let result = self.a & op;
 
-        self.a = self.set_nz(result, PFlags::M);
+        self.a = self.set_nz(result, self.p.contains(PFlags::M));
     }
 
     fn eor(&mut self, data_mode: DataMode) {
         let op = self.read_op(data_mode, PFlags::M);
         let result = self.a ^ op;
 
-        self.a = self.set_nz(result, PFlags::M);
+        self.a = self.set_nz(result, self.p.contains(PFlags::M));
     }
 
     fn ora(&mut self, data_mode: DataMode) {
         let op = self.read_op(data_mode, PFlags::M);
         let result = self.a | op;
 
-        self.a = self.set_nz(result, PFlags::M);
+        self.a = self.set_nz(result, self.p.contains(PFlags::M));
     }
 
     fn bit(&mut self, data_mode: DataMode) {
@@ -456,7 +602,7 @@ impl CPU {
             (op & bit!(15, u16)) != 0
         });
 
-        let write_data = self.set_nz(result, PFlags::M);
+        let write_data = self.set_nz(result, self.p.contains(PFlags::M));
         self.write_op(write_data, write_mode, PFlags::M);
     }
 
@@ -466,7 +612,7 @@ impl CPU {
 
         self.p.set(PFlags::C, (op & bit!(0, u16)) != 0);
 
-        let write_data = self.set_nz(result, PFlags::M);
+        let write_data = self.set_nz(result, self.p.contains(PFlags::M));
         self.write_op(write_data, write_mode, PFlags::M);
     }
 
@@ -480,7 +626,7 @@ impl CPU {
             (op & bit!(15, u16)) != 0
         });
 
-        let write_data = self.set_nz(result, PFlags::M);
+        let write_data = self.set_nz(result, self.p.contains(PFlags::M));
         self.write_op(write_data, write_mode, PFlags::M);
     }
 
@@ -491,16 +637,245 @@ impl CPU {
 
         self.p.set(PFlags::C, (op & bit!(0, u16)) != 0);
 
-        let write_data = self.set_nz(result, PFlags::M);
+        let write_data = self.set_nz(result, self.p.contains(PFlags::M));
         self.write_op(write_data, write_mode, PFlags::M);
+    }
+}
+
+// Internal: Branch/Jump instructions
+impl CPU {
+    fn branch(&mut self, flag_check: PFlags, set: bool) {
+        if self.p.contains(flag_check) == set {
+            let imm = (self.fetch() as i8) as i16;
+
+            self.pc = self.pc.wrapping_add(imm as u16);
+        }
+    }
+
+    fn brl(&mut self) {
+        let imm_lo = self.fetch();
+        let imm_hi = self.fetch();
+
+        self.pc = self.pc.wrapping_add(make16!(imm_hi, imm_lo));
+    }
+
+    fn jmp(&mut self, addr_mode: JumpAddrMode) {
+        let addr = self.get_jump_addr(addr_mode);
+
+        match addr {
+            Addr::Full(a) => {
+                self.pb = hi24!(a);
+                self.pc = lo24!(a);
+            },
+            Addr::ZeroBank(a) => self.pc = a
+        }
+    }
+
+    fn js(&mut self, addr_mode: JumpAddrMode) {
+        let addr = self.get_jump_addr(addr_mode);
+
+        let pc = self.pc.wrapping_sub(1);
+
+        match addr {
+            Addr::Full(a) => {
+                self.stack_push(self.pb);
+
+                self.pb = hi24!(a);
+                self.pc = lo24!(a);
+            },
+            Addr::ZeroBank(a) => {
+                self.pc = a
+            }
+        }
+
+        self.stack_push(hi!(pc));
+        self.stack_push(lo!(pc));
+    }
+
+    fn rtl(&mut self) {
+        let pc_lo = self.stack_pop();
+        let pc_hi = self.stack_pop();
+        let pb = self.stack_pop();
+
+        self.pc = make16!(pc_hi, pc_lo).wrapping_add(1);
+        self.pb = pb;
+    }
+
+    fn rts(&mut self) {
+        let pc_lo = self.stack_pop();
+        let pc_hi = self.stack_pop();
+
+        self.pc = make16!(pc_hi, pc_lo).wrapping_add(1);
+    }
+
+    fn brk(&mut self) {
+
+    }
+
+    fn cop(&mut self) {
+
+    }
+
+    fn rti(&mut self) {
+
+    }
+}
+
+// Internal: Misc ops
+impl CPU {
+    fn flag(&mut self, flag: PFlags, set: bool) {
+        self.p.set(flag, set);
+    }
+
+    fn rep(&mut self) {
+        let imm = self.fetch();
+
+        self.p &= PFlags::from_bits_truncate(!imm);
+
+        if self.pe.contains(PFlags::E) {
+            self.p |= PFlags::M | PFlags::X;
+        }
+    }
+
+    fn sep(&mut self) {
+        let imm = self.fetch();
+
+        self.p |= PFlags::from_bits_truncate(imm);
+    }
+
+    fn nop(&mut self) {
+
+    }
+
+    fn wdm(&mut self) {
+        self.pc = self.pc.wrapping_add(1);
+    }
+
+    fn stp(&mut self) {
+
+    }
+
+    fn wai(&mut self) {
+
+    }
+
+    fn xba(&mut self) {
+        let b = hi!(self.a);
+        let a = lo!(self.a);
+
+        let _ = self.set_nz(b as u16, true);
+
+        self.a = make16!(a, b);
+    }
+
+    fn xce(&mut self) {
+        let c_set = self.p.contains(PFlags::C);
+        let e_set = self.pe.contains(PFlags::E);
+        self.pe.set(PFlags::E | PFlags::M | PFlags::X, c_set);
+        self.p.set(PFlags::C, e_set);
+
+        if c_set {
+            self.x = 0 | (lo!(self.x) as u16);
+            self.y = 0 | (lo!(self.y) as u16);
+            self.s = 0x100 | (lo!(self.s) as u16);
+        }
+    }
+}
+
+// Internal: Data moving ops
+impl CPU {
+    fn lda(&mut self, data_mode: DataMode) {
+        let data = self.read_op(data_mode, PFlags::M);
+
+        self.a = self.set_nz(data, self.p.contains(PFlags::M));
+    }
+
+    fn ldx(&mut self, data_mode: DataMode) {
+        let data = self.read_op(data_mode, PFlags::X);
+
+        self.x = self.set_nz(data, self.p.contains(PFlags::X));
+    }
+
+    fn ldy(&mut self, data_mode: DataMode) {
+        let data = self.read_op(data_mode, PFlags::X);
+
+        self.y = self.set_nz(data, self.p.contains(PFlags::X));
+    }
+
+    fn sta(&mut self, data_mode: DataMode) {
+        self.write_op(self.a, data_mode, PFlags::M);
+    }
+
+    fn stx(&mut self, data_mode: DataMode) {
+        self.write_op(self.x, data_mode, PFlags::X);
+    }
+
+    fn sty(&mut self, data_mode: DataMode) {
+        self.write_op(self.y, data_mode, PFlags::X);
+    }
+
+    fn stz(&mut self, data_mode: DataMode) {
+        self.write_op(0, data_mode, PFlags::M);
+    }
+
+    fn mvn(&mut self) {
+
+    }
+
+    fn mvp(&mut self) {
+
+    }
+
+    fn pe(&mut self, data_mode: DataMode) {
+        let data = self.read_op(data_mode, PFlags::default());
+
+        self.stack_push(hi!(data));
+        self.stack_push(lo!(data));
+    }
+
+    fn ph(&mut self, reg: u16, flag_check: Option<PFlags>) {
+        if flag_check.map_or(false, |f| self.p.contains(f)) {
+            self.stack_push(reg as u8);
+        } else {
+            self.stack_push(hi!(reg));
+            self.stack_push(lo!(reg));
+        }
+    }
+
+    fn pl(&mut self, flag_check: Option<PFlags>) -> u16 {
+        let check = flag_check.map_or(false, |f| self.p.contains(f));
+
+        let reg = if check {
+            self.stack_pop() as u16
+        } else {
+            let lo = self.stack_pop();
+            let hi = self.stack_pop();
+            make16!(hi, lo)
+        };
+
+        self.set_nz(reg, check)
+    }
+
+    fn transfer(&mut self, from: u16, to: Option<u16>, flag_check: Option<PFlags>) -> u16 {
+        let result = if let Some(flags) = flag_check {
+            self.set_nz(from, self.p.contains(flags))
+        } else {
+            from
+        };
+
+        if to.is_some() && flag_check.map_or_else(|| self.pe.contains(PFlags::E), |f| self.p.contains(f)) {
+            (to.unwrap() & 0xFF00) | result
+        } else {
+            result
+        }
     }
 }
 
 // Internal: Data and Flag setting Micro-ops
 impl CPU {
     // Set N if high bit is 1, set Z if result is zero. Return 8 or 16 bit result.
-    fn set_nz(&mut self, result: u16, flag_check: PFlags) -> u16 {
-        if self.p.contains(flag_check) {
+    fn set_nz(&mut self, result: u16, byte: bool) -> u16 {
+        if byte {//flag_check.map_or(false, |f| self.p.contains(f)) {
             let result8 = result & 0xFF;
             self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
             self.p.set(PFlags::Z, result8 == 0);
@@ -552,6 +927,18 @@ impl CPU {
     // Write a byte to the (data) bus.
     fn write_data(&mut self, addr: u32, data: u8) {
         self.mem.write(addr, data);
+    }
+
+    // Pop a byte from the stack.
+    fn stack_pop(&mut self) -> u8 {
+        self.s = self.s.wrapping_add(1);
+        self.read_data(self.s as u32)
+    }
+
+    // Push a byte to the stack.
+    fn stack_push(&mut self, data: u8) {
+        self.write_data(self.s as u32, data);
+        self.s = self.s.wrapping_sub(1);
     }
 
     // Read one or two bytes (based on the value of the M or X flag).
@@ -622,7 +1009,7 @@ impl CPU {
             Imm => self.immediate(flag_check),
             Acc => self.a,
             Mode(m) => {
-                let addr = self.get_addr(m);
+                let addr = self.get_data_addr(m);
                 self.read_addr(addr, flag_check)
             },
             Known(_) => unreachable!() // In practice we never read from known addresses.
@@ -634,10 +1021,10 @@ impl CPU {
         use self::DataMode::*;
 
         match data_mode {
-            Imm => (self.immediate(flag_check), Imm),   // TODO: is this ever used?
+            Imm => unreachable!(),  // We can't write back to immediate data.
             Acc => (self.a, Acc),
             Mode(m) => {
-                let addr = self.get_addr(m);
+                let addr = self.get_data_addr(m);
                 (self.read_addr(addr, flag_check), Known(addr))
             },
             Known(_) => unreachable!() // In practice we never read from known addresses.
@@ -652,16 +1039,16 @@ impl CPU {
             Imm => unreachable!(),  // We can't write to immediate data.
             Acc => self.a = data,
             Mode(m) => {
-                let addr = self.get_addr(m);
+                let addr = self.get_data_addr(m);
                 self.write_addr(data, addr, flag_check);
             },
             Known(a) => self.write_addr(data, a, flag_check)
         }
     }
 
-    // Get an address using the specified addressing mode.
-    fn get_addr(&mut self, addr_mode: AddrMode) -> Addr {
-        use self::AddrMode::*;
+    // Get an address of data using the specified addressing mode.
+    fn get_data_addr(&mut self, addr_mode: DataAddrMode) -> Addr {
+        use self::DataAddrMode::*;
 
         match addr_mode {
             Abs             => self.absolute(),
@@ -671,20 +1058,44 @@ impl CPU {
             Dir             => self.direct(),
             DirX            => self.direct_x(),
             DirY            => self.direct_y(),
-            DirPtrDBR       => self.direct_ptr_dbr(),
-            DirPtrXDBR      => self.direct_ptr_x_dbr(),
-            DirPtrDBRY      => self.direct_ptr_dbr_y(),
+            DirPtrDbr       => self.direct_ptr_dbr(),
+            DirPtrXDbr      => self.direct_ptr_x_dbr(),
+            DirPtrDbrY      => self.direct_ptr_dbr_y(),
             DirPtr          => self.direct_ptr(),
             DirPtrY         => self.direct_ptr_y(),
             
             Long            => self.long(),
             LongX           => self.long_x(),
             Stack           => self.stack(),
-            StackPtrDBRY    => self.stack_ptr_dbr_y()
+            StackPtrDbrY    => self.stack_ptr_dbr_y()
+        }
+    }
+
+    // Get an address of a branch using the specified addressing mode.
+    fn get_jump_addr(&mut self, addr_mode: JumpAddrMode) -> Addr {
+        use self::JumpAddrMode::*;
+
+        match addr_mode {
+            AbsPbr      => self.absolute_pbr(),
+            AbsPtrPbr   => self.absolute_ptr_pbr(),
+            AbsPtrXPbr  => self.absolute_ptr_x_pbr(),
+            AbsPtr      => self.absolute_ptr(),
+            Long        => self.long()
         }
     }
 
     // Addressing modes:
+
+    // #$vvvv
+    fn immediate(&mut self, flag_check: PFlags) -> u16 {
+        let imm_lo = self.fetch();
+
+        let imm_hi = if !self.p.contains(flag_check) {
+            self.fetch()
+        } else { 0 };
+
+        make16!(imm_hi, imm_lo)
+    }
 
     // $vvvv
     fn absolute(&mut self) -> Addr {
@@ -878,14 +1289,61 @@ impl CPU {
         Addr::Full(make24!(imm_hi, imm_mid, imm_lo).wrapping_add(self.x as u32))
     }
 
-    // #$vvvv
-    fn immediate(&mut self, flag_check: PFlags) -> u16 {
+    // $vvvv
+    fn absolute_pbr(&mut self) -> Addr {
         let imm_lo = self.fetch();
+        let imm_hi = self.fetch();
 
-        let imm_hi = if !self.p.contains(flag_check) {
-            self.fetch()
-        } else { 0 };
+        Addr::ZeroBank(make16!(imm_hi, imm_lo))
+    }
 
-        make16!(imm_hi, imm_lo)
+    // ($vvvv)
+    fn absolute_ptr_pbr(&mut self) -> Addr {
+        let imm_lo = self.fetch();
+        let imm_hi = self.fetch();
+
+        let ptr = make16!(imm_lo, imm_hi);
+
+        let ptr_lo = make24!(0, ptr);
+        let ptr_hi = make24!(0, ptr.wrapping_add(1));
+
+        let addr_lo = self.read_data(ptr_lo);
+        let addr_hi = self.read_data(ptr_hi);
+
+        Addr::ZeroBank(make16!(addr_hi, addr_lo))
+    }
+
+    // ($vvvv, X)
+    fn absolute_ptr_x_pbr(&mut self) -> Addr {
+        let imm_lo = self.fetch();
+        let imm_hi = self.fetch();
+
+        let ptr = make16!(imm_lo, imm_hi).wrapping_add(self.x);
+
+        let ptr_lo = make24!(self.pb, ptr);
+        let ptr_hi = make24!(self.pb, ptr.wrapping_add(1));
+
+        let addr_lo = self.read_data(ptr_lo);
+        let addr_hi = self.read_data(ptr_hi);
+
+        Addr::ZeroBank(make16!(addr_hi, addr_lo))
+    }
+
+    // [$vvvv]
+    fn absolute_ptr(&mut self) -> Addr {
+        let imm_lo = self.fetch();
+        let imm_hi = self.fetch();
+
+        let ptr = make16!(imm_lo, imm_hi);
+
+        let ptr_lo = make24!(0, ptr);
+        let ptr_mid = make24!(0, ptr.wrapping_add(1));
+        let ptr_hi = make24!(0, ptr.wrapping_add(2));
+
+        let addr_lo = self.read_data(ptr_lo);
+        let addr_mid = self.read_data(ptr_mid);
+        let addr_hi = self.read_data(ptr_hi);
+
+        Addr::Full(make24!(addr_hi, addr_mid, addr_lo))
     }
 }

@@ -26,6 +26,20 @@ macro_rules! make24 {
     };
 }
 
+// Get the lowest two bytes of a 24-bit value.
+macro_rules! lo24 {
+    ($val:expr) => {
+        $val as u16
+    };
+}
+
+// Get the highest byte of a 24-bit value (or, the second highest byte of a 32-bit value).
+macro_rules! hi24 {
+    ($val:expr) => {
+        ($val >> 16) as u8
+    };
+}
+
 // Make a 16-bit value from two 8-bit values.
 macro_rules! make16 {
     ($hi:expr, $lo:expr) => {
