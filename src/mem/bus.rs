@@ -121,6 +121,7 @@ impl MemBus {
         //reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
     }
 
+    // Internal status registers.
     fn read_reg(&mut self, addr: u16) -> u8 {
         match addr {
             0x4212          => self.joypads.is_ready(),

@@ -1548,3 +1548,38 @@ impl CPU {
         Addr::Full(make24!(addr_hi, addr_mid, addr_lo))
     }
 }
+
+// Debug functions.
+impl CPU {
+    // Capture the state of the internal registers.
+    pub fn get_state(&self) -> crate::debug::CPUState {
+        crate::debug::CPUState {
+            a:  self.a,
+            x:  self.x,
+            y:  self.y,
+            s:  self.s,
+            db: self.db,
+            dp: self.dp,
+            pb: self.pb,
+            p:  self.p.bits(),
+            pe: self.pe.bits(),
+            pc: self.pc
+        }
+    }
+
+    // Read a memory address. Note this may affect the internal value!
+    pub fn get_mem_at(&mut self, addr: u32) -> u8 {
+        self.mem.read(addr).0
+    }
+
+    // Get the instruction at the current PC, with the next 3 bytes for context.
+    pub fn get_instr(&mut self) -> [u8; 4] {
+        let addr = make24!(self.pb, self.pc);
+        [
+            self.mem.read(make24!(self.pb, self.pc)).0,
+            self.mem.read(make24!(self.pb, self.pc.wrapping_add(1))).0,
+            self.mem.read(make24!(self.pb, self.pc.wrapping_add(2))).0,
+            self.mem.read(make24!(self.pb, self.pc.wrapping_add(3))).0
+        ]
+    }
+}
