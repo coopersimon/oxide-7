@@ -1,4 +1,12 @@
 // Address Buses A and B
+use std::{
+    io::{
+        BufReader,
+        Read
+    },
+    fs::File
+};
+
 use super::{
     RAM,
     rom::{
@@ -22,11 +30,16 @@ pub struct MemBus {
 impl MemBus {
     pub fn new(cart_path: &str) -> Self {
         // Open file and check type...
+        let f = File::open(cart_path).expect(&format!("Couldn't open file {}", cart_path));
+
+        let mut reader = BufReader::new(f);
+        // figure out which cart to use
+        let cart = Box::new(LoROM::new(reader));
 
         MemBus {
-            wram: RAM::new(0x20000),
-            bus_b: AddrBusB::new(),
-            cart: Box::new(LoROM::new())
+            wram:   RAM::new(0x20000),
+            bus_b:  AddrBusB::new(),
+            cart:   cart
         }
     }
 

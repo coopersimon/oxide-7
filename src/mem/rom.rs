@@ -1,5 +1,14 @@
 // ROM types
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    io::{
+        BufReader,
+        Read,
+        Seek,
+        SeekFrom
+    },
+    fs::File
+};
 
 use super::RAM;
 
@@ -10,16 +19,18 @@ pub trait Cart {
 
 // ROM banks.
 struct ROM {
-    banks: BTreeMap<u8, Vec<u8>>,
-    bank_size: usize
+    rom_file:   BufReader<File>,
+    banks:      BTreeMap<u8, Vec<u8>>,
+    bank_size:  usize
 }
 
 impl ROM {
-    fn new(file_name: &str, bank_size: usize) -> Self {
+    fn new(cart_file: BufReader<File>, bank_size: usize) -> Self {
         // read and store
         ROM {
-            banks: BTreeMap::new(),
-            bank_size: bank_size
+            rom_file:   cart_file,
+            banks:      BTreeMap::new(),
+            bank_size:  bank_size
         }
     }
 
@@ -27,11 +38,18 @@ impl ROM {
         if let Some(data) = self.banks.get(&bank) {
             data[addr as usize]
         } else {
-            // Read
-            let data = vec![0; self.bank_size];
-            let ret = data[addr as usize];
-            self.banks.insert(bank, data);
-            ret
+            let mut buf = vec![0; self.bank_size];
+
+            let offset = (bank as u64) * (self.bank_size as u64);
+            self.rom_file.seek(SeekFrom::Start(offset))
+                .expect("Couldn't swap in bank");
+
+            self.rom_file.read_exact(&mut buf)
+                .expect(&format!("Couldn't swap in bank at pos {}-{}", offset, offset + self.bank_size as u64));
+
+            let data = buf[addr as usize];
+            self.banks.insert(bank, buf);
+            data
         }
     }
 }
@@ -42,9 +60,9 @@ pub struct LoROM {
 }
 
 impl LoROM {
-    pub fn new() -> Self {
+    pub fn new(cart_file: BufReader<File>) -> Self {
         LoROM {
-            rom: ROM::new("", 0x8000),
+            rom: ROM::new(cart_file, 0x8000),
             ram: RAM::new(512 * 1024)
         }
     }
