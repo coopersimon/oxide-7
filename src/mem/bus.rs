@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::joypad::JoypadMem;
-use crate::timing::*;
+use crate::constants::timing::*;
 
 use super::{
     RAM,

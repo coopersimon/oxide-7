@@ -3,7 +3,10 @@ use bitflags::bitflags;
 
 use crate::{
     mem::MemBus,
-    timing::INTERNAL_OP
+    constants::{
+        timing::INTERNAL_OP,
+        int
+    }
 };
 
 bitflags! {
@@ -105,8 +108,8 @@ impl CPU {
             db:     0,
             dp:     0,
             pb:     0,
-            p:      PFlags::default(),
-            pe:     PFlags::default(),
+            p:      PFlags::M | PFlags::X,
+            pe:     PFlags::E,
             pc:     0,
 
             halt:   false,
@@ -759,11 +762,24 @@ impl CPU {
     }
 
     fn brk(&mut self) {
-        // TODO
+        self.pc = self.pc.wrapping_add(1);
+
+        if self.is_e_set() {
+            self.p.insert(PFlags::B);
+            self.trigger_interrupt(int::BRK_VECTOR_EMU);
+        } else {
+            self.trigger_interrupt(int::BRK_VECTOR);
+        }
     }
 
     fn cop(&mut self) {
-        // TODO
+        self.pc = self.pc.wrapping_add(1);
+
+        self.trigger_interrupt(if self.is_e_set() {
+            int::COP_VECTOR_EMU
+        } else {
+            int::COP_VECTOR
+        });
     }
 
     fn rti(&mut self) {
@@ -1048,6 +1064,26 @@ impl CPU {
 
     fn is_e_set(&self) -> bool {
         self.pe.contains(PFlags::E)
+    }
+
+    fn trigger_interrupt(&mut self, vector_addr: u32) {
+        if !self.is_e_set() {
+            self.stack_push(self.pb);
+        }
+
+        self.stack_push(hi!(self.pc));
+        self.stack_push(lo!(self.pc));
+        self.stack_push(self.p.bits());
+
+        let pc_lo = self.read_data(vector_addr);
+        let pc_hi = self.read_data(vector_addr + 1);
+
+        self.pc = make16!(pc_hi, pc_lo);
+
+        self.clock_inc(INTERNAL_OP);
+
+        self.p.insert(PFlags::I);
+        self.p.remove(PFlags::D);
     }
 }
 
@@ -1574,7 +1610,6 @@ impl CPU {
 
     // Get the instruction at the current PC, with the next 3 bytes for context.
     pub fn get_instr(&mut self) -> [u8; 4] {
-        let addr = make24!(self.pb, self.pc);
         [
             self.mem.read(make24!(self.pb, self.pc)).0,
             self.mem.read(make24!(self.pb, self.pc.wrapping_add(1))).0,

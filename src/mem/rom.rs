@@ -10,7 +10,7 @@ use std::{
     fs::File
 };
 
-use crate::timing;
+use crate::constants::timing;
 
 use super::RAM;
 
@@ -90,7 +90,7 @@ impl Cart for LoROM {
 
     fn write(&mut self, bank: u8, addr: u16, data: u8) -> usize {
         let internal_bank = bank % 0x80;
-        
+
         if internal_bank >= 0x70 {
             let ram_bank = ((internal_bank - 0x70) as u32) * 0x8000;
             self.ram.write(ram_bank + addr as u32, data);

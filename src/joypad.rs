@@ -6,18 +6,18 @@ bitflags! {
     // Flags for buttons.
     #[derive(Default)]
     pub struct Button: u16 {
-        const B         = bit!(15, u16);
-        const Y         = bit!(14, u16);
-        const Select    = bit!(13, u16);
-        const Start     = bit!(12, u16);
-        const Up        = bit!(11, u16);
-        const Down      = bit!(10, u16);
-        const Left      = bit!(9, u16);
-        const Right     = bit!(8, u16);
-        const A         = bit!(7, u16);
-        const X         = bit!(6, u16);
-        const L         = bit!(5, u16);
-        const R         = bit!(4, u16);
+        const B      = bit!(15, u16);
+        const Y      = bit!(14, u16);
+        const SELECT = bit!(13, u16);
+        const START  = bit!(12, u16);
+        const UP     = bit!(11, u16);
+        const DOWN   = bit!(10, u16);
+        const LEFT   = bit!(9, u16);
+        const RIGHT  = bit!(8, u16);
+        const A      = bit!(7, u16);
+        const X      = bit!(6, u16);
+        const L      = bit!(5, u16);
+        const R      = bit!(4, u16);
     }
 }
 
@@ -88,7 +88,7 @@ impl JoypadMem {
         match addr {
             0x4016 => self.joypads[0].shift_bit(),  // Shift the next one too?
             0x4017 => self.joypads[1].shift_bit(),
-            
+
             0x4218 => self.joypad_regs[0],
             0x4219 => self.joypad_regs[1],
             0x421A => self.joypad_regs[2],
