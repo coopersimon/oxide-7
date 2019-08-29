@@ -1,10 +1,10 @@
 // SNES Processor
 use bitflags::bitflags;
 
-use crate::mem::{
-    MemBus,
-    MemDevice
-};
+use crate::mem::MemBus;
+
+// Timings
+const INTERNAL_OP: usize = 6;
 
 bitflags! {
     // Flags for status bits inside the CPU.
@@ -96,7 +96,7 @@ pub struct CPU {
 // Public
 impl CPU {
     // Create and initialise new CPU.
-    pub fn new() -> Self {
+    pub fn new(bus: MemBus) -> Self {
         CPU {
             a:      0,
             x:      0,
@@ -111,7 +111,7 @@ impl CPU {
 
             halt:   false,
 
-            mem:    MemBus::new()
+            mem:    bus
         }
     }
 
@@ -598,7 +598,7 @@ impl CPU {
 
         self.set_z(result);
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         let write_data = op & (!self.a);
         self.write_op(write_data, write_mode, self.is_m_set());
@@ -610,7 +610,7 @@ impl CPU {
 
         self.set_z(result);
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         let write_data = op | self.a;
         self.write_op(write_data, write_mode, self.is_m_set());
@@ -626,7 +626,7 @@ impl CPU {
             (op & bit!(15, u16)) != 0
         });
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         let write_data = self.set_nz(result, self.is_m_set());
         self.write_op(write_data, write_mode, self.is_m_set());
@@ -638,7 +638,7 @@ impl CPU {
 
         self.p.set(PFlags::C, (op & bit!(0, u16)) != 0);
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         let write_data = self.set_nz(result, self.is_m_set());
         self.write_op(write_data, write_mode, self.is_m_set());
@@ -654,7 +654,7 @@ impl CPU {
             (op & bit!(15, u16)) != 0
         });
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         let write_data = self.set_nz(result, self.is_m_set());
         self.write_op(write_data, write_mode, self.is_m_set());
@@ -667,7 +667,7 @@ impl CPU {
 
         self.p.set(PFlags::C, (op & bit!(0, u16)) != 0);
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         let write_data = self.set_nz(result, self.is_m_set());
         self.write_op(write_data, write_mode, self.is_m_set());
@@ -683,10 +683,10 @@ impl CPU {
             let pc = self.pc.wrapping_add(imm as u16);
 
             if self.is_e_set() && (hi!(pc) != hi!(self.pc)) {
-                self.clock_inc(1);
+                self.clock_inc(INTERNAL_OP);
             }
 
-            self.clock_inc(1);
+            self.clock_inc(INTERNAL_OP);
 
             self.pc = pc;
         }
@@ -696,7 +696,7 @@ impl CPU {
         let imm_lo = self.fetch();
         let imm_hi = self.fetch();
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         self.pc = self.pc.wrapping_add(make16!(imm_hi, imm_lo));
     }
@@ -719,7 +719,7 @@ impl CPU {
         let pc = self.pc.wrapping_sub(1);
 
         if addr_mode != JumpAddrMode::AbsPtrXPbr {
-            self.clock_inc(1);
+            self.clock_inc(INTERNAL_OP);
         }
 
         match addr {
@@ -743,7 +743,7 @@ impl CPU {
         let pc_hi = self.stack_pop();
         let pb = self.stack_pop();
 
-        self.clock_inc(2);
+        self.clock_inc(INTERNAL_OP * 2);
 
         self.pc = make16!(pc_hi, pc_lo).wrapping_add(1);
         self.pb = pb;
@@ -753,7 +753,7 @@ impl CPU {
         let pc_lo = self.stack_pop();
         let pc_hi = self.stack_pop();
 
-        self.clock_inc(3);
+        self.clock_inc(INTERNAL_OP * 3);
 
         self.pc = make16!(pc_hi, pc_lo).wrapping_add(1);
     }
@@ -773,7 +773,7 @@ impl CPU {
 
         self.pc = make16!(pc_hi, pc_lo);
 
-        self.clock_inc(2);
+        self.clock_inc(INTERNAL_OP * 2);
 
         if !self.is_e_set() {
             self.pb = self.stack_pop();
@@ -785,14 +785,14 @@ impl CPU {
 impl CPU {
     fn flag(&mut self, flag: PFlags, set: bool) {
         self.p.set(flag, set);
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
     }
 
     fn rep(&mut self) {
         let imm = self.fetch();
 
         self.p &= PFlags::from_bits_truncate(!imm);
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         if self.is_e_set() {
             self.p |= PFlags::M | PFlags::X;
@@ -803,26 +803,26 @@ impl CPU {
         let imm = self.fetch();
 
         self.p |= PFlags::from_bits_truncate(imm);
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
     }
 
     fn nop(&mut self) {
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
     }
 
     fn wdm(&mut self) {
         self.pc = self.pc.wrapping_add(1);
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
     }
 
     fn stp(&mut self) {
         // TODO
-        self.clock_inc(2);
+        self.clock_inc(INTERNAL_OP * 2);
     }
 
     fn wai(&mut self) {
         // TODO
-        self.clock_inc(2);
+        self.clock_inc(INTERNAL_OP * 2);
     }
 
     fn xba(&mut self) {
@@ -831,7 +831,7 @@ impl CPU {
 
         let _ = self.set_nz(b as u16, true);
 
-        self.clock_inc(2);
+        self.clock_inc(INTERNAL_OP * 2);
 
         self.a = make16!(a, b);
     }
@@ -842,7 +842,7 @@ impl CPU {
         self.pe.set(PFlags::E, c_set);
         self.p.set(PFlags::C, e_set);
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         if c_set {
             self.p.insert(PFlags::M | PFlags::X);
@@ -904,7 +904,7 @@ impl CPU {
 
         self.a = self.a.wrapping_sub(1);
 
-        self.clock_inc(2);
+        self.clock_inc(INTERNAL_OP * 2);
 
         if self.a != 0xFFFF {
             self.pc = self.pc.wrapping_sub(3);
@@ -926,6 +926,8 @@ impl CPU {
 
         self.a = self.a.wrapping_sub(1);
 
+        self.clock_inc(INTERNAL_OP * 2);
+
         if self.a != 0xFFFF {
             self.pc = self.pc.wrapping_sub(3);
         }
@@ -943,7 +945,7 @@ impl CPU {
 
         let data = self.pc.wrapping_add(imm);
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         self.stack_push(hi!(data));
         self.stack_push(lo!(data));
@@ -957,7 +959,7 @@ impl CPU {
             self.stack_push(lo!(reg));
         }
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
     }
 
     fn pl(&mut self, byte: bool) -> u16 {
@@ -969,7 +971,7 @@ impl CPU {
             make16!(hi, lo)
         };
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         self.set_nz(reg, byte)
     }
@@ -981,7 +983,7 @@ impl CPU {
             from
         };
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         if byte {
             set_lo!(to, result)
@@ -1053,14 +1055,15 @@ impl CPU {
 impl CPU {
     // Read a byte from the (data) bus.
     fn read_data(&mut self, addr: u32) -> u8 {
-        self.clock_inc(1);
-        self.mem.read(addr)
+        let (data, cycles) = self.mem.read(addr);
+        self.clock_inc(cycles);
+        data
     }
 
     // Write a byte to the (data) bus.
     fn write_data(&mut self, addr: u32, data: u8) {
-        self.clock_inc(1);
-        self.mem.write(addr, data);
+        let cycles = self.mem.write(addr, data);
+        self.clock_inc(cycles);
     }
 
     // Pop a byte from the stack.
@@ -1247,7 +1250,7 @@ impl CPU {
         let addr = abs_addr.wrapping_add(self.x as u32);
 
         if !self.is_x_set() || (self.is_x_set() && (abs_addr < addr)) {
-            self.clock_inc(1);
+            self.clock_inc(INTERNAL_OP);
         }
 
         Addr::Full(addr)
@@ -1262,7 +1265,7 @@ impl CPU {
         let addr = abs_addr.wrapping_add(self.y as u32);
 
         if !self.is_x_set() || (self.is_x_set() && (abs_addr < addr)) {
-            self.clock_inc(1);
+            self.clock_inc(INTERNAL_OP);
         }
 
         Addr::Full(addr)
@@ -1278,7 +1281,7 @@ impl CPU {
             self.dp.wrapping_add(imm as u16)
         };*/
         if lo!(self.dp) != 0 {
-            self.clock_inc(1);
+            self.clock_inc(INTERNAL_OP);
         }
 
         Addr::ZeroBank(self.dp.wrapping_add(imm))
@@ -1296,10 +1299,10 @@ impl CPU {
         };
 
         if lo!(self.dp) != 0 {
-            self.clock_inc(1);
+            self.clock_inc(INTERNAL_OP);
         }
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         Addr::ZeroBank(addr)
     }
@@ -1316,10 +1319,10 @@ impl CPU {
         };
 
         if lo!(self.dp) != 0 {
-            self.clock_inc(1);
+            self.clock_inc(INTERNAL_OP);
         }
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         Addr::ZeroBank(addr)
     }
@@ -1336,7 +1339,7 @@ impl CPU {
         };
 
         if lo!(self.dp) != 0 {
-            self.clock_inc(1);
+            self.clock_inc(INTERNAL_OP);
         }
 
         let addr_lo = self.read_data(make24!(0, ptr_lo));
@@ -1358,10 +1361,10 @@ impl CPU {
         };
 
         if lo!(self.dp) != 0 {
-            self.clock_inc(1);
+            self.clock_inc(INTERNAL_OP);
         }
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         let addr_lo = self.read_data(make24!(0, ptr_lo));
         let addr_hi = self.read_data(make24!(0, ptr_hi));
@@ -1381,7 +1384,7 @@ impl CPU {
         };
 
         if lo!(self.dp) != 0 {
-            self.clock_inc(1);
+            self.clock_inc(INTERNAL_OP);
         }
 
         let addr_lo = self.read_data(make24!(0, ptr_lo));
@@ -1391,7 +1394,7 @@ impl CPU {
         let final_addr = addr.wrapping_add(self.y as u32);
 
         if !self.is_x_set() || (self.is_x_set() && (addr < final_addr)) {
-            self.clock_inc(1);
+            self.clock_inc(INTERNAL_OP);
         }
 
         Addr::Full(final_addr)
@@ -1408,7 +1411,7 @@ impl CPU {
         let ptr_hi = make24!(0, ptr.wrapping_add(2));
 
         if lo!(self.dp) != 0 {
-            self.clock_inc(1);
+            self.clock_inc(INTERNAL_OP);
         }
 
         let addr_lo = self.read_data(ptr_lo);
@@ -1429,7 +1432,7 @@ impl CPU {
         let ptr_hi = make24!(0, ptr.wrapping_add(2));
 
         if lo!(self.dp) != 0 {
-            self.clock_inc(1);
+            self.clock_inc(INTERNAL_OP);
         }
 
         let addr_lo = self.read_data(ptr_lo);
@@ -1445,7 +1448,7 @@ impl CPU {
 
         let addr = self.s.wrapping_add(imm);
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         Addr::ZeroBank(addr)
     }
@@ -1459,7 +1462,7 @@ impl CPU {
         let ptr_lo = make24!(0, ptr);
         let ptr_hi = make24!(0, ptr.wrapping_add(1));
 
-        self.clock_inc(2);
+        self.clock_inc(INTERNAL_OP * 2);
 
         let addr_lo = self.read_data(ptr_lo);
         let addr_hi = self.read_data(ptr_hi);
@@ -1519,7 +1522,7 @@ impl CPU {
         let ptr_lo = make24!(self.pb, ptr);
         let ptr_hi = make24!(self.pb, ptr.wrapping_add(1));
 
-        self.clock_inc(1);
+        self.clock_inc(INTERNAL_OP);
 
         let addr_lo = self.read_data(ptr_lo);
         let addr_hi = self.read_data(ptr_hi);
