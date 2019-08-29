@@ -2,10 +2,16 @@
 
 // Master cycle counts
 pub mod timing {
-    pub const INTERNAL_OP: usize =      6;
-    pub const FAST_MEM_ACCESS: usize =  6;
-    pub const SLOW_MEM_ACCESS: usize =  8;
+    pub const INTERNAL_OP: usize      = 6;
+    pub const FAST_MEM_ACCESS: usize  = 6;
+    pub const SLOW_MEM_ACCESS: usize  = 8;
     pub const XSLOW_MEM_ACCESS: usize = 12;
+
+    pub const SCANLINE: usize = 1364;
+    pub const PAUSE_START: usize = 536;
+    pub const PAUSE_LEN: usize = 40;
+
+    pub const NUM_SCANLINES: usize = 262;
 }
 
 // Interrupt vector locations. Each contains a 16-bit address.

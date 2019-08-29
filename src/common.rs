@@ -46,12 +46,34 @@ macro_rules! lo24 {
     };
 }
 
+// Set the lowest byte of a 24-bit value.
+macro_rules! set_lo24 {
+    ($val:expr, $lo:expr) => {
+        ($val & 0xFFFFFF00) | ($lo as u32)
+    };
+}
+
+// Set the middle byte of a 24-bit value.
+macro_rules! set_mid24 {
+    ($val:expr, $mid:expr) => {
+        ($val & 0xFFFF00FF) | (($mid as u32) << 8)
+    };
+}
+
 // Get the highest byte of a 24-bit value (or, the second highest byte of a 32-bit value).
 macro_rules! hi24 {
     ($val:expr) => {
         ($val >> 16) as u8
     };
 }
+
+// Set the high byte of a 24-bit value.
+macro_rules! set_hi24 {
+    ($val:expr, $hi:expr) => {
+        ($val & 0xFF00FFFF) | (($hi as u32) << 16)
+    };
+}
+
 
 // Make a 16-bit value from two 8-bit values.
 macro_rules! make16 {

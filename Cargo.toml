@@ -8,3 +8,8 @@ edition = "2018"
 
 [dependencies]
 bitflags = "1.1.0"
+vulkano = "0.13"
+vulkano-shaders = "0.13"
+vulkano-win = "0.13"
+winit = "0.19"
+cgmath = "0.17"
