@@ -99,7 +99,10 @@ pub struct CPU {
 // Public
 impl CPU {
     // Create and initialise new CPU.
-    pub fn new(bus: MemBus) -> Self {
+    pub fn new(mut bus: MemBus) -> Self {
+        let start_pc_lo = bus.read(int::RESET_VECTOR_EMU).0;
+        let start_pc_hi = bus.read(int::RESET_VECTOR_EMU + 1).0;
+
         CPU {
             a:      0,
             x:      0,
@@ -110,7 +113,7 @@ impl CPU {
             pb:     0,
             p:      PFlags::M | PFlags::X,
             pe:     PFlags::E,
-            pc:     0,
+            pc:     make16!(start_pc_hi, start_pc_lo),
 
             halt:   false,
 
