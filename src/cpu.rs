@@ -1,10 +1,10 @@
 // SNES Processor
 use bitflags::bitflags;
 
-use crate::mem::MemBus;
-
-// Timings
-const INTERNAL_OP: usize = 6;
+use crate::{
+    mem::MemBus,
+    timing::INTERNAL_OP
+};
 
 bitflags! {
     // Flags for status bits inside the CPU.

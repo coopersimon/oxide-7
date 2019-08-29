@@ -2,10 +2,14 @@
 use std::{
     io::{
         BufReader,
-        Read
+        Read,
+        Seek,
+        SeekFrom
     },
     fs::File
 };
+
+use crate::timing::*;
 
 use super::{
     RAM,
@@ -14,11 +18,6 @@ use super::{
         LoROM
     }
 };
-
-// Timings
-const FAST_MEM_ACCESS: usize = 6;
-const SLOW_MEM_ACCESS: usize = 8;
-const XSLOW_MEM_ACCESS: usize = 12;
 
 // A bus to attach to the CPU (Address Bus A).
 pub struct MemBus {
@@ -29,18 +28,36 @@ pub struct MemBus {
 
 impl MemBus {
     pub fn new(cart_path: &str) -> Self {
-        // Open file and check type...
+        // Open ROM file.
         let f = File::open(cart_path).expect(&format!("Couldn't open file {}", cart_path));
 
-        let mut reader = BufReader::new(f);
-        // figure out which cart to use
-        let cart = Box::new(LoROM::new(reader));
+        let reader = BufReader::new(f);
+        
+        let cart = MemBus::make_cart(reader);
 
         MemBus {
             wram:   RAM::new(0x20000),
             bus_b:  AddrBusB::new(),
             cart:   cart
         }
+    }
+
+    fn make_cart(mut reader: BufReader<File>) -> Box<dyn Cart> {
+        let mut buf = [0; 0x40];
+        
+        // Check for LoROM
+        reader.seek(SeekFrom::Start(0x7FB0)).expect("Couldn't seek to cartridge header.");
+        reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
+
+        if (buf[0x25] & 0x21) == 0x20 {
+            return Box::new(LoROM::new(reader, (buf[0x25] & 0x10) != 0));
+        } else {
+            panic!("Unrecognised ROM");
+        }
+
+        // Check for HiROM
+        //reader.seek(SeekFrom::Start(0x7FB0)).expect("Couldn't seek to cartridge header.");
+        //reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
     }
 
     pub fn read(&mut self, addr: u32) -> (u8, usize) {
@@ -54,10 +71,10 @@ impl MemBus {
                 0x3000..=0x3FFF => (0, FAST_MEM_ACCESS), // Extensions
                 0x4000..=0x40FF => (0, XSLOW_MEM_ACCESS), // Joypads
                 0x4200..=0x44FF => (0, FAST_MEM_ACCESS), // DMA
-                0x6000..=0xFFFF => (self.cart.read(bank, offset), SLOW_MEM_ACCESS),
+                0x6000..=0x7FFF => self.cart.read(bank, offset),
                 _               => (0, FAST_MEM_ACCESS),  // Unmapped
             },
-            0x40..=0x7D | 0xC0..=0xFF => (self.cart.read(bank, offset), SLOW_MEM_ACCESS),
+            0x40..=0x7D | 0xC0..=0xFF => self.cart.read(bank, offset),
             0x7E | 0x7F => (self.wram.read(addr - 0x7E0000), SLOW_MEM_ACCESS),
         }
     }
@@ -73,10 +90,10 @@ impl MemBus {
                 0x3000..=0x3FFF => FAST_MEM_ACCESS, // Extensions
                 0x4000..=0x40FF => XSLOW_MEM_ACCESS, // Joypads
                 0x4200..=0x44FF => FAST_MEM_ACCESS, // DMA
-                0x6000..=0xFFFF => {self.cart.write(bank, offset, data); SLOW_MEM_ACCESS},
+                0x6000..=0xFFFF => self.cart.write(bank, offset, data),
                 _               => FAST_MEM_ACCESS,  // Unmapped
             },
-            0x40..=0x7D | 0xC0..=0xFF => {self.cart.write(bank, offset, data); SLOW_MEM_ACCESS},
+            0x40..=0x7D | 0xC0..=0xFF => self.cart.write(bank, offset, data),
             0x7E | 0x7F => {self.wram.write(addr - 0x7E0000, data); SLOW_MEM_ACCESS},
         }
     }

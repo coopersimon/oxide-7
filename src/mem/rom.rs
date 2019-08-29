@@ -10,11 +10,13 @@ use std::{
     fs::File
 };
 
+use crate::timing;
+
 use super::RAM;
 
 pub trait Cart {
-    fn read(&mut self, bank: u8, addr: u16) -> u8;
-    fn write(&mut self, bank: u8, addr: u16, data: u8);
+    fn read(&mut self, bank: u8, addr: u16) -> (u8, usize);
+    fn write(&mut self, bank: u8, addr: u16, data: u8) -> usize;
 }
 
 // ROM banks.
@@ -56,36 +58,45 @@ impl ROM {
 
 pub struct LoROM {
     rom: ROM,
-    ram: RAM
+    ram: RAM,
+
+    rom_speed: usize,
 }
 
 impl LoROM {
-    pub fn new(cart_file: BufReader<File>) -> Self {
+    pub fn new(cart_file: BufReader<File>, fast: bool) -> Self {
         LoROM {
             rom: ROM::new(cart_file, 0x8000),
-            ram: RAM::new(512 * 1024)
+            ram: RAM::new(512 * 1024),
+
+            rom_speed: if fast {timing::FAST_MEM_ACCESS} else {timing::SLOW_MEM_ACCESS}
         }
     }
 }
 
 impl Cart for LoROM {
-    fn read(&mut self, bank: u8, addr: u16) -> u8 {
+    fn read(&mut self, bank: u8, addr: u16) -> (u8, usize) {
         let internal_bank = bank % 0x80;
+
         if addr >= 0x8000 {
-            self.rom.read(internal_bank, addr % 0x8000)
+            (self.rom.read(internal_bank, addr % 0x8000), if bank >= 0x80 {timing::SLOW_MEM_ACCESS} else {self.rom_speed})
         } else if internal_bank >= 0x70 {
             let ram_bank = ((internal_bank - 0x70) as u32) * 0x8000;
-            self.ram.read(ram_bank + addr as u32)
+            (self.ram.read(ram_bank + addr as u32), timing::SLOW_MEM_ACCESS)
         } else {
-            0
+            (0, timing::SLOW_MEM_ACCESS)
         }
     }
 
-    fn write(&mut self, bank: u8, addr: u16, data: u8) {
+    fn write(&mut self, bank: u8, addr: u16, data: u8) -> usize {
         let internal_bank = bank % 0x80;
+        
         if internal_bank >= 0x70 {
             let ram_bank = ((internal_bank - 0x70) as u32) * 0x8000;
-            self.ram.write(ram_bank + addr as u32, data)
+            self.ram.write(ram_bank + addr as u32, data);
+            timing::SLOW_MEM_ACCESS
+        } else {
+            if bank >= 0x80 {timing::SLOW_MEM_ACCESS} else {self.rom_speed}
         }
     }
 }
