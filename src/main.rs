@@ -5,6 +5,7 @@ mod constants;
 mod cpu;
 mod joypad;
 mod mem;
+mod video;
 
 mod snes;
 
