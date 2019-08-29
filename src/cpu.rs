@@ -448,7 +448,7 @@ impl CPU {
         self.a = if self.is_m_set() {
             let result8 = result & 0xFF;
             let full_wraparound = (result8 == self.a) && (op != 0);
-            self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
+            self.p.set(PFlags::N, test_bit!(result8, 7));
             self.p.set(PFlags::V, ((result8 as i8) < (self.a as i8)) || full_wraparound);
             self.p.set(PFlags::Z, result8 == 0);
             self.p.set(PFlags::C, (result8 < self.a) || full_wraparound);
@@ -456,7 +456,7 @@ impl CPU {
             result8
         } else {
             let full_wraparound = (result == self.a) && (op != 0);
-            self.p.set(PFlags::N, (result & bit!(15, u16)) != 0);
+            self.p.set(PFlags::N, test_bit!(result, 15));
             self.p.set(PFlags::V, ((result as i16) < (self.a as i16)) || full_wraparound);
             self.p.set(PFlags::Z, result == 0);
             self.p.set(PFlags::C, (result < self.a) || full_wraparound);
@@ -472,7 +472,7 @@ impl CPU {
         self.a = if self.is_m_set() {
             let result8 = result & 0xFF;
             let full_wraparound = (result8 == self.a) && (op != 0);
-            self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
+            self.p.set(PFlags::N, test_bit!(result8, 7));
             self.p.set(PFlags::V, ((result8 as i8) > (self.a as i8)) || full_wraparound);
             self.p.set(PFlags::Z, result8 == 0);
             self.p.set(PFlags::C, (result8 > self.a) || full_wraparound);
@@ -480,7 +480,7 @@ impl CPU {
             result8
         } else {
             let full_wraparound = (result == self.a) && (op != 0);
-            self.p.set(PFlags::N, (result & bit!(15, u16)) != 0);
+            self.p.set(PFlags::N, test_bit!(result, 15));
             self.p.set(PFlags::V, ((result as i16) > (self.a as i16)) || full_wraparound);
             self.p.set(PFlags::Z, result == 0);
             self.p.set(PFlags::C, (result > self.a) || full_wraparound);
@@ -575,8 +575,8 @@ impl CPU {
             match data_mode {
                 DataMode::Imm => {},
                 _ => {
-                    self.p.set(PFlags::N, (op & bit!(7, u16)) != 0);
-                    self.p.set(PFlags::V, (op & bit!(6, u16)) != 0);
+                    self.p.set(PFlags::N, test_bit!(op, 7));
+                    self.p.set(PFlags::V, test_bit!(op, 6));
                 }
             }
         } else {
@@ -585,8 +585,8 @@ impl CPU {
             match data_mode {
                 DataMode::Imm => {},
                 _ => {
-                    self.p.set(PFlags::N, (op & bit!(15, u16)) != 0);
-                    self.p.set(PFlags::V, (op & bit!(14, u16)) != 0);
+                    self.p.set(PFlags::N, test_bit!(op, 15));
+                    self.p.set(PFlags::V, test_bit!(op, 14));
                 }
             }
         }
@@ -621,9 +621,9 @@ impl CPU {
         let result = op << 1;
 
         self.p.set(PFlags::C, if self.is_m_set() {
-            (op & bit!(7, u16)) != 0
+            test_bit!(op, 7)
         } else {
-            (op & bit!(15, u16)) != 0
+            test_bit!(op, 15)
         });
 
         self.clock_inc(INTERNAL_OP);
@@ -636,7 +636,7 @@ impl CPU {
         let (op, write_mode) = self.read_op_and_addr_mode(data_mode, self.is_m_set());
         let result = op >> 1;
 
-        self.p.set(PFlags::C, (op & bit!(0, u16)) != 0);
+        self.p.set(PFlags::C, test_bit!(op, 0));
 
         self.clock_inc(INTERNAL_OP);
 
@@ -649,9 +649,9 @@ impl CPU {
         let result = (op << 1) | ((self.p & PFlags::C).bits() as u16);
 
         self.p.set(PFlags::C, if self.is_m_set() {
-            (op & bit!(7, u16)) != 0
+            test_bit!(op, 7)
         } else {
-            (op & bit!(15, u16)) != 0
+            test_bit!(op, 15)
         });
 
         self.clock_inc(INTERNAL_OP);
@@ -665,7 +665,7 @@ impl CPU {
         let carry = ((self.p & PFlags::C).bits() as u16) << (if self.is_m_set() {7} else {15});
         let result = (op >> 1) | carry;
 
-        self.p.set(PFlags::C, (op & bit!(0, u16)) != 0);
+        self.p.set(PFlags::C, test_bit!(op, 0));
 
         self.clock_inc(INTERNAL_OP);
 
@@ -999,12 +999,12 @@ impl CPU {
     fn set_nz(&mut self, result: u16, byte: bool) -> u16 {
         if byte {
             let result8 = result & 0xFF;
-            self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
+            self.p.set(PFlags::N, test_bit!(result8, 7));
             self.p.set(PFlags::Z, result8 == 0);
 
             result8
         } else {
-            self.p.set(PFlags::N, (result & bit!(15, u16)) != 0);
+            self.p.set(PFlags::N, test_bit!(result, 15));
             self.p.set(PFlags::Z, result == 0);
 
             result
@@ -1028,11 +1028,11 @@ impl CPU {
 
         if self.p.contains(flag_check) {
             let result8 = result & 0xFF;
-            self.p.set(PFlags::N, (result8 & bit!(7, u16)) != 0);
+            self.p.set(PFlags::N, test_bit!(result8, 7));
             self.p.set(PFlags::Z, result8 == 0);
             self.p.set(PFlags::C, result8 >= reg);
         } else {
-            self.p.set(PFlags::N, (result & bit!(15, u16)) != 0);
+            self.p.set(PFlags::N, test_bit!(result, 15));
             self.p.set(PFlags::Z, result == 0);
             self.p.set(PFlags::C, result >= reg);
         }

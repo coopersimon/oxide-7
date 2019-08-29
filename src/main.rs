@@ -1,6 +1,7 @@
 #[macro_use]
 mod common;
 mod cpu;
+mod joypad;
 mod mem;
 mod timing;
 

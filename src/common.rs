@@ -16,6 +16,19 @@ macro_rules! bit {
     };
 }
 
+// Check if a bit is set.
+macro_rules! test_bit {
+    ($val:expr, $bit_num:expr) => {
+        test_bit!($val, $bit_num, u16)
+    };
+    ($val:expr, $bit_num:expr, u8) => {
+        ($val & bit!($bit_num, u8)) != 0
+    };
+    ($val:expr, $bit_num:expr, u16) => {
+        ($val & bit!($bit_num, u16)) != 0
+    };
+}
+
 // Make a 24-bit value from an 8-bit and a 16-bit value.
 macro_rules! make24 {
     ($hi:expr, $lo:expr) => {
