@@ -20,7 +20,7 @@ impl SNES {
     // Construct a new SNES with a cartridge inserted.
     pub fn new(cart_path: &str, save_path: &str) -> Self {
         let bus = MemBus::new(cart_path);
-        let mut cpu = CPU::new(bus);
+        let cpu = CPU::new(bus);
 
         let events_loop = EventsLoop::new();
 

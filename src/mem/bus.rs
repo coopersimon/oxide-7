@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    joypad::JoypadMem,
+    joypad::{Button, JoypadMem},
     constants::timing::*,
     video::PPU
 };
@@ -95,9 +95,9 @@ impl MemBus {
 
                 0x2100..=0x2143 => {self.bus_b.write(lo!(offset), data); FAST_MEM_ACCESS},
                 0x2180          => self.write(self.wram_addr, data),
-                0x2181          => {set_lo24!(self.wram_addr, data); FAST_MEM_ACCESS},
-                0x2182          => {set_mid24!(self.wram_addr, data); FAST_MEM_ACCESS},
-                0x2183          => {set_hi24!(self.wram_addr, data); FAST_MEM_ACCESS},
+                0x2181          => {self.wram_addr = set_lo24!(self.wram_addr, data); FAST_MEM_ACCESS},
+                0x2182          => {self.wram_addr = set_mid24!(self.wram_addr, data); FAST_MEM_ACCESS},
+                0x2183          => {self.wram_addr = set_hi24!(self.wram_addr, data); FAST_MEM_ACCESS},
                 0x2100..=0x21FF => FAST_MEM_ACCESS,
                 0x3000..=0x3FFF => FAST_MEM_ACCESS, // Extensions
 
@@ -114,6 +114,10 @@ impl MemBus {
             0x40..=0x7D | 0xC0..=0xFF => self.cart.write(bank, offset, data),
             0x7E | 0x7F => {self.wram.write(addr - 0x7E0000, data); SLOW_MEM_ACCESS},
         }
+    }
+
+    pub fn set_joypad_button(&mut self, button: Button, joypad: usize) {
+        self.joypads.set_button(button, joypad);
     }
 }
 
@@ -166,7 +170,7 @@ impl AddrBusB {
         }
     }
 
-    pub fn read(&mut self, addr: u8) -> u8 {
+    fn read(&mut self, addr: u8) -> u8 {
         match addr {
             0x34..=0x3F => self.ppu.read_mem(addr),
             0x40..=0x43 => 0, // APU IO
@@ -174,7 +178,7 @@ impl AddrBusB {
         }
     }
 
-    pub fn write(&mut self, addr: u8, data: u8) {
+    fn write(&mut self, addr: u8, data: u8) {
         match addr {
             0x00..=0x33 => self.ppu.write_mem(addr, data),
             0x37 => {}, // Software latch (?)

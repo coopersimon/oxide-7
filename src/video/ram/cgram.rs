@@ -27,4 +27,9 @@ impl CGRAM {
         self.data[self.addr as usize] = data;
         self.addr = self.addr.wrapping_add(1);
     }
+
+    // For use by renderer memory caches.
+    pub fn ref_data<'a>(&'a self) -> &'a [u8] {
+        &self.data
+    }
 }

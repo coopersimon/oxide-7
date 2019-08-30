@@ -1,28 +1,41 @@
 // Video memory. Connected to the B bus.
 
+mod registers;
 mod cgram;
+mod oam;
+mod vram;
 
+use registers::Registers;
 use cgram::CGRAM;
+use oam::OAM;
+use vram::VRAM;
 
 // Struct containing OAM, CGRAM and VRAM.
 pub struct VideoMem {
-    // OAM
-    cgram: CGRAM,
-    // VRAM
+    registers:  Registers,
+
+    oam:        OAM,
+    cgram:      CGRAM,
+    vram:       VRAM
 }
 
 impl VideoMem {
     pub fn new() -> Self {
         VideoMem {
-            cgram: CGRAM::new()
+            registers:  Registers::new(),
+
+            oam:        OAM::new(),
+            cgram:      CGRAM::new(),
+            vram:       VRAM::new()
         }
     }
 
     pub fn read(&mut self, addr: u8) -> u8 {
         match addr {
             0x34..=0x37 => 0, // Mult result
-            0x38 => 0, // OAM read
-            0x39..=0x3A => 0, // VRAM read
+            0x38 => self.oam.read(),
+            0x39 => self.vram.read_lo(),
+            0x3A => self.vram.read_hi(),
             0x3B => self.cgram.read(),
             0x3C => 0, // H scanline pos
             0x3D => 0, // V scanline pos
@@ -33,32 +46,32 @@ impl VideoMem {
 
     pub fn write(&mut self, addr: u8, data: u8) {
         match addr {
-            0x00 => {}, // screen display reg
-            0x01 => {}, // object control
-            0x02 => {}, // OAM address
-            0x03 => {},
-            0x04 => {}, // OAM write
-            0x05 => {}, // bg mode and char size
-            0x06 => {}, // mosaic settings
-            0x07 => {}, // BG1 settings
-            0x08 => {}, // BG2 settings
-            0x09 => {}, // BG3 settings
-            0x0A => {}, // BG4 settings
-            0x0B => {}, // BG1&2 char address
-            0x0C => {}, // BG3&4 char address
-            0x0D => {}, // BG1 scroll X
-            0x0E => {}, // BG1 scroll Y
-            0x0F => {}, // BG2 scroll X
-            0x10 => {}, // BG2 scroll Y
-            0x11 => {}, // BG3 scroll X
-            0x12 => {}, // BG3 scroll Y
-            0x13 => {}, // BG4 scroll X
-            0x14 => {}, // BG4 scroll Y
-            0x15 => {}, // Video port control
-            0x16 => {}, // VRAM addr lo
-            0x17 => {}, // VRAM addr hi
-            0x18 => {}, // VRAM data lo
-            0x19 => {}, // VRAM data hi
+            0x00 => self.registers.set_screen_display(data),
+            0x01 => self.oam.set_settings(data),
+            0x02 => self.oam.set_addr_lo(data),
+            0x03 => self.oam.set_addr_hi(data),
+            0x04 => self.oam.write(data),
+            0x05 => self.registers.set_bg_mode(data),
+            0x06 => self.registers.set_mosaic(data),
+            0x07 => self.registers.bg1_settings = data,
+            0x08 => self.registers.bg2_settings = data,
+            0x09 => self.registers.bg3_settings = data,
+            0x0A => self.registers.bg4_settings = data,
+            0x0B => self.registers.bg12_char_addr = data,
+            0x0C => self.registers.bg34_char_addr = data,
+            0x0D => self.registers.bg1_scroll_x = data,
+            0x0E => self.registers.bg1_scroll_y = data,
+            0x0F => self.registers.bg2_scroll_x = data,
+            0x10 => self.registers.bg2_scroll_y = data,
+            0x11 => self.registers.bg3_scroll_x = data,
+            0x12 => self.registers.bg3_scroll_y = data,
+            0x13 => self.registers.bg4_scroll_x = data,
+            0x14 => self.registers.bg4_scroll_y = data,
+            0x15 => self.vram.set_port_control(data),
+            0x16 => self.vram.set_addr_lo(data),
+            0x17 => self.vram.set_addr_hi(data),
+            0x18 => self.vram.write_lo(data),
+            0x19 => self.vram.write_hi(data),
             0x1A..=0x20 => {}, // Mode 7 shit
             0x21 => self.cgram.set_addr(data),
             0x22 => self.cgram.write(data),
@@ -73,5 +86,10 @@ impl VideoMem {
             0x33 => {}, // Screen mode select
             _ => unreachable!()
         }
+    }
+
+    // Renderer methods to get raw data.
+    pub fn get_cgram<'a>(&'a self) -> &'a [u8] {
+        self.cgram.ref_data()
     }
 }
