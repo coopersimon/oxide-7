@@ -12,21 +12,27 @@ use vram::VRAM;
 
 // Struct containing OAM, CGRAM and VRAM.
 pub struct VideoMem {
-    registers:  Registers,
+    registers:      Registers,
 
-    oam:        OAM,
-    cgram:      CGRAM,
-    vram:       VRAM
+    hor_scanline:   usize,
+    ver_scanline:   usize,
+
+    oam:            OAM,
+    cgram:          CGRAM,
+    vram:           VRAM
 }
 
 impl VideoMem {
     pub fn new() -> Self {
         VideoMem {
-            registers:  Registers::new(),
+            registers:      Registers::new(),
 
-            oam:        OAM::new(),
-            cgram:      CGRAM::new(),
-            vram:       VRAM::new()
+            hor_scanline:   0,
+            ver_scanline:   0,
+
+            oam:            OAM::new(),
+            cgram:          CGRAM::new(),
+            vram:           VRAM::new()
         }
     }
 
@@ -47,10 +53,12 @@ impl VideoMem {
     pub fn write(&mut self, addr: u8, data: u8) {
         match addr {
             0x00 => self.registers.set_screen_display(data),
+
             0x01 => self.oam.set_settings(data),
             0x02 => self.oam.set_addr_lo(data),
             0x03 => self.oam.set_addr_hi(data),
             0x04 => self.oam.write(data),
+
             0x05 => self.registers.set_bg_mode(data),
             0x06 => self.registers.set_mosaic(data),
             0x07 => self.registers.bg1_settings = data,
@@ -67,14 +75,18 @@ impl VideoMem {
             0x12 => self.registers.bg3_scroll_y = data,
             0x13 => self.registers.bg4_scroll_x = data,
             0x14 => self.registers.bg4_scroll_y = data,
+
             0x15 => self.vram.set_port_control(data),
             0x16 => self.vram.set_addr_lo(data),
             0x17 => self.vram.set_addr_hi(data),
             0x18 => self.vram.write_lo(data),
             0x19 => self.vram.write_hi(data),
+
             0x1A..=0x20 => {}, // Mode 7 shit
+
             0x21 => self.cgram.set_addr(data),
             0x22 => self.cgram.write(data),
+            
             0x23 => {}, // BG1&2 window
             0x24 => {}, // BG3&4 window
             0x25 => {}, // Obj window
@@ -91,5 +103,12 @@ impl VideoMem {
     // Renderer methods to get raw data.
     pub fn get_cgram<'a>(&'a self) -> &'a [u8] {
         self.cgram.ref_data()
+    }
+}
+
+// Status things
+impl VideoMem {
+    pub fn clock(&mut self) {
+        
     }
 }

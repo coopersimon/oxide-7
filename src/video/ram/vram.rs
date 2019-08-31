@@ -5,9 +5,9 @@ use bitflags::bitflags;
 bitflags! {
     #[derive(Default)]
     struct PortControl: u8 {
-        const INC =          bit!(7);
-        const FULL_GRAPHIC = bit!(3) | bit!(2);
-        const INC_RATE =     bit!(1) | bit!(0);
+        const INC =      bit!(7);
+        const REMAP =    bit!(3) | bit!(2);
+        const INC_RATE = bit!(1) | bit!(0);
     }
 }
 
@@ -91,7 +91,8 @@ impl VRAM {
             INC_RATE_2   => 2,
             INC_RATE_64  => 64,
             INC_RATE_128 => 128,
-            INC_RATE_256 => 256
+            INC_RATE_256 => 256,
+            _ => unreachable!()
         };
 
         self.addr = self.addr.wrapping_add(inc_rate);

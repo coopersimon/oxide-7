@@ -1,17 +1,34 @@
 // Various constants
 
+// Screen parameters
+pub mod screen {
+    pub const HORIZONTAL_DOTS: usize = 340;
+    pub const NUM_SCANLINES: usize = 262;
+
+    pub const H_RES: usize = 256;
+    pub const V_RES: usize = 224;
+}
+
 // Master cycle counts
 pub mod timing {
+    use super::screen;
+
+    // Instruction timing
     pub const INTERNAL_OP: usize      = 6;
     pub const FAST_MEM_ACCESS: usize  = 6;
     pub const SLOW_MEM_ACCESS: usize  = 8;
     pub const XSLOW_MEM_ACCESS: usize = 12;
 
-    pub const SCANLINE: usize = 1364;
+    // Video timing
+    pub const DOT_TIME: usize = 4;
+    pub const SCANLINE: usize = DOT_TIME * screen::HORIZONTAL_DOTS;
+    pub const SCANLINE_OFFSET: usize = DOT_TIME * 22;
+    pub const H_BLANK_TIME: usize = SCANLINE_OFFSET + (DOT_TIME * screen::H_RES);
+
     pub const PAUSE_START: usize = 536;
     pub const PAUSE_LEN: usize = 40;
 
-    pub const NUM_SCANLINES: usize = 262;
+    pub const FRAME_TIME: usize = SCANLINE * screen::NUM_SCANLINES;
 }
 
 // Interrupt vector locations. Each contains a 16-bit address.
