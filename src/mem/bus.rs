@@ -1,4 +1,5 @@
-// Address Buses A and B
+// Address Buses A and B, and DMA operation.
+
 use std::{
     io::{
         BufReader,
@@ -17,6 +18,10 @@ use crate::{
 
 use super::{
     RAM,
+    dma::{
+        DMAChannel,
+        DMAControl
+    },
     rom::{
         Cart,
         LoROM
@@ -36,6 +41,10 @@ pub struct MemBus {
     // Stored addresses
     wram_addr:  u32,
 
+    // DMA
+    hdma_active:    u8,
+    dma_channels:   Vec<DMAChannel>,
+
     // Extensions
 }
 
@@ -54,6 +63,9 @@ impl MemBus {
             
             cart:       cart,
             wram:       RAM::new(0x20000),
+
+            hdma_active:    0,
+            dma_channels:   vec![DMAChannel::new(); 8],
 
             wram_addr:  0,
         }
@@ -75,7 +87,15 @@ impl MemBus {
                 0x4000..=0x4015 |
                 0x4000..=0x41FF => (self.joypads.read(offset), XSLOW_MEM_ACCESS),
                 0x4200..=0x42FF => (self.read_reg(offset), FAST_MEM_ACCESS),
-                0x4300..=0x44FF => (0, FAST_MEM_ACCESS),                                // DMA
+
+                0x4300..=0x430A => (self.dma_channels[0].read((addr as u8) & 0xF), FAST_MEM_ACCESS),
+                0x4310..=0x431A => (self.dma_channels[1].read((addr as u8) & 0xF), FAST_MEM_ACCESS),
+                0x4320..=0x432A => (self.dma_channels[2].read((addr as u8) & 0xF), FAST_MEM_ACCESS),
+                0x4330..=0x433A => (self.dma_channels[3].read((addr as u8) & 0xF), FAST_MEM_ACCESS),
+                0x4340..=0x434A => (self.dma_channels[4].read((addr as u8) & 0xF), FAST_MEM_ACCESS),
+                0x4350..=0x435A => (self.dma_channels[5].read((addr as u8) & 0xF), FAST_MEM_ACCESS),
+                0x4360..=0x436A => (self.dma_channels[6].read((addr as u8) & 0xF), FAST_MEM_ACCESS),
+                0x4370..=0x437A => (self.dma_channels[7].read((addr as u8) & 0xF), FAST_MEM_ACCESS),
 
                 0x6000..=0xFFFF => self.cart.read(bank, offset),
                 _               => (0, FAST_MEM_ACCESS),                                // Unmapped
@@ -106,7 +126,15 @@ impl MemBus {
                 0x4016          => {self.joypads.latch_all(); XSLOW_MEM_ACCESS},
 
                 0x4200..=0x42FF => {self.write_reg(offset, data); FAST_MEM_ACCESS},
-                0x4300..=0x44FF => FAST_MEM_ACCESS, // DMA
+
+                0x4300..=0x430A => {self.dma_channels[0].write((addr as u8) & 0xF, data); FAST_MEM_ACCESS},
+                0x4310..=0x431A => {self.dma_channels[1].write((addr as u8) & 0xF, data); FAST_MEM_ACCESS},
+                0x4320..=0x432A => {self.dma_channels[2].write((addr as u8) & 0xF, data); FAST_MEM_ACCESS},
+                0x4330..=0x433A => {self.dma_channels[3].write((addr as u8) & 0xF, data); FAST_MEM_ACCESS},
+                0x4340..=0x434A => {self.dma_channels[4].write((addr as u8) & 0xF, data); FAST_MEM_ACCESS},
+                0x4350..=0x435A => {self.dma_channels[5].write((addr as u8) & 0xF, data); FAST_MEM_ACCESS},
+                0x4360..=0x436A => {self.dma_channels[6].write((addr as u8) & 0xF, data); FAST_MEM_ACCESS},
+                0x4370..=0x437A => {self.dma_channels[7].write((addr as u8) & 0xF, data); FAST_MEM_ACCESS},
 
                 0x6000..=0xFFFF => self.cart.write(bank, offset, data),
                 _               => FAST_MEM_ACCESS,  // Unmapped
@@ -118,6 +146,10 @@ impl MemBus {
 
     pub fn set_joypad_button(&mut self, button: Button, joypad: usize) {
         self.joypads.set_button(button, joypad);
+    }
+
+    pub fn clock(&mut self, cycles: usize) {
+
     }
 }
 
@@ -155,6 +187,60 @@ impl MemBus {
             0x4200          => self.joypads.enable_counter(data),
             _ => {},
         }
+    }
+
+    // DMA
+    // Keeps cycling until the transfer is done. This pauses the CPU operation.
+    fn dma_transfer(&mut self, channels: u8) {
+        for chan in 0..8 {
+            let channel = &mut self.dma_channels[chan];
+
+            while test_bit!(channels, chan, u8) {
+                let (src_addr, dst_addr) = if channel.control.contains(DMAControl::TRANSFER_DIR) {
+                    (channel.get_b_bus_addr(), channel.get_a_bus_addr())
+                } else {
+                    (channel.get_a_bus_addr(), channel.get_b_bus_addr())
+                };
+
+                match (channel.control & DMAControl::TRANSFER_MODE).bits() {
+                    0 => {
+                        let data = self.read(src_addr).0;
+                        self.write(dst_addr, data);
+                    },
+                    1 => for i in 0..2 {
+                        let data = self.read(src_addr + i).0;
+                        self.write(dst_addr + i, data);
+                    },
+                    2 | 6 => for i in 0..2 {
+                        let data = self.read(src_addr + i).0;
+                        self.write(dst_addr, data);
+                    },
+                    3 | 7 => for i in 0..4 {
+                        let data = self.read(src_addr + i).0;
+                        self.write(dst_addr + (i / 2), data);
+                    },
+                    4 => for i in 0..4 {
+                        let data = self.read(src_addr + i).0;
+                        self.write(dst_addr + i, data);
+                    },
+                    5 => for i in 0..4 {
+                        let data = self.read(src_addr + i).0;
+                        self.write(dst_addr + (i % 2), data);
+                    }
+                    _ => unreachable!()
+                }
+
+                if channel.decrement_count() {
+                    channels ^= bit!(chan);
+                }
+
+                self.clock(channel.get_cycles());
+            }
+        }
+    }
+
+    fn dma_cycle(&mut self) {
+        
     }
 }
 

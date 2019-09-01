@@ -39,9 +39,15 @@ macro_rules! make24 {
     };
 }
 
-// Get the lowest two bytes of a 24-bit value.
+// Get the lowest byte or 2 bytes of a 24-bit value.
 macro_rules! lo24 {
     ($val:expr) => {
+        lo24!($val, u16)
+    };
+    ($val:expr, u8) => {
+        $val as u8
+    };
+    ($val:expr, u16) => {
         $val as u16
     };
 }
@@ -50,6 +56,13 @@ macro_rules! lo24 {
 macro_rules! set_lo24 {
     ($val:expr, $lo:expr) => {
         ($val & 0xFFFFFF00) | ($lo as u32)
+    };
+}
+
+// Get the middle byte of a 24-bit value.
+macro_rules! mid24 {
+    ($val:expr) => {
+        ($val >> 8) as u8
     };
 }
 

@@ -1,5 +1,6 @@
 // Memory
 mod bus;
+mod dma;
 mod rom;
 
 pub use bus::MemBus;

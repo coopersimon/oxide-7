@@ -438,9 +438,7 @@ impl CPU {
 
     // Clock
     fn clock_inc(&mut self, cycles: usize) {
-        for _ in 0..cycles {
-
-        }
+        self.mem.clock(cycles);
     }
 }
 
