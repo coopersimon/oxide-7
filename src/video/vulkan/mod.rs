@@ -1,5 +1,6 @@
 // Vulkan renderer and data caches.
 
+mod mem;
 mod shaders;
 
 use vulkano::{
@@ -63,6 +64,8 @@ use super::{
     render::Renderable
 };
 
+use mem::MemoryCache;
+
 // Types
 type RenderPipeline = GraphicsPipeline<
     SingleBufferDefinition<Vertex>,
@@ -92,7 +95,7 @@ struct RenderData {
 
 pub struct Renderer {
     // Memory
-    mem:            VRamRef,
+    mem:            MemoryCache,
     // Core
     device:         Arc<Device>,
     queue:          Arc<Queue>,
@@ -102,12 +105,12 @@ pub struct Renderer {
     // Uniforms
     sampler:        Arc<Sampler>,
     set_pools:      Vec<FixedSizeDescriptorSetsPool<Arc<RenderPipeline>>>,
-    // Vulkan data
+    // Swapchain and frames
     swapchain:      Arc<Swapchain<Window>>,
     framebuffers:   Vec<Arc<dyn FramebufferAbstract + Send + Sync>>,
     dynamic_state:  DynamicState,
     // Frame data
-    previous_frame_future: Box<dyn GpuFuture + Send + Sync>,
+    previous_frame_future: Box<dyn GpuFuture>,
     render_data: Option<RenderData>
 }
 
@@ -234,7 +237,7 @@ impl Renderer {
         ];
 
         Renderer {
-            mem:            video_mem,
+            mem:            MemoryCache::new(video_mem),
 
             device:         device.clone(),
             queue:          queue,
@@ -253,11 +256,72 @@ impl Renderer {
             render_data: None
         }
     }
+
+    // Re-create the swapchain and framebuffers.
+    pub fn create_swapchain(&mut self) {
+        let window = self.surface.window();
+        let dimensions = if let Some(dimensions) = window.get_inner_size() {
+            let dimensions: (u32, u32) = dimensions.to_physical(window.get_hidpi_factor()).into();
+            [dimensions.0, dimensions.1]
+        } else {
+            return;
+        };
+
+        // Get a swapchain and images for use with the swapchain.
+        let (new_swapchain, images) = self.swapchain.recreate_with_dimension(dimensions).unwrap();
+
+        let viewport = Viewport {
+            origin: [0.0, 0.0],
+            dimensions: [dimensions[0] as f32, dimensions[1] as f32],
+            depth_range: 0.0 .. 1.0,
+        };
+
+        self.dynamic_state.viewports = Some(vec![viewport]);
+
+        self.framebuffers = images.iter().map(|image| {
+            Arc::new(
+                Framebuffer::start(self.render_pass.clone())
+                    .add(image.clone()).unwrap()
+                    .build().unwrap()
+            ) as Arc<dyn FramebufferAbstract + Send + Sync>
+        }).collect::<Vec<_>>();
+
+        self.swapchain = new_swapchain;
+    }
 }
 
 impl Renderable for Renderer {
     fn frame_start(&mut self) {
+        // Get current framebuffer index from the swapchain.
+        let (image_num, acquire_future) = acquire_next_image(self.swapchain.clone(), None)
+            .expect("Didn't get next image");
 
+        // Make image with current texture.
+        let (image, write_future) = video_mem.get_tile_atlas(&self.device, &self.queue);
+
+        // Make descriptor set to bind texture atlas.
+        let set0 = Arc::new(self.set_pools[0].next()
+            .add_sampled_image(image, self.sampler.clone()).unwrap()
+            .build().unwrap());
+
+        // Make descriptor set for palette.
+        let set1 = Arc::new(self.set_pools[1].next()
+            .add_buffer(video_mem.get_palette_buffer().clone()).unwrap()
+            .build().unwrap());
+        
+        // Start building command buffer using pipeline and framebuffer, starting with the background vertices.
+        let command_buffer_builder = AutoCommandBufferBuilder::primary_one_time_submit(self.device.clone(), self.queue.family()).unwrap()
+            .begin_render_pass(self.framebuffers[image_num].clone(), false, vec![[0.0, 0.0, 0.0, 1.0].into()]).unwrap();
+
+        self.render_data = Some(RenderData{
+            command_buffer: Some(command_buffer_builder),
+            acquire_future: Box::new(acquire_future),
+            image_num:      image_num,
+            image_future:   write_future,
+            pipeline:       self.pipeline.clone(),
+            //set0:           set0,
+            //set1:           set1
+        });
     }
 
     fn draw_line(&mut self) {

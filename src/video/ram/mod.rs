@@ -5,6 +5,8 @@ mod cgram;
 mod oam;
 mod vram;
 
+use crate::joypad::JoypadMem;
+
 use registers::Registers;
 use cgram::CGRAM;
 use oam::OAM;
@@ -13,9 +15,6 @@ use vram::VRAM;
 // Struct containing OAM, CGRAM and VRAM.
 pub struct VideoMem {
     registers:      Registers,
-
-    hor_scanline:   usize,
-    ver_scanline:   usize,
 
     oam:            OAM,
     cgram:          CGRAM,
@@ -27,12 +26,11 @@ impl VideoMem {
         VideoMem {
             registers:      Registers::new(),
 
-            hor_scanline:   0,
-            ver_scanline:   0,
-
             oam:            OAM::new(),
             cgram:          CGRAM::new(),
-            vram:           VRAM::new()
+            vram:           VRAM::new(),
+
+            joypads:        JoypadMem::new()
         }
     }
 
@@ -106,9 +104,6 @@ impl VideoMem {
     }
 }
 
-// Status things
+// Joypad access
 impl VideoMem {
-    pub fn clock(&mut self) {
-        
-    }
 }

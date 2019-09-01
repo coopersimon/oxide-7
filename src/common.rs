@@ -1,5 +1,12 @@
 // Common utils
 
+// Interrupts that can be triggered from devices.
+pub enum Interrupt {
+    NMI,
+    IRQ
+}
+
+/**** BIT MACROS ****/
 // Single bit selection.
 macro_rules! bit {
     ($bit_num:expr) => {
@@ -28,6 +35,43 @@ macro_rules! test_bit {
         ($val & bit!($bit_num, u16)) != 0
     };
 }
+
+
+// Make a 16-bit value from two 8-bit values.
+macro_rules! make16 {
+    ($hi:expr, $lo:expr) => {
+        (($hi as u16) << 8) | ($lo as u16)
+    };
+}
+
+// Get the low byte of a 16-bit value.
+macro_rules! lo {
+    ($val:expr) => {
+        $val as u8
+    };
+}
+
+// Set the low byte of a 16-bit value.
+macro_rules! set_lo {
+    ($val:expr, $lo:expr) => {
+        ($val & 0xFF00) | ($lo as u16)
+    };
+}
+
+// Get the high byte of a 16-bit value.
+macro_rules! hi {
+    ($val:expr) => {
+        ($val >> 8) as u8
+    };
+}
+
+// Set the high byte of a 16-bit value.
+macro_rules! set_hi {
+    ($val:expr, $hi:expr) => {
+        ($val & 0x00FF) | (($hi as u16) << 8)
+    };
+}
+
 
 // Make a 24-bit value from an 8-bit and a 16-bit value.
 macro_rules! make24 {
@@ -84,41 +128,5 @@ macro_rules! hi24 {
 macro_rules! set_hi24 {
     ($val:expr, $hi:expr) => {
         ($val & 0xFF00FFFF) | (($hi as u32) << 16)
-    };
-}
-
-
-// Make a 16-bit value from two 8-bit values.
-macro_rules! make16 {
-    ($hi:expr, $lo:expr) => {
-        (($hi as u16) << 8) | ($lo as u16)
-    };
-}
-
-// Get the low byte of a 16-bit value.
-macro_rules! lo {
-    ($val:expr) => {
-        $val as u8
-    };
-}
-
-// Set the low byte of a 16-bit value.
-macro_rules! set_lo {
-    ($val:expr, $lo:expr) => {
-        ($val & 0xFF00) | ($lo as u16)
-    };
-}
-
-// Get the high byte of a 16-bit value.
-macro_rules! hi {
-    ($val:expr) => {
-        ($val >> 8) as u8
-    };
-}
-
-// Set the high byte of a 16-bit value.
-macro_rules! set_hi {
-    ($val:expr, $hi:expr) => {
-        ($val & 0x00FF) | (($hi as u16) << 8)
     };
 }

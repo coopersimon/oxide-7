@@ -1,4 +1,5 @@
 // Tools for communicating with the renderer and its thread.
+use crate::joypad::Button;
 
 // Commands to send to the renderer.
 pub enum VideoCommand {
@@ -11,7 +12,7 @@ pub enum VideoCommand {
 // Signals sent back from the renderer.
 pub enum VideoSignal {
     HBlank,         // The line has been drawn, trigger h-blank
-    VBlank,         // The frame has been rendered fully, trigger h-blank
+    VBlank(Button), // The frame has been rendered fully, trigger v-blank. Return joypad update TODO: make this cleaner
     None            // Null signal, take no action.
 }
 

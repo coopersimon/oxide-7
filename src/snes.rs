@@ -9,11 +9,7 @@ use crate::{
 };
 
 pub struct SNES {
-    pub cpu:        CPU,        // CPU, along with mem bus and devices
-    events_loop:    EventsLoop, // EventsLoop
-    // Joypads
-    // Audio thread
-    // Video thread (?)
+    pub cpu: CPU,    // CPU, along with mem bus and devices
 }
 
 impl SNES {
@@ -22,11 +18,8 @@ impl SNES {
         let bus = MemBus::new(cart_path);
         let cpu = CPU::new(bus);
 
-        let events_loop = EventsLoop::new();
-
         SNES {
-            cpu:            cpu,
-            events_loop:    events_loop
+            cpu: cpu,
         }
     }
 

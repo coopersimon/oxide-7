@@ -43,9 +43,9 @@ impl JoypadMem {
         }
     }
 
-    // Set button externally.
-    pub fn set_button(&mut self, button: Button, joypad: usize) {
-        self.joypads[joypad].set_button(button);
+    // Set buttons externally.
+    pub fn set_buttons(&mut self, button: Button, joypad: usize) {
+        self.joypads[joypad].set_buttons(button);
     }
 
     // Set new-style joypad reading.
@@ -121,8 +121,8 @@ impl Joypad {
         }
     }
 
-    // Set button externally.
-    fn set_button(&mut self, button: Button) {
+    // Set buttons externally.
+    fn set_buttons(&mut self, button: Button) {
         self.buttons.insert(button);
     }
 
