@@ -5,8 +5,6 @@ mod cgram;
 mod oam;
 mod vram;
 
-use crate::joypad::JoypadMem;
-
 use registers::Registers;
 use cgram::CGRAM;
 use oam::OAM;
@@ -28,9 +26,7 @@ impl VideoMem {
 
             oam:            OAM::new(),
             cgram:          CGRAM::new(),
-            vram:           VRAM::new(),
-
-            joypads:        JoypadMem::new()
+            vram:           VRAM::new()
         }
     }
 

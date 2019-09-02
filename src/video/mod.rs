@@ -185,7 +185,9 @@ impl PPU {
             match wait_for_blank {
                 VideoSignal::VBlank(j) => {
                     self.joypads.set_buttons(j, 0);
-                    return self.trigger_interrupt(Interrupt::NMI);
+                    if self.int_enable.contains(IntEnable::ENABLE_NMI) {
+                        return self.trigger_interrupt(Interrupt::NMI);
+                    }
                 },
                 VideoSignal::HBlank => return PPUSignal::HBlank,
                 VideoSignal::None   => {}
@@ -205,7 +207,7 @@ impl PPU {
             }
         }
 
-        if self.int_enable.contains(IntEnable::ENABLE_IRQ_Y) && (self.cycle_count >= self.h_cycle) {
+        if self.int_enable.contains(IntEnable::ENABLE_IRQ_X) && (self.cycle_count >= self.h_cycle) {
             self.trigger_interrupt(Interrupt::IRQ)
         } else {
             PPUSignal::None

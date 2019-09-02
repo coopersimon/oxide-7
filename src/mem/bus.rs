@@ -11,7 +11,6 @@ use std::{
 };
 
 use crate::{
-    joypad::{Button, JoypadMem},
     common::Interrupt,
     constants::timing::*,
     video::{PPU, PPUSignal}
@@ -38,8 +37,12 @@ pub struct MemBus {
     cart:       Box<dyn Cart>,
     wram:       RAM,
 
-    // Stored addresses
-    wram_addr:  u32,
+    // Stored values
+    wram_addr:      u32,
+    mult_operand:   u8,
+    div_operand:    u16,
+    div_result:     u16,    // TODO: do these need to be timed properly?
+    mult_result:    u16,
 
     // DMA
     hdma_active:    u8,
@@ -67,7 +70,11 @@ impl MemBus {
             hdma_active:    0,
             dma_channels:   vec![DMAChannel::new(); 8],
 
-            wram_addr:  0,
+            wram_addr:      0,
+            mult_operand:   0,
+            div_operand:    0,
+            div_result:     0,
+            mult_result:    0,
         }
     }
 
@@ -144,9 +151,19 @@ impl MemBus {
         }
     }
 
-    pub fn clock(&mut self, cycles: usize) -> Interrupt {
-        match self.bus_b.clock(cycles) {
-            
+    // Clock the PPU and APU, and handle any signals coming from the PPU.
+    pub fn clock(&mut self, cycles: usize) -> Option<Interrupt> {
+        // TODO: clock APU.
+        match self.bus_b.ppu.clock(cycles) {
+            PPUSignal::NMI => Some(Interrupt::NMI),
+            PPUSignal::IRQ => Some(Interrupt::IRQ),
+            PPUSignal::HBlank => {
+                if self.hdma_active != 0 {
+                    self.hdma_transfer();
+                }
+                None
+            },
+            PPUSignal::None => None
         }
     }
 }
@@ -178,10 +195,10 @@ impl MemBus {
             0x4211 => self.bus_b.ppu.get_irq_flag(),
             0x4212 => self.bus_b.ppu.get_status(), // PPU status
             0x4213 => 0, // IO port read
-            0x4214 => 0, // DIV QUOT LO
-            0x4215 => 0, // DIV QUOT HI
-            0x4216 => 0, // MULT PROD / DIV REM LO
-            0x4217 => 0, // MULT PROD / DIV REM HI
+            0x4214 => lo!(self.div_result),
+            0x4215 => hi!(self.div_result),
+            0x4216 => lo!(self.mult_result),
+            0x4217 => hi!(self.mult_result),
             0x4218..=0x421F => self.bus_b.ppu.read_joypad(addr),
             _ => 0,
         }
@@ -191,17 +208,34 @@ impl MemBus {
         match addr {
             0x4200 => self.bus_b.ppu.set_int_enable(data),   // Enable IRQ
             0x4201 => {}, // IO port write
-            0x4202 => {}, // MULT A
-            0x4203 => {}, // MULT B
-            0x4204 => {}, // DIV A LO
-            0x4205 => {}, // DIV A HI
-            0x4206 => {}, // DIV B
+            0x4202 => self.mult_operand = data,
+            0x4203 => self.mult_result = (self.mult_operand as u16) * (data as u16),
+            0x4204 => self.div_operand = set_lo!(self.div_operand, data),
+            0x4205 => self.div_operand = set_hi!(self.div_operand, data),
+            0x4206 => {
+                let divisor = data as u16;
+                self.div_result = self.div_operand / divisor;
+                self.mult_result = self.div_operand % divisor;
+            },
             0x4207 => self.bus_b.ppu.set_h_timer_lo(data),
             0x4208 => self.bus_b.ppu.set_h_timer_hi(data),
             0x4209 => self.bus_b.ppu.set_v_timer_lo(data),
             0x420a => self.bus_b.ppu.set_v_timer_hi(data),
             0x420b => self.dma_transfer(data),
-            0x420c => {}, // HDMA
+            0x420c => {
+                self.hdma_active = data;
+                for chan in 0..8 {
+                    if test_bit!(self.hdma_active, chan, u8) {
+                        let channel = &mut self.dma_channels[chan];
+
+                        channel.start_hdma();
+                        
+                        if !channel.init_instr(self.read(channel.hdma_table_addr).0) {
+                            self.hdma_active ^= bit!(chan);
+                        }
+                    }
+                }
+            },
             0x420d => {}, // Fast ROM access speed
             _ => unreachable!(),
         }
@@ -257,8 +291,78 @@ impl MemBus {
         }
     }
 
-    fn dma_cycle(&mut self) {
-        
+    // Transfers a single block of HDMA data. Called during H-blank.
+    fn hdma_transfer(&mut self) {
+        for chan in 0..8 {
+            if test_bit!(self.hdma_active, chan, u8) {
+                let channel = &mut self.dma_channels[chan];
+                
+                // Get new instruction.
+                if channel.get_line_count() == 0 {
+                    channel.inc_table_addr();
+                    // Finish channel.
+                    if !channel.init_instr(self.read(channel.hdma_table_addr).0) {
+                        self.hdma_active ^= bit!(chan);
+                        continue;
+                    } else if channel.once() {
+                        self.hdma_line(channel);
+                    }
+                }
+
+                // Run the instruction for each line.
+                if !channel.once() {
+                    self.hdma_line(channel);
+                }
+
+                channel.dec_line_count();
+            }
+        }
+    }
+
+    // A single HDMA line transfer.
+    fn hdma_line(&mut self, channel: &mut DMAChannel) {
+        // Get bytes to write.
+        match (channel.control & DMAControl::TRANSFER_MODE).bits() {
+            0 => {
+                let data = self.get_hdma_data(channel, 0);
+                self.bus_b.write(channel.b_bus_addr, data);
+            },
+            1 => for i in 0_u8..2_u8 {
+                let data = self.get_hdma_data(channel, i as u32);
+                self.bus_b.write(channel.b_bus_addr + i, data);
+            },
+            2 | 6 => for i in 0_u8..2_u8 {
+                let data = self.get_hdma_data(channel, i as u32);
+                self.bus_b.write(channel.b_bus_addr, data);
+            },
+            3 | 7 => for i in 0_u8..4_u8 {
+                let data = self.get_hdma_data(channel, i as u32);
+                self.bus_b.write(channel.b_bus_addr + (i / 2), data);
+            },
+            4 => for i in 0_u8..4_u8 {
+                let data = self.get_hdma_data(channel, i as u32);
+                self.bus_b.write(channel.b_bus_addr + i, data);
+            },
+            5 => for i in 0_u8..4_u8 {
+                let data = self.get_hdma_data(channel, i as u32);
+                self.bus_b.write(channel.b_bus_addr + (i % 2), data);
+            }
+            _ => unreachable!()
+        }
+
+        self.clock(channel.get_cycles());
+    }
+
+    // Get HDMA data for a transfer.
+    fn get_hdma_data(&mut self, channel: &DMAChannel, offset: u32) -> u8 {
+        if channel.control.contains(DMAControl::HDMA_INDIRECT) {
+            let lo = self.read(channel.hdma_table_addr + (offset * 2)).0;
+            let hi = self.read(channel.hdma_table_addr + (offset * 2) + 1).0;
+            let indirect_addr = channel.indirect_table_addr(make16!(hi, lo));
+            self.read(indirect_addr).0
+        } else {
+            self.read(channel.hdma_table_addr + offset).0
+        }
     }
 }
 
@@ -289,9 +393,5 @@ impl AddrBusB {
             0x40..=0x43 => {}, // APU IO
             _ => unreachable!()
         }
-    }
-
-    fn clock(&mut self, cycles: usize) -> PPUSignal {
-        self.ppu.clock(cycles)
     }
 }

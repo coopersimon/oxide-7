@@ -3,6 +3,7 @@ use bitflags::bitflags;
 
 use crate::{
     mem::MemBus,
+    common::Interrupt,
     constants::{
         timing::INTERNAL_OP,
         int
@@ -91,6 +92,7 @@ pub struct CPU {
 
     // Status
     halt:   bool,
+    int:    Option<Interrupt>,  // Pending interrupts
 
     // Memory
     mem:    MemBus
@@ -116,6 +118,7 @@ impl CPU {
             pc:     make16!(start_pc_hi, start_pc_lo),
 
             halt:   false,
+            int:    None,
 
             mem:    bus
         }
@@ -124,7 +127,16 @@ impl CPU {
     // A single step of the CPU.
     // Executes an instruction and clocks other components.
     pub fn step(&mut self) {
-        if !self.halt {
+        // Check for interrupts.
+        if let Some(int) = self.int {
+            self.trigger_interrupt(match int {
+                Interrupt::NMI => if self.is_e_set() {int::NMI_VECTOR_EMU} else {int::NMI_VECTOR},
+                Interrupt::IRQ => if self.is_e_set() {int::IRQ_VECTOR_EMU} else {int::IRQ_VECTOR}
+            });
+
+            self.int = None;
+            self.halt = false;
+        } else if !self.halt {
             self.execute_instruction();
         }
     }
@@ -438,7 +450,8 @@ impl CPU {
 
     // Clock
     fn clock_inc(&mut self, cycles: usize) {
-        self.mem.clock(cycles);
+        // TODO: H-blank? More than one interrupt set?
+        self.int = self.mem.clock(cycles);
     }
 }
 

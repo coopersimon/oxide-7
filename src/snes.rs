@@ -1,7 +1,5 @@
 // Collection of components
 
-use winit::EventsLoop;
-
 use crate::{
     cpu::CPU,
     mem::MemBus

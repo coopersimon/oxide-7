@@ -96,10 +96,16 @@ macro_rules! lo24 {
     };
 }
 
-// Set the lowest byte of a 24-bit value.
+// Set the lowest byte or 2 bytes of a 24-bit value.
 macro_rules! set_lo24 {
     ($val:expr, $lo:expr) => {
+        set_lo24!($val, $lo, u8)
+    };
+    ($val:expr, $lo:expr, u8) => {
         ($val & 0xFFFFFF00) | ($lo as u32)
+    };
+    ($val:expr, $lo:expr, u16) => {
+        ($val & 0xFFFF0000) | ($lo as u32)
     };
 }
 
