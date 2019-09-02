@@ -28,6 +28,7 @@ use super::super::super::VideoMem;
 pub type PatternImage = Arc<ImmutableImage<R8Uint>>;
 pub type PatternFuture = Box<dyn GpuFuture>;
 
+#[derive(Clone, Copy, PartialEq)]
 pub enum BitsPerPixel {
     _2,
     _4,
@@ -72,14 +73,14 @@ impl PatternMem {
     }
 
     // Call if VRAM is known to be dirty.
-    pub fn clear_image(&mut self, mem: &mut VideoMem) {
+    pub fn clear_image(&mut self, mem: &VideoMem) {
         if mem.vram_dirty_range(self.start_addr, self.end_addr) {
             self.image = None;
         }
     }
 
     // Return cached image or create one if none is cached.
-    pub fn get_image(&mut self, mem: &mut VideoMem) -> (PatternImage, PatternFuture) {
+    pub fn get_image(&mut self, mem: &VideoMem) -> (PatternImage, PatternFuture) {
         if let Some(image) = &self.image {
             (image.clone(), Box::new(now(self.device.clone())))
         } else {
@@ -88,6 +89,30 @@ impl PatternMem {
             self.image = Some(image.clone());
             (image, Box::new(future))
         }
+    }
+
+    // Set the address.
+    pub fn set_addr(&mut self, start_addr: u16) {
+        let size = (self.width * self.height * match self.bits_per_pixel {
+            BitsPerPixel::_2 => 16,
+            BitsPerPixel::_4 => 32,
+            BitsPerPixel::_8 => 64,
+        }) as u16;   // TODO: check against max size
+
+        self.start_addr = start_addr;
+        self.end_addr = start_addr + size;
+
+        self.image = None;
+    }
+
+    // Return the BPP.
+    pub fn get_bits_per_pixel(&self) -> BitsPerPixel {
+        self.bits_per_pixel
+    }
+
+    // Return the start address.
+    pub fn get_start_addr(&self) -> u16 {
+        self.start_addr
     }
 }
 

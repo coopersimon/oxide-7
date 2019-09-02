@@ -111,6 +111,7 @@ impl VRAM {
     }
 
     // Check if a block of bytes overlaps with the dirty range.
+    // TODO: return the overlapped area.
     pub fn dirty_range(&self, start: u16, end: u16) -> bool {
         (start <= self.dirty_end) && (end >= self.dirty_start)
     }

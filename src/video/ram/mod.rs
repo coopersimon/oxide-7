@@ -5,7 +5,7 @@ mod cgram;
 mod oam;
 mod vram;
 
-use registers::Registers;
+pub use registers::*;
 use cgram::CGRAM;
 use oam::OAM;
 use vram::VRAM;
@@ -111,6 +111,10 @@ impl VideoMem {
         self.vram.ref_data()
     }
 
+    pub fn get_registers<'a>(&'a self) -> &'a Registers {
+        &self.registers
+    }
+
     // Renderer methods to check dirtiness of data.
     pub fn is_oam_dirty(&self) -> bool {
         self.oam.is_dirty()
@@ -126,5 +130,9 @@ impl VideoMem {
 
     pub fn vram_dirty_range(&self, start: u16, end: u16) -> bool {
         self.vram.dirty_range(start, end)
+    }
+
+    pub fn vram_reset_dirty_range(&mut self) {
+        self.vram.reset_dirty_range();
     }
 }

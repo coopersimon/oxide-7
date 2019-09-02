@@ -35,6 +35,9 @@ macro_rules! test_bit {
     ($val:expr, $bit_num:expr, u16) => {
         ($val & bit!($bit_num, u16)) != 0
     };
+    ($val:expr, $bit_num:expr, u32) => {
+        ($val & bit!($bit_num, u32)) != 0
+    };
 }
 
 

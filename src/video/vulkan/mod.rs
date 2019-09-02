@@ -44,7 +44,9 @@ use vulkano::{
             FixedSizeDescriptorSetsPool
         },
         pipeline_layout::PipelineLayoutAbstract
-    }
+    },
+    memory::pool::StdMemoryPool,
+    buffer::cpu_pool::CpuBufferPoolChunk
 };
 
 use vulkano_win::VkSurfaceBuild;
@@ -81,6 +83,15 @@ struct Vertex {
 }
 
 vulkano::impl_vertex!(Vertex, position, data);
+
+// TODO: move this and other data elsewhere
+#[derive(Clone, Copy)]
+enum Side {
+    Left =  0 << 16,
+    Right = 1 << 16
+}
+
+pub type VertexBuffer = CpuBufferPoolChunk<Vertex, Arc<StdMemoryPool>>;
 
 // Data for a single render
 struct RenderData {
@@ -237,7 +248,7 @@ impl Renderer {
         ];
 
         Renderer {
-            mem:            MemoryCache::new(video_mem),
+            mem:            MemoryCache::new(video_mem, &device, &queue),
 
             device:         device.clone(),
             queue:          queue,
@@ -252,7 +263,7 @@ impl Renderer {
             framebuffers:   framebuffers,
             dynamic_state:  dynamic_state,
 
-            previous_frame_future: Box::new(now(device.clone())),
+            previous_frame_future: Box::new(now(device)),
             render_data: None
         }
     }
