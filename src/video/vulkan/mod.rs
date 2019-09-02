@@ -297,7 +297,7 @@ impl Renderable for Renderer {
             .expect("Didn't get next image");
 
         // Make image with current texture.
-        let (image, write_future) = video_mem.get_tile_atlas(&self.device, &self.queue);
+        /*let (image, write_future) = video_mem.get_tile_atlas(&self.device, &self.queue);
 
         // Make descriptor set to bind texture atlas.
         let set0 = Arc::new(self.set_pools[0].next()
@@ -307,7 +307,7 @@ impl Renderable for Renderer {
         // Make descriptor set for palette.
         let set1 = Arc::new(self.set_pools[1].next()
             .add_buffer(video_mem.get_palette_buffer().clone()).unwrap()
-            .build().unwrap());
+            .build().unwrap());*/
         
         // Start building command buffer using pipeline and framebuffer, starting with the background vertices.
         let command_buffer_builder = AutoCommandBufferBuilder::primary_one_time_submit(self.device.clone(), self.queue.family()).unwrap()
@@ -317,7 +317,7 @@ impl Renderable for Renderer {
             command_buffer: Some(command_buffer_builder),
             acquire_future: Box::new(acquire_future),
             image_num:      image_num,
-            image_future:   write_future,
+            image_future:   Box::new(now(self.device.clone())),//write_future,
             pipeline:       self.pipeline.clone(),
             //set0:           set0,
             //set1:           set1

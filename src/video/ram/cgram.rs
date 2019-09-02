@@ -1,15 +1,19 @@
 // CGRAM: contains palette information.
 
 pub struct CGRAM {
-    data: Vec<u8>,
-    addr: u8
+    data:   Vec<u8>,
+    addr:   u8,
+
+    dirty:  bool
 }
 
 impl CGRAM {
     pub fn new() -> Self {
         CGRAM {
-            data: vec![0; 256],
-            addr: 0
+            data:   vec![0; 256],
+            addr:   0,
+
+            dirty:  true
         }
     }
 
@@ -26,10 +30,16 @@ impl CGRAM {
     pub fn write(&mut self, data: u8) {
         self.data[self.addr as usize] = data;
         self.addr = self.addr.wrapping_add(1);
+        self.dirty = true;
     }
 
     // For use by renderer memory caches.
-    pub fn ref_data<'a>(&'a self) -> &'a [u8] {
+    pub fn ref_data<'a>(&'a mut self) -> &'a [u8] {
+        self.dirty = false;
         &self.data
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
     }
 }

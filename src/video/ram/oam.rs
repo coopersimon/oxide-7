@@ -28,6 +28,8 @@ pub struct OAM {
     hi_byte:    bool,
     flags:      OAMFlags,
     buffer:     u8,
+
+    dirty:      bool
 }
 
 impl OAM {
@@ -42,6 +44,8 @@ impl OAM {
             hi_byte:    false,
             flags:      OAMFlags::default(),
             buffer:     0,
+
+            dirty:      true,
         }
     }
 
@@ -95,5 +99,22 @@ impl OAM {
             self.buffer = data;
             self.hi_byte = true;
         }
+
+        self.dirty = true;
+    }
+
+    // For use by renderer memory caches.
+    pub fn ref_hi_data<'a>(&'a mut self) -> &'a [u8] {
+        self.dirty = false;
+        &self.hi_table
+    }
+
+    pub fn ref_lo_data<'a>(&'a mut self) -> &'a [u8] {
+        self.dirty = false;
+        &self.lo_table
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
     }
 }

@@ -8,7 +8,7 @@ use patternmem::*;
 pub struct MemoryCache {
     native_mem:     VRamRef,
 
-    pattern_mem:    [PatternMem; 4]
+    pattern_mem:    Vec<PatternMem>
 }
 
 impl MemoryCache {
@@ -16,7 +16,7 @@ impl MemoryCache {
         MemoryCache {
             native_mem:     vram,
 
-            pattern_mem:    [PatternMem::new(), PatternMem::new(), PatternMem::new(), PatternMem::new()]
+            pattern_mem:    Vec::new()
         }
     }
 

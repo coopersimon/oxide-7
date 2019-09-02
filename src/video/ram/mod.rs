@@ -95,11 +95,36 @@ impl VideoMem {
     }
 
     // Renderer methods to get raw data.
-    pub fn get_cgram<'a>(&'a self) -> &'a [u8] {
+    pub fn get_oam_hi<'a>(&'a mut self) -> &'a [u8] {
+        self.oam.ref_hi_data()
+    }
+
+    pub fn get_oam_lo<'a>(&'a mut self) -> &'a [u8] {
+        self.oam.ref_lo_data()
+    }
+
+    pub fn get_cgram<'a>(&'a mut self) -> &'a [u8] {
         self.cgram.ref_data()
     }
-}
 
-// Joypad access
-impl VideoMem {
+    pub fn get_vram<'a>(&'a self) -> &'a [u8] {
+        self.vram.ref_data()
+    }
+
+    // Renderer methods to check dirtiness of data.
+    pub fn is_oam_dirty(&self) -> bool {
+        self.oam.is_dirty()
+    }
+
+    pub fn is_cgram_dirty(&self) -> bool {
+        self.cgram.is_dirty()
+    }
+
+    pub fn is_vram_dirty(&self) -> bool {
+        self.vram.is_dirty()
+    }
+
+    pub fn vram_dirty_range(&self, start: u16, end: u16) -> bool {
+        self.vram.dirty_range(start, end)
+    }
 }

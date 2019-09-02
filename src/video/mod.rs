@@ -47,6 +47,14 @@ bitflags! {
     }
 }
 
+bitflags! {
+    #[derive(Default)]
+    struct PPUStatus: u8 {
+        const V_BLANK = bit!(7);
+        const H_BLANK = bit!(6);
+    }
+}
+
 // Signal from the PPU.
 pub enum PPUSignal {
     None,       // No signal
@@ -65,6 +73,7 @@ pub struct PPU {
     scanline:       usize,  // Current scanline
 
     int_enable:     IntEnable,
+    status:         PPUStatus,
     nmi_flag:       u8,     // Top bit set if NMI occurs.
     irq_flag:       u8,     // Top bit set if IRQ occurs.
     h_timer:        u16,    // $4207-8, for triggering IRQ.
@@ -121,6 +130,7 @@ impl PPU {
             scanline:       0,
 
             int_enable:     IntEnable::default(),
+            status:         PPUStatus::default(),
             nmi_flag:       0,
             irq_flag:       0,
             h_timer:        0,
@@ -149,7 +159,7 @@ impl PPU {
 
     // Misc
     pub fn get_status(&mut self) -> u8 {
-        0 // TODO
+        self.joypads.is_ready()
     }
 
     // Joypad access
@@ -184,24 +194,40 @@ impl PPU {
 
             match wait_for_blank {
                 VideoSignal::VBlank(j) => {
+                    self.toggle_vblank(true);
                     self.joypads.set_buttons(j, 0);
+
+                    if self.int_enable.contains(IntEnable::AUTO_JOYPAD) {
+                        self.joypads.prepare_read();
+                    }
+
                     if self.int_enable.contains(IntEnable::ENABLE_NMI) {
                         return self.trigger_interrupt(Interrupt::NMI);
                     }
                 },
-                VideoSignal::HBlank => return PPUSignal::HBlank,
+                VideoSignal::HBlank => {
+                    self.toggle_hblank(true);
+                    return PPUSignal::HBlank;
+                },
                 VideoSignal::None   => {}
             }
 
         } else if self.cycle_count >= timing::SCANLINE_OFFSET {
 
-            if self.scanline == 0 {
+            if self.scanline == 1 {
                 self.nmi_flag = 0;
+                self.toggle_vblank(false);
                 self.command_tx.send(VideoCommand::FrameStart).unwrap();
-            } else if self.scanline <= 224 {
                 self.command_tx.send(VideoCommand::DrawLine).unwrap();
+
+            } else if self.scanline <= 224 {
+                self.toggle_hblank(false);
+                self.command_tx.send(VideoCommand::DrawLine).unwrap();
+
             } else if self.scanline == 225 {
+                self.toggle_hblank(false);
                 self.command_tx.send(VideoCommand::FrameEnd).unwrap();
+                
             } else {
                 self.command_tx.send(VideoCommand::None).unwrap();
             }
@@ -265,5 +291,14 @@ impl PPU {
                 PPUSignal::IRQ
             },
         }
+    }
+
+    // Toggle blanking modes.
+    fn toggle_vblank(&mut self, vblank: bool) {
+        self.status.set(PPUStatus::V_BLANK, vblank);
+    }
+
+    fn toggle_hblank(&mut self, hblank: bool) {
+        self.status.set(PPUStatus::H_BLANK, hblank);
     }
 }
