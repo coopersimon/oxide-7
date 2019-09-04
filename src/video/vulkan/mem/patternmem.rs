@@ -30,9 +30,9 @@ pub type PatternFuture = Box<dyn GpuFuture>;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum BitsPerPixel {
-    _2,
-    _4,
-    _8
+    _2 = 2,
+    _4 = 4,
+    _8 = 8
 }
 
 pub struct PatternMem {
@@ -92,12 +92,13 @@ impl PatternMem {
     }
 
     // Set the address.
-    pub fn set_addr(&mut self, start_addr: u16) {
+    pub fn set_addr(&mut self, start_addr: u16, height: u32) {
+        self.height = height;
         let size = (self.width * self.height * match self.bits_per_pixel {
             BitsPerPixel::_2 => 16,
             BitsPerPixel::_4 => 32,
             BitsPerPixel::_8 => 64,
-        }) as u16;   // TODO: check against max size
+        }) as u16;
 
         self.start_addr = start_addr;
         self.end_addr = start_addr + size;

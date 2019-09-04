@@ -113,7 +113,7 @@ impl TileMap {
             }
         }
         
-        return true;
+        true
     }
 
     // Update the tiles if the memory region is dirty.

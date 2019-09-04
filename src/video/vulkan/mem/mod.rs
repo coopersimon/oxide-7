@@ -28,7 +28,7 @@ use vulkano::{
 
 use std::sync::Arc;
 
-use super::super::ram::Registers;
+use super::VertexBuffer;
 use crate::video::VRamRef;
 use patternmem::*;
 use tilemap::*;
@@ -70,7 +70,7 @@ impl MemoryCache {
         MemoryCache {
             native_mem:     vram,
 
-            mode:           0,
+            mode:           8,
 
             pattern_mem:    pattern_mem,
             tile_maps:      tile_maps,
@@ -94,28 +94,32 @@ impl MemoryCache {
         // TODO: just check relevant BGs
         let regs = mem.get_registers();
         if self.pattern_mem[0].get_start_addr() != regs.bg_1_pattern_addr() {
-            self.pattern_mem[0].set_addr(regs.bg_1_pattern_addr());
+            let height = regs.get_pattern_table_height(regs.bg_1_pattern_addr(), self.pattern_mem[0].get_bits_per_pixel() as u32);
+            self.pattern_mem[0].set_addr(regs.bg_1_pattern_addr(), height);
         }
         if !self.tile_maps[0].check_and_set_addr(regs.bg1_settings) {
             self.tile_maps[0] = TileMap::new(&self.device, regs.bg1_settings, regs.bg_1_large_tiles());
         }
 
         if self.pattern_mem[1].get_start_addr() != regs.bg_2_pattern_addr() {
-            self.pattern_mem[1].set_addr(regs.bg_2_pattern_addr());
+            let height = regs.get_pattern_table_height(regs.bg_2_pattern_addr(), self.pattern_mem[1].get_bits_per_pixel() as u32);
+            self.pattern_mem[1].set_addr(regs.bg_2_pattern_addr(), height);
         }
         if !self.tile_maps[1].check_and_set_addr(regs.bg2_settings) {
             self.tile_maps[1] = TileMap::new(&self.device, regs.bg2_settings, regs.bg_2_large_tiles());
         }
 
         if self.pattern_mem[2].get_start_addr() != regs.bg_3_pattern_addr() {
-            self.pattern_mem[2].set_addr(regs.bg_3_pattern_addr());
+            let height = regs.get_pattern_table_height(regs.bg_3_pattern_addr(), self.pattern_mem[2].get_bits_per_pixel() as u32);
+            self.pattern_mem[2].set_addr(regs.bg_3_pattern_addr(), height);
         }
         if !self.tile_maps[2].check_and_set_addr(regs.bg3_settings) {
             self.tile_maps[2] = TileMap::new(&self.device, regs.bg3_settings, regs.bg_3_large_tiles());
         }
 
         if self.pattern_mem[3].get_start_addr() != regs.bg_4_pattern_addr() {
-            self.pattern_mem[3].set_addr(regs.bg_4_pattern_addr());
+            let height = regs.get_pattern_table_height(regs.bg_4_pattern_addr(), self.pattern_mem[3].get_bits_per_pixel() as u32);
+            self.pattern_mem[3].set_addr(regs.bg_4_pattern_addr(), height);
         }
         if !self.tile_maps[3].check_and_set_addr(regs.bg4_settings) {
             self.tile_maps[3] = TileMap::new(&self.device, regs.bg4_settings, regs.bg_4_large_tiles());
@@ -143,24 +147,21 @@ impl MemoryCache {
     }
 
     // Retrieve structures.
-    pub fn get_bg_1_image(&mut self) -> (PatternImage, PatternFuture) {
+    // Get texture for a bg.
+    pub fn get_bg_image(&mut self, bg_num: usize) -> (PatternImage, PatternFuture) {
         let mem = self.native_mem.lock().expect("Couldn't lock native mem.");
-        self.pattern_mem[0].get_image(&mem)
+        self.pattern_mem[bg_num].get_image(&mem)
     }
 
-    pub fn get_bg_2_image(&mut self) -> (PatternImage, PatternFuture) {
-        let mem = self.native_mem.lock().expect("Couldn't lock native mem.");
-        self.pattern_mem[1].get_image(&mem)
+    // Get vertices for a line on a bg.
+    pub fn get_bg_lo_vertices(&mut self, bg_num: usize, y: u8) -> Option<VertexBuffer> {
+        // TODO: check mode?
+        self.tile_maps[bg_num].get_lo_vertex_buffer(y)
     }
 
-    pub fn get_bg_3_image(&mut self) -> (PatternImage, PatternFuture) {
-        let mem = self.native_mem.lock().expect("Couldn't lock native mem.");
-        self.pattern_mem[2].get_image(&mem)
-    }
-
-    pub fn get_bg_4_image(&mut self) -> (PatternImage, PatternFuture) {
-        let mem = self.native_mem.lock().expect("Couldn't lock native mem.");
-        self.pattern_mem[3].get_image(&mem)
+    pub fn get_bg_hi_vertices(&mut self, bg_num: usize, y: u8) -> Option<VertexBuffer> {
+        // TODO: check mode?
+        self.tile_maps[bg_num].get_hi_vertex_buffer(y)
     }
 }
 

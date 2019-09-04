@@ -22,11 +22,11 @@ pub struct VideoMem {
 impl VideoMem {
     pub fn new() -> Self {
         VideoMem {
-            registers:      Registers::new(),
+            registers:  Registers::new(),
 
-            oam:            OAM::new(),
-            cgram:          CGRAM::new(),
-            vram:           VRAM::new()
+            oam:        OAM::new(),
+            cgram:      CGRAM::new(),
+            vram:       VRAM::new()
         }
     }
 
@@ -48,7 +48,7 @@ impl VideoMem {
         match addr {
             0x00 => self.registers.set_screen_display(data),
 
-            0x01 => self.oam.set_settings(data),
+            0x01 => self.registers.set_object_settings(data),
             0x02 => self.oam.set_addr_lo(data),
             0x03 => self.oam.set_addr_hi(data),
             0x04 => self.oam.write(data),
@@ -95,12 +95,8 @@ impl VideoMem {
     }
 
     // Renderer methods to get raw data.
-    pub fn get_oam_hi<'a>(&'a mut self) -> &'a [u8] {
-        self.oam.ref_hi_data()
-    }
-
-    pub fn get_oam_lo<'a>(&'a mut self) -> &'a [u8] {
-        self.oam.ref_lo_data()
+    pub fn get_oam<'a>(&'a mut self) -> (&'a [u8], &'a [u8]) {
+        self.oam.ref_data()
     }
 
     pub fn get_cgram<'a>(&'a mut self) -> &'a [u8] {

@@ -2,15 +2,6 @@
 
 use bitflags::bitflags;
 
-bitflags! {
-    #[derive(Default)]
-    struct ObjectSettings: u8 {
-        const SIZE = bit!(7) | bit!(6) | bit!(5);
-        const SELECT = bit!(4) | bit!(3);
-        const BASE = bit!(2) | bit!(1) | bit!(0);
-    }
-}
-
 bitflags!{
     #[derive(Default)]
     struct OAMFlags: u8 {
@@ -21,8 +12,6 @@ bitflags!{
 pub struct OAM {
     lo_table:   Vec<u8>,
     hi_table:   Vec<u8>,
-
-    object_settings: ObjectSettings,
 
     addr:       u8,
     hi_byte:    bool,
@@ -38,8 +27,6 @@ impl OAM {
             lo_table:   vec![0; 512],
             hi_table:   vec![0; 32],
 
-            object_settings: ObjectSettings::default(),
-
             addr:       0,
             hi_byte:    false,
             flags:      OAMFlags::default(),
@@ -47,10 +34,6 @@ impl OAM {
 
             dirty:      true,
         }
-    }
-
-    pub fn set_settings(&mut self, data: u8) {
-        self.object_settings = ObjectSettings::from_bits_truncate(data);
     }
 
     pub fn set_addr_lo(&mut self, addr: u8) {
@@ -104,14 +87,9 @@ impl OAM {
     }
 
     // For use by renderer memory caches.
-    pub fn ref_hi_data<'a>(&'a mut self) -> &'a [u8] {
+    pub fn ref_data<'a>(&'a mut self) -> (&'a [u8], &'a [u8]) {
         self.dirty = false;
-        &self.hi_table
-    }
-
-    pub fn ref_lo_data<'a>(&'a mut self) -> &'a [u8] {
-        self.dirty = false;
-        &self.lo_table
+        (&self.hi_table, &self.lo_table)
     }
 
     pub fn is_dirty(&self) -> bool {
