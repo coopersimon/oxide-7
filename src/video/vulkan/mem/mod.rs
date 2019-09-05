@@ -6,23 +6,9 @@ mod sprite;
 mod tilemap;
 
 use vulkano::{
-    command_buffer::{
-        AutoCommandBuffer,
-        CommandBufferExecFuture
-    },
     device::{
         Device,
         Queue
-    },
-    image::{
-        Dimensions,
-        immutable::ImmutableImage
-    },
-    format::{
-        R8Uint
-    },
-    sync::{
-        now, GpuFuture, NowFuture
     }
 };
 
@@ -72,10 +58,10 @@ pub struct MemoryCache {
 impl MemoryCache {
     pub fn new(vram: VRamRef, device: &Arc<Device>, queue: &Arc<Queue>) -> Self {
         let pattern_mem = [
-            PatternMem::new(queue, device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0),  // BG 1 can be 2, 4 or 8 BPP
-            PatternMem::new(queue, device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0),  // BG 2 can be 2, 4 or 7 BPP
-            PatternMem::new(queue, device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0),  // BG 3 can only be 2 BPP
-            PatternMem::new(queue, device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0)   // BG 4 can only be 2 BPP
+            PatternMem::new(queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0),  // BG 1 can be 2, 4 or 8 BPP
+            PatternMem::new(queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0),  // BG 2 can be 2, 4 or 7 BPP
+            PatternMem::new(queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0),  // BG 3 can only be 2 BPP
+            PatternMem::new(queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0)   // BG 4 can only be 2 BPP
         ];
 
         let tile_maps = [
@@ -95,7 +81,7 @@ impl MemoryCache {
             tile_maps:      tile_maps,
 
             sprite_mem:     SpriteMem::new(device),
-            sprite_pattern: PatternMem::new(queue, device, PATTERN_WIDTH, PATTERN_WIDTH, BitsPerPixel::_4, 0),
+            sprite_pattern: PatternMem::new(queue, PATTERN_WIDTH, PATTERN_WIDTH, BitsPerPixel::_4, 0),
 
             palette:        Palette::new(device),
 
@@ -288,54 +274,54 @@ impl MemoryCache {
         use VideoMode::*;
         match mode {
             _0 => {
-                self.pattern_mem[0] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0);
+                self.pattern_mem[0] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0);
                 if self.pattern_mem[1].get_bits_per_pixel() != BitsPerPixel::_2 {
-                    self.pattern_mem[1] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0);
+                    self.pattern_mem[1] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0);
                 }
             },
             _1 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_4 {
-                    self.pattern_mem[0] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
+                    self.pattern_mem[0] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
                 }
                 if self.pattern_mem[1].get_bits_per_pixel() != BitsPerPixel::_4 {
-                    self.pattern_mem[1] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
+                    self.pattern_mem[1] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
                 }
             },
             _2 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_4 {
-                    self.pattern_mem[0] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
+                    self.pattern_mem[0] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
                 }
                 if self.pattern_mem[1].get_bits_per_pixel() != BitsPerPixel::_4 {
-                    self.pattern_mem[1] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
+                    self.pattern_mem[1] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
                 }
             },
             _3 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_8 {
-                    self.pattern_mem[0] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_8, 0);
+                    self.pattern_mem[0] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_8, 0);
                 }
                 if self.pattern_mem[1].get_bits_per_pixel() != BitsPerPixel::_4 {
-                    self.pattern_mem[1] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
+                    self.pattern_mem[1] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
                 }
             },
             _4 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_8 {
-                    self.pattern_mem[0] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_8, 0);
+                    self.pattern_mem[0] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_8, 0);
                 }
                 if self.pattern_mem[1].get_bits_per_pixel() != BitsPerPixel::_2 {
-                    self.pattern_mem[1] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0);
+                    self.pattern_mem[1] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0);
                 }
             },
             _5 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_4 {
-                    self.pattern_mem[0] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
+                    self.pattern_mem[0] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
                 }
                 if self.pattern_mem[1].get_bits_per_pixel() != BitsPerPixel::_2 {
-                    self.pattern_mem[1] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0);
+                    self.pattern_mem[1] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0);
                 }
             },
             _6 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_4 {
-                    self.pattern_mem[0] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
+                    self.pattern_mem[0] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
                 }
             },
             _7 => {

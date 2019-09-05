@@ -25,8 +25,10 @@ pub mod timing {
     pub const SCANLINE_OFFSET: usize = DOT_TIME * 22;
     pub const H_BLANK_TIME: usize = SCANLINE_OFFSET + (DOT_TIME * screen::H_RES);
 
-    pub const PAUSE_START: usize = 536;
+    // CPU pause in middle of line.
     pub const PAUSE_LEN: usize = 40;
+    pub const PAUSE_START: usize = 536;
+    pub const PAUSE_END: usize = PAUSE_START + PAUSE_LEN;
 
     pub const FRAME_TIME: usize = SCANLINE * screen::NUM_SCANLINES;
 }

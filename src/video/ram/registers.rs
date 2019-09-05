@@ -121,7 +121,7 @@ impl Registers {
         base << 13
     }
 
-    pub fn obj_N_pattern_addr(&self) -> u16 {
+    pub fn obj_n_pattern_addr(&self) -> u16 {
         let base = (self.object_settings & ObjectSettings::BASE).bits() as u16;
         let table = (self.object_settings & ObjectSettings::SELECT).bits() as u16 + 1;
         (base << 13) + (table << 12)
@@ -169,7 +169,7 @@ impl Registers {
 
         // Always push sprite pattern mem
         borders.push(self.obj_0_pattern_addr());
-        borders.push(self.obj_N_pattern_addr());
+        borders.push(self.obj_n_pattern_addr());
 
         borders.push(((self.bg1_settings & 0xFC) as u16) << 8);
         borders.push(self.bg_1_pattern_addr());

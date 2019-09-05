@@ -5,10 +5,7 @@ use vulkano::{
         AutoCommandBuffer,
         CommandBufferExecFuture
     },
-    device::{
-        Device,
-        Queue
-    },
+    device::Queue,
     image::{
         Dimensions,
         immutable::ImmutableImage
@@ -45,13 +42,12 @@ pub struct PatternMem {
     end_addr:       u16,
 
     // Vulkan
-    device:         Arc<Device>,
     queue:          Arc<Queue>,
     image:          Option<PatternImage>
 }
 
 impl PatternMem {
-    pub fn new(queue: &Arc<Queue>, device: &Arc<Device>, width: u32, height: u32, bits_per_pixel: BitsPerPixel, start_addr: u16) -> Self {
+    pub fn new(queue: &Arc<Queue>, width: u32, height: u32, bits_per_pixel: BitsPerPixel, start_addr: u16) -> Self {
         let size = (width * height * match bits_per_pixel {
             BitsPerPixel::_2 => 16,
             BitsPerPixel::_4 => 32,
@@ -66,7 +62,6 @@ impl PatternMem {
             start_addr:     start_addr,
             end_addr:       start_addr + size,
 
-            device:         device.clone(),
             queue:          queue.clone(),
             image:          None
         }

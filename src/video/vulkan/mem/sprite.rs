@@ -4,8 +4,6 @@ use vulkano::{
     device::Device
 };
 
-use bitflags::bitflags;
-
 use super::super::{
     Side, Vertex, VertexBuffer,
     super::ram::ObjectSettings
@@ -82,7 +80,7 @@ impl SpriteMem {
 
     // TODO: duplicate each of these, check which pattern mem the sprite is using (0 or N)
     pub fn get_vertex_buffer(&mut self, priority: usize, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
-        self.get_vertex_buffer_N(match priority {
+        self.get_vertex_buffer_n(match priority {
             0 => PRIORITY_0,
             1 => PRIORITY_1,
             2 => PRIORITY_2,
@@ -95,7 +93,7 @@ impl SpriteMem {
 // Internal
 impl SpriteMem {
     // Check each object's priority and add it to the buffer if we need it.
-    fn get_vertex_buffer_N(&mut self, priority_check: u8, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
+    fn get_vertex_buffer_n(&mut self, priority_check: u8, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
         let mut buffer = Vec::new();
 
         for lo in (0..oam_lo.len()).step_by(4) {

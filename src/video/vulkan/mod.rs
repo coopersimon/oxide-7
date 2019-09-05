@@ -37,10 +37,6 @@ use vulkano::{
     },
     descriptor::{
         descriptor_set::{
-            PersistentDescriptorSetBuf,
-            PersistentDescriptorSetImg,
-            PersistentDescriptorSetSampler,
-            FixedSizeDescriptorSet,
             FixedSizeDescriptorSetsPool
         },
         pipeline_layout::PipelineLayoutAbstract
@@ -49,15 +45,7 @@ use vulkano::{
     buffer::cpu_pool::CpuBufferPoolChunk
 };
 
-use vulkano_win::VkSurfaceBuild;
-
-use winit::{
-    EventsLoop,
-    Window,
-    WindowBuilder
-};
-
-use bitflags::bitflags;
+use winit::Window;
 
 use std::sync::Arc;
 
@@ -144,13 +132,7 @@ pub struct Renderer {
 
 impl Renderer {
     // Create and initialise renderer.
-    pub fn new(video_mem: VRamRef, events_loop: &EventsLoop) -> Self {
-        // Make instance with window extensions.
-        let instance = {
-            let extensions = vulkano_win::required_extensions();
-            Instance::new(None, &extensions, None).expect("Failed to create vulkan instance")
-        };
-
+    pub fn new(video_mem: VRamRef, instance: Arc<Instance>, surface: Arc<Surface<Window>>) -> Self {
         // Get graphics device.
         let physical = PhysicalDevice::enumerate(&instance).next()
             .expect("No device available");
@@ -174,13 +156,6 @@ impl Renderer {
 
         // Get a queue from the iterator.
         let queue = queues.next().unwrap();
-
-        // Make a surface.
-        let surface = WindowBuilder::new()
-            .with_dimensions((512, 448).into())
-            .with_title("Oxide-7")
-            .build_vk_surface(&events_loop, instance.clone())
-            .expect("Couldn't create surface");
 
         // Make the sampler for the texture.
         let sampler = Sampler::new(
@@ -360,6 +335,7 @@ impl Renderable for Renderer {
         let render_data = std::mem::replace(&mut self.render_data, None);
 
         if let Some(render_data) = render_data {
+            //println!("Frame");
             // Finish command buffer.
             let (command_buffer, acquire_future, mut image_futures, image_num) = render_data.finish_drawing();
 

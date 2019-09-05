@@ -163,6 +163,9 @@ impl MemBus {
                 }
                 None
             },
+            PPUSignal::Delay => {
+                self.clock(PAUSE_LEN)
+            },
             PPUSignal::None => None
         }
     }
