@@ -28,8 +28,13 @@ use vulkano::{
 
 use std::sync::Arc;
 
-use super::VertexBuffer;
 use crate::video::VRamRef;
+
+use super::{
+    VertexBuffer,
+    super::VideoMode
+};
+
 use patternmem::*;
 use tilemap::*;
 use sprite::*;
@@ -42,7 +47,7 @@ const PATTERN_HEIGHT: u32 = 64 * 8; // Pattern width in pixels (16 tiles)
 pub struct MemoryCache {
     native_mem:     VRamRef,
     // Internal settings
-    mode:           u8,
+    mode:           VideoMode,
 
     // Internal mem
     pattern_mem:    [PatternMem; 4],
@@ -77,7 +82,7 @@ impl MemoryCache {
         MemoryCache {
             native_mem:     vram,
 
-            mode:           8,
+            mode:           VideoMode::_7,
 
             pattern_mem:    pattern_mem,
             tile_maps:      tile_maps,
@@ -95,7 +100,7 @@ impl MemoryCache {
     // Called every line. Checks mode and dirtiness of video memory.
     pub fn init(&mut self) {
         // Check mode and alter backgrounds.
-        let stored_mode = self.native_mem.lock().expect("Couldn't lock native mem.").get_registers().get_mode();
+        let stored_mode = VideoMode::from(self.native_mem.lock().expect("Couldn't lock native mem.").get_registers().get_mode());
         if stored_mode != self.mode {
             self.switch_mode(stored_mode);
         }
@@ -170,7 +175,7 @@ impl MemoryCache {
 
     // Retrieve structures.
     // Get texture for a bg.
-    pub fn get_bg_image(&mut self, bg_num: usize) -> (PatternImage, PatternFuture) {
+    pub fn get_bg_image(&mut self, bg_num: usize) -> (PatternImage, Option<PatternFuture>) {
         let mem = self.native_mem.lock().expect("Couldn't lock native mem.");
         self.pattern_mem[bg_num].get_image(&mem)
     }
@@ -187,7 +192,7 @@ impl MemoryCache {
     }
 
     // Get texture for sprites.
-    pub fn get_sprite_image_0(&mut self) -> (PatternImage, PatternFuture) {
+    pub fn get_sprite_image_0(&mut self) -> (PatternImage, Option<PatternFuture>) {
         let mem = self.native_mem.lock().expect("Couldn't lock native mem.");
         self.sprite_pattern.get_image(&mem)
     }
@@ -204,29 +209,24 @@ impl MemoryCache {
         self.palette.get_palette_buffer()
     }
 
-    pub fn use_bg(&self, bg_num: usize) -> bool {
-        match self.mode {
-            0 => true,
-            1 if bg_num < 3 => true,
-            2 | 3 | 4 | 5 if bg_num < 2 => true,
-            6 | 7 if bg_num == 0 => true,
-            _ => false
-        }
+    pub fn get_mode(&self) -> VideoMode {
+        VideoMode::from(self.mode)
     }
 }
 
 // Internal
 impl MemoryCache {
     // Switch mode: setup backgrounds. // TODO: other stuff here?
-    fn switch_mode(&mut self, mode: u8) {
+    fn switch_mode(&mut self, mode: VideoMode) {
+        use VideoMode::*;
         match mode {
-            0 => {
+            _0 => {
                 self.pattern_mem[0] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0);
                 if self.pattern_mem[1].get_bits_per_pixel() != BitsPerPixel::_2 {
                     self.pattern_mem[1] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0);
                 }
             },
-            1 => {
+            _1 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_4 {
                     self.pattern_mem[0] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
                 }
@@ -234,7 +234,7 @@ impl MemoryCache {
                     self.pattern_mem[1] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
                 }
             },
-            2 => {
+            _2 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_4 {
                     self.pattern_mem[0] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
                 }
@@ -242,7 +242,7 @@ impl MemoryCache {
                     self.pattern_mem[1] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
                 }
             },
-            3 => {
+            _3 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_8 {
                     self.pattern_mem[0] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_8, 0);
                 }
@@ -250,7 +250,7 @@ impl MemoryCache {
                     self.pattern_mem[1] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
                 }
             },
-            4 => {
+            _4 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_8 {
                     self.pattern_mem[0] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_8, 0);
                 }
@@ -258,7 +258,7 @@ impl MemoryCache {
                     self.pattern_mem[1] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0);
                 }
             },
-            5 => {
+            _5 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_4 {
                     self.pattern_mem[0] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
                 }
@@ -266,15 +266,14 @@ impl MemoryCache {
                     self.pattern_mem[1] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2, 0);
                 }
             },
-            6 => {
+            _6 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_4 {
                     self.pattern_mem[0] = PatternMem::new(&self.queue, &self.device, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4, 0);
                 }
             },
-            7 => {
+            _7 => {
                 panic!("Mode 7 not supported!");
-            },
-            _ => unreachable!()
+            }
         }
     }
 }

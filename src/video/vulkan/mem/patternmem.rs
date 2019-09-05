@@ -80,14 +80,14 @@ impl PatternMem {
     }
 
     // Return cached image or create one if none is cached.
-    pub fn get_image(&mut self, mem: &VideoMem) -> (PatternImage, PatternFuture) {
+    pub fn get_image(&mut self, mem: &VideoMem) -> (PatternImage, Option<PatternFuture>) {
         if let Some(image) = &self.image {
-            (image.clone(), Box::new(now(self.device.clone())))
+            (image.clone(), None)
         } else {
             let data = &mem.get_vram()[(self.start_addr as usize)..(self.end_addr as usize)];
             let (image, future) = self.make_image(data);
             self.image = Some(image.clone());
-            (image, Box::new(future))
+            (image, Some(Box::new(future)))
         }
     }
 

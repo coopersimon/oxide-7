@@ -63,7 +63,10 @@ use std::sync::Arc;
 
 use super::{
     VRamRef,
-    render::Renderable
+    render::{
+        Renderable,
+        VideoMode
+    }
 };
 
 use mem::MemoryCache;
@@ -326,23 +329,55 @@ impl Renderable for Renderer {
 
     fn draw_line(&mut self, y: u8) {
         if let Some(render_data) = &mut self.render_data {
-            render_data.draw(&mut self.mem, &self.sampler, &self.device, &self.queue, &self.dynamic_state, y)
+            match self.mem.get_mode() {
+                VideoMode::_0 => render_data.draw_mode_0(&mut self.mem, &self.sampler, &self.dynamic_state, y),
+                VideoMode::_1 => {},
+                VideoMode::_2 => {},
+                VideoMode::_3 => {},
+                VideoMode::_4 => {},
+                VideoMode::_5 => {},
+                VideoMode::_6 => {},
+                VideoMode::_7 => {},
+            }
         }
     }
 
     fn frame_end(&mut self) {
+        let render_data = std::mem::replace(&mut self.render_data, None);
 
+        if let Some(render_data) = render_data {
+            // Finish command buffer.
+            let (command_buffer, acquire_future, mut image_futures, image_num) = render_data.finish_drawing();
+
+            // Wait until previous frame is done.
+            let mut now_future = Box::new(now(self.device.clone())) as Box<dyn GpuFuture>;
+            std::mem::swap(&mut self.previous_frame_future, &mut now_future);
+
+            // Wait until previous frame is done,
+            // _and_ the framebuffer has been acquired,
+            // _and_ the textures have been uploaded.
+            let init_future = Box::new(now_future.join(acquire_future)) as Box<dyn GpuFuture>;
+            let future = image_futures.drain(..).fold(init_future, |all, f| Box::new(all.join(f)) as Box<dyn GpuFuture>)
+                .then_execute(self.queue.clone(), command_buffer).unwrap()                      // Run the commands (pipeline and render)
+                .then_swapchain_present(self.queue.clone(), self.swapchain.clone(), image_num)  // Present newly rendered image.
+                .then_signal_fence_and_flush();                                                 // Signal done and flush the pipeline.
+
+            match future {
+                Ok(future) => self.previous_frame_future = Box::new(future) as Box<_>,
+                Err(e) => println!("Err: {:?}", e),
+            }
+
+            self.previous_frame_future.cleanup_finished();
+        }
     }
 }
 
 // Internal
 impl RenderData {
-    fn draw(
+    fn draw_mode_0(
         &mut self,
         mem:            &mut MemoryCache,
         sampler:        &Arc<Sampler>,
-        device:         &Arc<Device>,
-        queue:          &Arc<Queue>,
         dynamic_state:  &DynamicState,
         y:              u8
         ) {
@@ -355,49 +390,59 @@ impl RenderData {
             .build().unwrap());
 
         // Make descriptor set to bind texture atlases for patterns.
-        let bg_4_set0 = if mem.use_bg(3) {
+        let bg_4_set0 = {
             let (image, write_future) = mem.get_bg_image(3);
-            self.image_futures.push(write_future);
+            if let Some(future) = write_future {
+                self.image_futures.push(future);
+            }
 
             // Make descriptor set to bind texture atlas.
-            Some(Arc::new(self.set_pool_0.next()
+            Arc::new(self.set_pool_0.next()
                 .add_sampled_image(image, sampler.clone()).unwrap()
-                .build().unwrap()))
-        } else {None};
+                .build().unwrap())
+        };
 
-        let bg_3_set0 = if mem.use_bg(2) {
+        let bg_3_set0 = {
             let (image, write_future) = mem.get_bg_image(2);
-            self.image_futures.push(write_future);
+            if let Some(future) = write_future {
+                self.image_futures.push(future);
+            }
 
             // Make descriptor set to bind texture atlas.
-            Some(Arc::new(self.set_pool_0.next()
+            Arc::new(self.set_pool_0.next()
                 .add_sampled_image(image, sampler.clone()).unwrap()
-                .build().unwrap()))
-        } else {None};
+                .build().unwrap())
+        };
 
-        let bg_2_set0 = if mem.use_bg(1) {
+        let bg_2_set0 = {
             let (image, write_future) = mem.get_bg_image(1);
-            self.image_futures.push(write_future);
+            if let Some(future) = write_future {
+                self.image_futures.push(future);
+            }
 
             // Make descriptor set to bind texture atlas.
-            Some(Arc::new(self.set_pool_0.next()
+            Arc::new(self.set_pool_0.next()
                 .add_sampled_image(image, sampler.clone()).unwrap()
-                .build().unwrap()))
-        } else {None};
+                .build().unwrap())
+        };
 
-        let bg_1_set0 = if mem.use_bg(0) {
+        let bg_1_set0 = {
             let (image, write_future) = mem.get_bg_image(0);
-            self.image_futures.push(write_future);
+            if let Some(future) = write_future {
+                self.image_futures.push(future);
+            }
 
             // Make descriptor set to bind texture atlas.
-            Some(Arc::new(self.set_pool_0.next()
+            Arc::new(self.set_pool_0.next()
                 .add_sampled_image(image, sampler.clone()).unwrap()
-                .build().unwrap()))
-        } else {None};
+                .build().unwrap())
+        };
 
-        let palette_0_set0 = {
+        let sprite_0_set0 = {
             let (image, write_future) = mem.get_sprite_image_0();
-            self.image_futures.push(write_future);
+            if let Some(future) = write_future {
+                self.image_futures.push(future);
+            }
 
             // Make descriptor set to bind texture atlas.
             Arc::new(self.set_pool_0.next()
@@ -408,19 +453,140 @@ impl RenderData {
         // Push constants
 
         // Draw
-        if mem.use_bg(3) {
-            let y_scroll = 0; // TODO: fetch this
-            if let Some(bg_4_vertices) = mem.get_bg_lo_vertices(0, y.wrapping_add(y_scroll)) {
-                command_buffer = command_buffer.draw(
-                    self.pipeline.clone(),
-                    dynamic_state,
-                    bg_4_vertices,
-                    (bg_4_set0.unwrap().clone(), set1.clone()),
-                    ()  // TODO Push constants
-                ).unwrap();
-            }
+        let bg_4_y = y.wrapping_add(0); // TODO: fetch this
+        if let Some(bg_4_vertices) = mem.get_bg_lo_vertices(3, bg_4_y) {
+            command_buffer = command_buffer.draw(
+                self.pipeline.clone(),
+                dynamic_state,
+                bg_4_vertices,
+                (bg_4_set0.clone(), set1.clone()),
+                ()  // TODO Push constants
+            ).unwrap();
+        }
+
+        let bg_3_y = y.wrapping_add(0); // TODO: fetch this
+        if let Some(bg_3_vertices) = mem.get_bg_lo_vertices(2, bg_3_y) {
+            command_buffer = command_buffer.draw(
+                self.pipeline.clone(),
+                dynamic_state,
+                bg_3_vertices,
+                (bg_3_set0.clone(), set1.clone()),
+                ()  // TODO Push constants
+            ).unwrap();
+        }
+
+        if let Some(sprites_0) = mem.get_sprite_vertices(0, y) {
+            command_buffer = command_buffer.draw(
+                self.pipeline.clone(),
+                dynamic_state,
+                sprites_0,
+                (sprite_0_set0.clone(), set1.clone()),
+                ()  // TODO Push constants
+            ).unwrap();
+        }
+
+        if let Some(bg_4_vertices) = mem.get_bg_hi_vertices(3, bg_4_y) {
+            command_buffer = command_buffer.draw(
+                self.pipeline.clone(),
+                dynamic_state,
+                bg_4_vertices,
+                (bg_4_set0, set1.clone()),
+                ()  // TODO Push constants
+            ).unwrap();
+        }
+
+        if let Some(bg_3_vertices) = mem.get_bg_hi_vertices(2, bg_3_y) {
+            command_buffer = command_buffer.draw(
+                self.pipeline.clone(),
+                dynamic_state,
+                bg_3_vertices,
+                (bg_3_set0, set1.clone()),
+                ()  // TODO Push constants
+            ).unwrap();
+        }
+
+        if let Some(sprites_1) = mem.get_sprite_vertices(1, y) {
+            command_buffer = command_buffer.draw(
+                self.pipeline.clone(),
+                dynamic_state,
+                sprites_1,
+                (sprite_0_set0.clone(), set1.clone()),
+                ()  // TODO Push constants
+            ).unwrap();
+        }
+
+        let bg_2_y = y.wrapping_add(0); // TODO: fetch this
+        if let Some(bg_2_vertices) = mem.get_bg_lo_vertices(1, bg_2_y) {
+            command_buffer = command_buffer.draw(
+                self.pipeline.clone(),
+                dynamic_state,
+                bg_2_vertices,
+                (bg_2_set0.clone(), set1.clone()),
+                ()  // TODO Push constants
+            ).unwrap();
+        }
+
+        let bg_1_y = y.wrapping_add(0); // TODO: fetch this
+        if let Some(bg_1_vertices) = mem.get_bg_lo_vertices(0, bg_1_y) {
+            command_buffer = command_buffer.draw(
+                self.pipeline.clone(),
+                dynamic_state,
+                bg_1_vertices,
+                (bg_1_set0.clone(), set1.clone()),
+                ()  // TODO Push constants
+            ).unwrap();
+        }
+
+        if let Some(sprites_2) = mem.get_sprite_vertices(2, y) {
+            command_buffer = command_buffer.draw(
+                self.pipeline.clone(),
+                dynamic_state,
+                sprites_2,
+                (sprite_0_set0.clone(), set1.clone()),
+                ()  // TODO Push constants
+            ).unwrap();
+        }
+
+        if let Some(bg_2_vertices) = mem.get_bg_hi_vertices(1, bg_2_y) {
+            command_buffer = command_buffer.draw(
+                self.pipeline.clone(),
+                dynamic_state,
+                bg_2_vertices,
+                (bg_2_set0, set1.clone()),
+                ()  // TODO Push constants
+            ).unwrap();
+        }
+
+        if let Some(bg_1_vertices) = mem.get_bg_hi_vertices(0, bg_1_y) {
+            command_buffer = command_buffer.draw(
+                self.pipeline.clone(),
+                dynamic_state,
+                bg_1_vertices,
+                (bg_1_set0, set1.clone()),
+                ()  // TODO Push constants
+            ).unwrap();
+        }
+
+        if let Some(sprites_3) = mem.get_sprite_vertices(3, y) {
+            command_buffer = command_buffer.draw(
+                self.pipeline.clone(),
+                dynamic_state,
+                sprites_3,
+                (sprite_0_set0.clone(), set1.clone()),
+                ()  // TODO Push constants
+            ).unwrap();
         }
 
         self.command_buffer = Some(command_buffer);
+    }
+
+
+    fn finish_drawing(self) -> (AutoCommandBuffer, Box<dyn GpuFuture>, Vec<Box<dyn GpuFuture>>, usize) {
+        (
+            self.command_buffer.unwrap().end_render_pass().unwrap().build().unwrap(),
+            self.acquire_future,
+            self.image_futures,
+            self.image_num
+        )
     }
 }
