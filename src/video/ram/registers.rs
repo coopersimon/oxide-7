@@ -108,6 +108,10 @@ impl Registers {
         (self.bg_mode & BGMode::MODE).bits()
     }
 
+    pub fn get_object_settings(&self) -> u8 {
+        self.object_settings.bits()
+    }
+
     pub fn obj_0_pattern_addr(&self) -> u16 {
         let base = (self.object_settings & ObjectSettings::BASE).bits() as u16;
         base << 13

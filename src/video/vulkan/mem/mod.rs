@@ -1,6 +1,6 @@
 // Converting native VRAM, CGRAM and OAM into Vulkan structures.
 
-mod palette;
+pub mod palette;
 pub mod patternmem;
 mod sprite;
 mod tilemap;
@@ -32,6 +32,8 @@ use super::VertexBuffer;
 use crate::video::VRamRef;
 use patternmem::*;
 use tilemap::*;
+use sprite::*;
+use palette::*;
 
 const PATTERN_WIDTH: u32 = 16 * 8; // Pattern width in pixels (16 tiles)
 const PATTERN_HEIGHT: u32 = 64 * 8; // Pattern width in pixels (16 tiles)
@@ -45,6 +47,11 @@ pub struct MemoryCache {
     // Internal mem
     pattern_mem:    [PatternMem; 4],
     tile_maps:      [TileMap; 4],
+
+    sprite_mem:     SpriteMem,
+    sprite_pattern: PatternMem,
+
+    palette:        Palette,
 
     // Vulkan things
     device:         Arc<Device>,
@@ -74,6 +81,11 @@ impl MemoryCache {
 
             pattern_mem:    pattern_mem,
             tile_maps:      tile_maps,
+
+            sprite_mem:     SpriteMem::new(device),
+            sprite_pattern: PatternMem::new(queue, device, PATTERN_WIDTH, PATTERN_WIDTH, BitsPerPixel::_4, 0),
+
+            palette:        Palette::new(device),
 
             device:         device.clone(),
             queue:          queue.clone()
@@ -141,9 +153,19 @@ impl MemoryCache {
             mem.vram_reset_dirty_range();
         }
 
-        // Check OAM dirtiness
+        // Check OAM dirtiness (always recreate for now TODO: caching of object vertices)
+        let regs = mem.get_registers();
+        self.sprite_mem.check_and_set_obj_settings(regs.get_object_settings());
+        if self.sprite_pattern.get_start_addr() != regs.obj_0_pattern_addr() {
+            let height = regs.get_pattern_table_height(regs.obj_0_pattern_addr(), BitsPerPixel::_4 as u32);
+            self.sprite_pattern.set_addr(regs.obj_0_pattern_addr(), height);
+        }
+        // TODO: obj_N_pattern...
 
         // Check CGRAM dirtiness
+        if mem.is_cgram_dirty() {
+            self.palette.create_buffer(&mut mem);
+        }
     }
 
     // Retrieve structures.
@@ -162,6 +184,34 @@ impl MemoryCache {
     pub fn get_bg_hi_vertices(&mut self, bg_num: usize, y: u8) -> Option<VertexBuffer> {
         // TODO: check mode?
         self.tile_maps[bg_num].get_hi_vertex_buffer(y)
+    }
+
+    // Get texture for sprites.
+    pub fn get_sprite_image_0(&mut self) -> (PatternImage, PatternFuture) {
+        let mem = self.native_mem.lock().expect("Couldn't lock native mem.");
+        self.sprite_pattern.get_image(&mem)
+    }
+
+    // Get vertices for a line of sprites.
+    pub fn get_sprite_vertices(&mut self, priority: usize, y: u8) -> Option<VertexBuffer> {
+        let mut mem = self.native_mem.lock().expect("Couldn't lock native mem.");
+        let (oam_hi, oam_lo) = mem.get_oam();
+        self.sprite_mem.get_vertex_buffer(priority, y, oam_hi, oam_lo)
+    }
+
+    // Get the palettes.
+    pub fn get_palette_buffer(&self) -> PaletteBuffer {
+        self.palette.get_palette_buffer()
+    }
+
+    pub fn use_bg(&self, bg_num: usize) -> bool {
+        match self.mode {
+            0 => true,
+            1 if bg_num < 3 => true,
+            2 | 3 | 4 | 5 if bg_num < 2 => true,
+            6 | 7 if bg_num == 0 => true,
+            _ => false
+        }
     }
 }
 

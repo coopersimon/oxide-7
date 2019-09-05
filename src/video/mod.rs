@@ -105,8 +105,8 @@ impl PPU {
                         renderer.frame_start();
                         VideoSignal::None
                     },
-                    DrawLine => {
-                        renderer.draw_line();
+                    DrawLine(y) => {
+                        renderer.draw_line(y);
                         VideoSignal::HBlank
                     },
                     FrameEnd => {
@@ -218,11 +218,11 @@ impl PPU {
                 self.nmi_flag = 0;
                 self.toggle_vblank(false);
                 self.command_tx.send(VideoCommand::FrameStart).unwrap();
-                self.command_tx.send(VideoCommand::DrawLine).unwrap();
+                self.command_tx.send(VideoCommand::DrawLine(self.scanline as u8)).unwrap();
 
             } else if self.scanline <= 224 {
                 self.toggle_hblank(false);
-                self.command_tx.send(VideoCommand::DrawLine).unwrap();
+                self.command_tx.send(VideoCommand::DrawLine(self.scanline as u8)).unwrap();
 
             } else if self.scanline == 225 {
                 self.toggle_hblank(false);

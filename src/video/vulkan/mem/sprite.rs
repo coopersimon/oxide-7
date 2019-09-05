@@ -38,6 +38,8 @@ pub struct SpriteMem {
     small_size:     (u8, u8),
     large_size:     (u8, u8),
 
+    settings:       u8,
+
     buffer_pool:    CpuBufferPool<Vertex>
 }
 
@@ -46,48 +48,54 @@ impl SpriteMem {
         SpriteMem {
             small_size:     (8, 8),
             large_size:     (16, 16),
+
+            settings:       0,
+
             buffer_pool:    CpuBufferPool::vertex_buffer(device.clone())
         }
     }
 
-    pub fn set_obj_settings(&mut self, settings: u8) {
-        let (small, large) = match (ObjectSettings::from_bits_truncate(settings) & ObjectSettings::SIZE).bits() >> 5 {
-            0 => ((8, 8), (16, 16)),
-            1 => ((8, 8), (32, 32)),
-            2 => ((8, 8), (64, 64)),
-            3 => ((16, 16), (32, 32)),
-            4 => ((16, 16), (64, 64)),
-            5 => ((32, 32), (64, 64)),
-            6 => ((16, 32), (32, 64)),
-            7 => ((16, 32), (32, 32)),
+    // Return true if settings are the same. Otherwise, setup new sprite sizes and return false.
+    pub fn check_and_set_obj_settings(&mut self, settings: u8) -> bool {
+        if settings != self.settings {
+            let (small, large) = match (ObjectSettings::from_bits_truncate(settings) & ObjectSettings::SIZE).bits() >> 5 {
+                0 => ((8, 8), (16, 16)),
+                1 => ((8, 8), (32, 32)),
+                2 => ((8, 8), (64, 64)),
+                3 => ((16, 16), (32, 32)),
+                4 => ((16, 16), (64, 64)),
+                5 => ((32, 32), (64, 64)),
+                6 => ((16, 32), (32, 64)),
+                7 => ((16, 32), (32, 32)),
+                _ => unreachable!()
+            };
+
+            self.small_size = small;
+            self.large_size = large;
+            self.settings = settings;
+
+            false
+        } else {
+            true
+        }
+    }
+
+    // TODO: duplicate each of these, check which pattern mem the sprite is using (0 or N)
+    pub fn get_vertex_buffer(&mut self, priority: usize, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
+        self.get_vertex_buffer_N(match priority {
+            0 => PRIORITY_0,
+            1 => PRIORITY_1,
+            2 => PRIORITY_2,
+            3 => PRIORITY_3,
             _ => unreachable!()
-        };
-
-        self.small_size = small;
-        self.large_size = large;
-    }
-
-    pub fn get_vertex_buffer_0(&mut self, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
-        self.get_vertex_buffer(PRIORITY_0, y, oam_hi, oam_lo)
-    }
-
-    pub fn get_vertex_buffer_1(&mut self, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
-        self.get_vertex_buffer(PRIORITY_1, y, oam_hi, oam_lo)
-    }
-
-    pub fn get_vertex_buffer_2(&mut self, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
-        self.get_vertex_buffer(PRIORITY_2, y, oam_hi, oam_lo)
-    }
-
-    pub fn get_vertex_buffer_3(&mut self, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
-        self.get_vertex_buffer(PRIORITY_3, y, oam_hi, oam_lo)
+        }, y, oam_hi, oam_lo)
     }
 }
 
 // Internal
 impl SpriteMem {
     // Check each object's priority and add it to the buffer if we need it.
-    fn get_vertex_buffer(&mut self, priority_check: u8, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
+    fn get_vertex_buffer_N(&mut self, priority_check: u8, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
         let mut buffer = Vec::new();
 
         for lo in (0..oam_lo.len()).step_by(4) {

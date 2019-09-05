@@ -4,7 +4,7 @@ use crate::joypad::Button;
 // Commands to send to the renderer.
 pub enum VideoCommand {
     FrameStart,     // Start the process of rendering a frame.
-    DrawLine,       // Draw a single line.
+    DrawLine(u8),   // Draw a single line.
     FrameEnd,       // End the process of rendering a frame.
     None            // Null command, just return none.
 }
@@ -19,6 +19,6 @@ pub enum VideoSignal {
 // Renderer trait.
 pub trait Renderable {
     fn frame_start(&mut self);
-    fn draw_line(&mut self);
+    fn draw_line(&mut self, y: u8);
     fn frame_end(&mut self);
 }

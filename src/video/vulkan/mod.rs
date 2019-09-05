@@ -98,10 +98,12 @@ struct RenderData {
     command_buffer: Option<AutoCommandBufferBuilder>,
     acquire_future: Box<dyn GpuFuture>,
     image_num:      usize,
-    image_future:   Box<dyn GpuFuture>,
+    image_futures:  Vec<Box<dyn GpuFuture>>,
     pipeline:       Arc<RenderPipeline>,
-    //set0:           Arc<FixedSizeDescriptorSet<Arc<RenderPipeline>, (((), PersistentDescriptorSetImg<super::mem::TileImage>), PersistentDescriptorSetSampler)>>,
-    //set1:           Arc<FixedSizeDescriptorSet<Arc<RenderPipeline>, ((), PersistentDescriptorSetBuf<super::mem::PaletteBuffer>)>>
+    //set0:           Arc<FixedSizeDescriptorSet<Arc<RenderPipeline>, (((), PersistentDescriptorSetImg<mem::patternmem::PatternImage>), PersistentDescriptorSetSampler)>>,
+    //set1:           Arc<FixedSizeDescriptorSet<Arc<RenderPipeline>, ((), PersistentDescriptorSetBuf<mem::palette::PaletteBuffer>)>>
+    set_pool_0:     FixedSizeDescriptorSetsPool<Arc<RenderPipeline>>,
+    set_pool_1:     FixedSizeDescriptorSetsPool<Arc<RenderPipeline>>,
 }
 
 pub struct Renderer {
@@ -306,19 +308,6 @@ impl Renderable for Renderer {
         // Get current framebuffer index from the swapchain.
         let (image_num, acquire_future) = acquire_next_image(self.swapchain.clone(), None)
             .expect("Didn't get next image");
-
-        // Make image with current texture.
-        /*let (image, write_future) = video_mem.get_tile_atlas(&self.device, &self.queue);
-
-        // Make descriptor set to bind texture atlas.
-        let set0 = Arc::new(self.set_pools[0].next()
-            .add_sampled_image(image, self.sampler.clone()).unwrap()
-            .build().unwrap());
-
-        // Make descriptor set for palette.
-        let set1 = Arc::new(self.set_pools[1].next()
-            .add_buffer(video_mem.get_palette_buffer().clone()).unwrap()
-            .build().unwrap());*/
         
         // Start building command buffer using pipeline and framebuffer, starting with the background vertices.
         let command_buffer_builder = AutoCommandBufferBuilder::primary_one_time_submit(self.device.clone(), self.queue.family()).unwrap()
@@ -328,18 +317,110 @@ impl Renderable for Renderer {
             command_buffer: Some(command_buffer_builder),
             acquire_future: Box::new(acquire_future),
             image_num:      image_num,
-            image_future:   Box::new(now(self.device.clone())),//write_future,
+            image_futures:  Vec::new(),
             pipeline:       self.pipeline.clone(),
-            //set0:           set0,
-            //set1:           set1
+            set_pool_0:     self.set_pools[0].clone(),
+            set_pool_1:     self.set_pools[1].clone()
         });
     }
 
-    fn draw_line(&mut self) {
-
+    fn draw_line(&mut self, y: u8) {
+        if let Some(render_data) = &mut self.render_data {
+            render_data.draw(&mut self.mem, &self.sampler, &self.device, &self.queue, &self.dynamic_state, y)
+        }
     }
 
     fn frame_end(&mut self) {
 
+    }
+}
+
+// Internal
+impl RenderData {
+    fn draw(
+        &mut self,
+        mem:            &mut MemoryCache,
+        sampler:        &Arc<Sampler>,
+        device:         &Arc<Device>,
+        queue:          &Arc<Queue>,
+        dynamic_state:  &DynamicState,
+        y:              u8
+        ) {
+
+        let mut command_buffer = std::mem::replace(&mut self.command_buffer, None).unwrap();
+
+        // Make descriptor set for palettes.
+        let set1 = Arc::new(self.set_pool_1.next()
+            .add_buffer(mem.get_palette_buffer()).unwrap()
+            .build().unwrap());
+
+        // Make descriptor set to bind texture atlases for patterns.
+        let bg_4_set0 = if mem.use_bg(3) {
+            let (image, write_future) = mem.get_bg_image(3);
+            self.image_futures.push(write_future);
+
+            // Make descriptor set to bind texture atlas.
+            Some(Arc::new(self.set_pool_0.next()
+                .add_sampled_image(image, sampler.clone()).unwrap()
+                .build().unwrap()))
+        } else {None};
+
+        let bg_3_set0 = if mem.use_bg(2) {
+            let (image, write_future) = mem.get_bg_image(2);
+            self.image_futures.push(write_future);
+
+            // Make descriptor set to bind texture atlas.
+            Some(Arc::new(self.set_pool_0.next()
+                .add_sampled_image(image, sampler.clone()).unwrap()
+                .build().unwrap()))
+        } else {None};
+
+        let bg_2_set0 = if mem.use_bg(1) {
+            let (image, write_future) = mem.get_bg_image(1);
+            self.image_futures.push(write_future);
+
+            // Make descriptor set to bind texture atlas.
+            Some(Arc::new(self.set_pool_0.next()
+                .add_sampled_image(image, sampler.clone()).unwrap()
+                .build().unwrap()))
+        } else {None};
+
+        let bg_1_set0 = if mem.use_bg(0) {
+            let (image, write_future) = mem.get_bg_image(0);
+            self.image_futures.push(write_future);
+
+            // Make descriptor set to bind texture atlas.
+            Some(Arc::new(self.set_pool_0.next()
+                .add_sampled_image(image, sampler.clone()).unwrap()
+                .build().unwrap()))
+        } else {None};
+
+        let palette_0_set0 = {
+            let (image, write_future) = mem.get_sprite_image_0();
+            self.image_futures.push(write_future);
+
+            // Make descriptor set to bind texture atlas.
+            Arc::new(self.set_pool_0.next()
+                .add_sampled_image(image, sampler.clone()).unwrap()
+                .build().unwrap())
+        };
+
+        // Push constants
+
+        // Draw
+        if mem.use_bg(3) {
+            let y_scroll = 0; // TODO: fetch this
+            if let Some(bg_4_vertices) = mem.get_bg_lo_vertices(0, y.wrapping_add(y_scroll)) {
+                command_buffer = command_buffer.draw(
+                    self.pipeline.clone(),
+                    dynamic_state,
+                    bg_4_vertices,
+                    (bg_4_set0.unwrap().clone(), set1.clone()),
+                    ()  // TODO Push constants
+                ).unwrap();
+            }
+        }
+
+        self.command_buffer = Some(command_buffer);
     }
 }

@@ -9,23 +9,34 @@ use vulkano::{
 
 use std::sync::Arc;
 
+use super::super::super::VideoMem;
+
 pub type PaletteBuffer = CpuBufferPoolChunk<u16, Arc<StdMemoryPool>>;
 
-#[derive(Clone)]
-struct Palette {
+pub struct Palette {
     buffer_pool:    CpuBufferPool<u16>,
     current_buffer: Option<PaletteBuffer>
 }
 
 impl Palette {
-    fn new(device: &Arc<Device>) -> Self {
+    pub fn new(device: &Arc<Device>) -> Self {
         Palette {
             buffer_pool:    CpuBufferPool::uniform_buffer(device.clone()),
             current_buffer: None
         }
     }
 
+    // Makes a new buffer and replaces the old one.
+    pub fn create_buffer(&mut self, mem: &mut VideoMem) {
+        let buf = self.buffer_pool.chunk(
+            mem.get_cgram().chunks(2).map(|c| make16!(c[1], c[0]))
+        ).unwrap();
+
+        self.current_buffer = Some(buf.clone());
+    }
+
     // TODO: should this return the buffer or the set?
-    fn get_palette_buffer(&mut self) {
+    pub fn get_palette_buffer(&self) -> PaletteBuffer {
+        self.current_buffer.as_ref().unwrap().clone()
     }
 }
