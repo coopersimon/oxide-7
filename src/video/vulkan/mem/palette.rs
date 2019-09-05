@@ -11,10 +11,10 @@ use std::sync::Arc;
 
 use super::super::super::VideoMem;
 
-pub type PaletteBuffer = CpuBufferPoolChunk<u16, Arc<StdMemoryPool>>;
+pub type PaletteBuffer = CpuBufferPoolChunk<u32, Arc<StdMemoryPool>>;
 
 pub struct Palette {
-    buffer_pool:    CpuBufferPool<u16>,
+    buffer_pool:    CpuBufferPool<u32>,
     current_buffer: Option<PaletteBuffer>
 }
 
@@ -29,7 +29,7 @@ impl Palette {
     // Makes a new buffer and replaces the old one.
     pub fn create_buffer(&mut self, mem: &mut VideoMem) {
         let buf = self.buffer_pool.chunk(
-            mem.get_cgram().chunks(2).map(|c| make16!(c[1], c[0]))
+            mem.get_cgram().chunks(4).map(|c| make32!(c[3], c[2], c[1], c[0]))
         ).unwrap();
 
         self.current_buffer = Some(buf.clone());

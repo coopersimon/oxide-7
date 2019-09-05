@@ -43,11 +43,17 @@ use palette::*;
 const PATTERN_WIDTH: u32 = 16 * 8; // Pattern width in pixels (16 tiles)
 const PATTERN_HEIGHT: u32 = 64 * 8; // Pattern width in pixels (16 tiles)
 
+const VIEW_WIDTH: usize = 256;           // Width of visible area in pixels.
+const VIEW_HEIGHT: usize = 224;          // Height of visible area in pixels.
+
+const SCROLL_X_FRAC: f32 = -0.5 / VIEW_WIDTH as f32;   // Multiply scroll x by this to get vertex offset.
+const SCROLL_Y_FRAC: f32 = -0.5 / VIEW_HEIGHT as f32;   // Multiply scroll x by this to get vertex offset.
 
 pub struct MemoryCache {
     native_mem:     VRamRef,
     // Internal settings
     mode:           VideoMode,
+    bg3_priority:   bool,
 
     // Internal mem
     pattern_mem:    [PatternMem; 4],
@@ -83,6 +89,7 @@ impl MemoryCache {
             native_mem:     vram,
 
             mode:           VideoMode::_7,
+            bg3_priority:   false,
 
             pattern_mem:    pattern_mem,
             tile_maps:      tile_maps,
@@ -141,6 +148,8 @@ impl MemoryCache {
         if !self.tile_maps[3].check_and_set_addr(regs.bg4_settings) {
             self.tile_maps[3] = TileMap::new(&self.device, regs.bg4_settings, regs.bg_4_large_tiles());
         }
+
+        self.bg3_priority = regs.get_bg3_priority();
 
         // Check data dirtiness
         if mem.is_vram_dirty() {
@@ -209,8 +218,66 @@ impl MemoryCache {
         self.palette.get_palette_buffer()
     }
 
+    // Get registers
+    pub fn get_scroll_y(&self, bg_num: usize) -> u8 {
+        let mem = self.native_mem.lock().expect("Couldn't lock native mem.");
+        let regs = mem.get_registers();
+        match bg_num {
+            0 => regs.bg1_scroll_y,
+            1 => regs.bg2_scroll_y,
+            2 => regs.bg3_scroll_y,
+            _ => regs.bg4_scroll_y
+        }
+    }
+
+    pub fn get_scroll_x(&self, bg_num: usize) -> u8 {
+        let mem = self.native_mem.lock().expect("Couldn't lock native mem.");
+        let regs = mem.get_registers();
+        match bg_num {
+            0 => regs.bg1_scroll_x,
+            1 => regs.bg2_scroll_x,
+            2 => regs.bg3_scroll_x,
+            _ => regs.bg4_scroll_x
+        }
+    }
+
+    pub fn get_bg_push_constants(&self, bg_num: usize) -> super::PushConstants {
+        let tex_size_x = self.tile_maps[bg_num].get_tile_height() as f32 / (self.tile_maps[bg_num].width() as f32);
+        let tex_size_y = self.tile_maps[bg_num].get_tile_height() as f32 / (self.tile_maps[bg_num].height() as f32);
+
+        let vertex_offset_x = (self.get_scroll_x(bg_num) as f32) * SCROLL_X_FRAC;
+        let vertex_offset_y = (self.get_scroll_y(bg_num) as f32) * SCROLL_Y_FRAC;
+
+        super::PushConstants {
+            tex_size:           [tex_size_x, tex_size_y],     // 1/16 for 8x8 tile, 1/8 for 16x16 tile
+            atlas_size:         [16.0, self.pattern_mem[bg_num].get_height() as f32],    // Y: pattern mem height in tiles
+            vertex_offset:      [vertex_offset_x, vertex_offset_y],
+            tex_pixel_height:   self.tile_maps[bg_num].get_tile_height(),
+            palette_offset:     0,
+            palette_size:       1 << (self.pattern_mem[bg_num].get_bits_per_pixel() as u32)
+        }
+    }
+
+    pub fn get_sprite_push_constants(&self) -> super::PushConstants {
+        let tex_size_x = 1.0 / 16.0;
+        let tex_size_y = 1.0 / 16.0;
+        
+        super::PushConstants {
+            tex_size:           [tex_size_x, tex_size_y],   // Different for each sprite? Or multiply this by size bit?
+            atlas_size:         [16.0, 16.0],
+            vertex_offset:      [0.0, 0.0],
+            tex_pixel_height:   8.0,    // TODO: Not relevant here: must be encoded individually for each sprite.
+            palette_offset:     8,
+            palette_size:       16
+        }
+    }
+
     pub fn get_mode(&self) -> VideoMode {
         VideoMode::from(self.mode)
+    }
+
+    pub fn get_bg3_priority(&self) -> bool {
+        self.bg3_priority
     }
 }
 

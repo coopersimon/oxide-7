@@ -140,3 +140,9 @@ macro_rules! set_hi24 {
         ($val & 0xFF00FFFF) | (($hi as u32) << 16)
     };
 }
+
+macro_rules! make32 {
+    ($b3:expr, $b2:expr, $b1:expr, $b0:expr) => {
+        (($b3 as u32) << 24) | (($b2 as u32) << 16) | (($b1 as u32) << 8) | ($b0 as u32)
+    };
+}

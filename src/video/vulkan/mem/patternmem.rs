@@ -17,7 +17,7 @@ use vulkano::{
         R8Uint
     },
     sync::{
-        now, GpuFuture, NowFuture
+        GpuFuture, NowFuture
     }
 };
 
@@ -114,6 +114,11 @@ impl PatternMem {
     // Return the start address.
     pub fn get_start_addr(&self) -> u16 {
         self.start_addr
+    }
+
+    // Get the height of the memory in tiles
+    pub fn get_height(&self) -> u32 {
+        self.height
     }
 }
 

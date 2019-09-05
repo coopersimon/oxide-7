@@ -108,6 +108,10 @@ impl Registers {
         (self.bg_mode & BGMode::MODE).bits()
     }
 
+    pub fn get_bg3_priority(&self) -> bool {
+        self.bg_mode.contains(BGMode::BG3_PRIORITY)
+    }
+
     pub fn get_object_settings(&self) -> u8 {
         self.object_settings.bits()
     }

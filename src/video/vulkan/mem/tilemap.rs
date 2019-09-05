@@ -188,4 +188,22 @@ impl TileMap {
             Some(self.buffer_pool.chunk(tile_map).unwrap())
         }
     }
+
+    /*pub fn get_tile_width(&self) -> f32 {
+        
+    }*/
+
+    pub fn get_tile_height(&self) -> f32 {
+        self.tile_height as f32
+    }
+
+    // Tile map width in tiles
+    pub fn width(&self) -> u32 {
+        if self.bg_reg.contains(BGReg::MIRROR_X) {64} else {32}
+    }
+
+    // Tile map height in tiles
+    pub fn height(&self) -> u32 {
+        if self.bg_reg.contains(BGReg::MIRROR_Y) {64} else {32}
+    }
 }
