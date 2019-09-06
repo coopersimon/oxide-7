@@ -129,10 +129,13 @@ impl CPU {
     pub fn step(&mut self) {
         // Check for interrupts.
         if let Some(int) = self.int {
-            self.trigger_interrupt(match int {
-                Interrupt::NMI => if self.is_e_set() {int::NMI_VECTOR_EMU} else {int::NMI_VECTOR},
-                Interrupt::IRQ => if self.is_e_set() {int::IRQ_VECTOR_EMU} else {int::IRQ_VECTOR}
-            });
+            
+            match int {
+                Interrupt::NMI => self.trigger_interrupt(if self.is_e_set() {int::NMI_VECTOR_EMU} else {int::NMI_VECTOR}),
+                Interrupt::IRQ => if !self.p.contains(PFlags::I) {
+                    self.trigger_interrupt(if self.is_e_set() {int::IRQ_VECTOR_EMU} else {int::IRQ_VECTOR})
+                }
+            }
 
             self.int = None;
             self.halt = false;

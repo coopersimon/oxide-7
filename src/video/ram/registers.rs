@@ -104,6 +104,10 @@ impl Registers {
     }
 
     // Getters for the renderer.
+    pub fn get_screen_display(&self) -> u8 {
+        self.screen_display
+    }
+
     pub fn get_mode(&self) -> u8 {
         (self.bg_mode & BGMode::MODE).bits()
     }

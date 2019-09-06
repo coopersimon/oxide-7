@@ -174,7 +174,7 @@ impl Renderer {
 
             let caps = surface.capabilities(physical)
                     .expect("Failed to get surface capabilities");
-            let dimensions = caps.current_extent.unwrap_or([160, 144]);
+            let dimensions = caps.current_extent.unwrap_or([512, 448]);
 
             let alpha = caps.supported_composite_alpha.iter().next().unwrap();
             let format = caps.supported_formats[0].0;
@@ -299,9 +299,9 @@ impl Renderable for Renderer {
         let (image_num, acquire_future) = acquire_next_image(self.swapchain.clone(), None)
             .expect("Didn't get next image");
         
-        // Start building command buffer using pipeline and framebuffer, starting with the background vertices.
+        // Start building command buffer using framebuffer.
         let command_buffer_builder = AutoCommandBufferBuilder::primary_one_time_submit(self.device.clone(), self.queue.family()).unwrap()
-            .begin_render_pass(self.framebuffers[image_num].clone(), false, vec![[0.0, 0.0, 0.0, 1.0].into()]).unwrap();
+            .begin_render_pass(self.framebuffers[image_num].clone(), false, vec![[1.0, 0.0, 0.0, 1.0].into()]).unwrap();
 
         self.render_data = Some(RenderData{
             command_buffer: Some(command_buffer_builder),
@@ -316,17 +316,19 @@ impl Renderable for Renderer {
 
     fn draw_line(&mut self, y: u8) {
         if let Some(render_data) = &mut self.render_data {
-            self.mem.init();
+            if !self.mem.in_fblank() {
+                self.mem.init();
 
-            match self.mem.get_mode() {
-                VideoMode::_0 => render_data.draw_mode_0(&mut self.mem, &self.sampler, &self.dynamic_state, y),
-                VideoMode::_1 => render_data.draw_mode_1(&mut self.mem, &self.sampler, &self.dynamic_state, y),
-                VideoMode::_2 => {},
-                VideoMode::_3 => {},
-                VideoMode::_4 => {},
-                VideoMode::_5 => {},
-                VideoMode::_6 => {},
-                VideoMode::_7 => {},
+                match self.mem.get_mode() {
+                    VideoMode::_0 => render_data.draw_mode_0(&mut self.mem, &self.sampler, &self.dynamic_state, y),
+                    VideoMode::_1 => render_data.draw_mode_1(&mut self.mem, &self.sampler, &self.dynamic_state, y),
+                    VideoMode::_2 => {},
+                    VideoMode::_3 => {},
+                    VideoMode::_4 => {},
+                    VideoMode::_5 => {},
+                    VideoMode::_6 => {},
+                    VideoMode::_7 => {},
+                }
             }
         }
     }
@@ -335,7 +337,6 @@ impl Renderable for Renderer {
         let render_data = std::mem::replace(&mut self.render_data, None);
 
         if let Some(render_data) = render_data {
-            //println!("Frame");
             // Finish command buffer.
             let (command_buffer, acquire_future, mut image_futures, image_num) = render_data.finish_drawing();
 

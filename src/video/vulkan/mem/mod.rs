@@ -168,6 +168,12 @@ impl MemoryCache {
         }
     }
 
+    // TODO: do this check elsewhere
+    pub fn in_fblank(&self) -> bool {
+        let screen_display = self.native_mem.lock().expect("Couldn't lock native mem.").get_registers().get_screen_display();
+        test_bit!(screen_display, 7, u8)
+    }
+
     // Retrieve structures.
     // Get texture for a bg.
     pub fn get_bg_image(&mut self, bg_num: usize) -> (PatternImage, Option<PatternFuture>) {

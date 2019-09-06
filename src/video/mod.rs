@@ -105,7 +105,9 @@ pub struct PPU {
     v_timer:        u16,    // $4209-a, for triggering IRQ.
 
     command_tx:     Sender<VideoCommand>,
-    signal_rx:      Receiver<VideoSignal>
+    signal_rx:      Receiver<VideoSignal>,
+
+    events_loop:    EventsLoop
 }
 
 impl PPU {
@@ -147,7 +149,7 @@ impl PPU {
                         VideoSignal::HBlank
                     },
                     FrameEnd => {
-                        renderer.draw_line(223);
+                        renderer.draw_line((screen::V_RES - 1) as u8);
                         renderer.frame_end();
                         VideoSignal::VBlank
                     }
@@ -174,23 +176,27 @@ impl PPU {
             v_timer:        0,
 
             command_tx:     command_tx,
-            signal_rx:      signal_rx
+            signal_rx:      signal_rx,
+
+            events_loop:    events_loop
         }
     }
 
     // Memory access from CPU / B Bus
     pub fn read_mem(&mut self, addr: u8) -> u8 {
-        if let Ok(mut mem) = self.mem.try_lock() {
+        /*if let Ok(mut mem) = self.mem.try_lock() {
             mem.read(addr)
         } else {
             0
-        }
+        }*/ // TODO: Re-introduce trylock here
+        self.mem.lock().unwrap().read(addr)
     }
 
     pub fn write_mem(&mut self, addr: u8, data: u8) {
-        if let Ok(mut mem) = self.mem.try_lock() {
+        /*if let Ok(mut mem) = self.mem.try_lock() {
             mem.write(addr, data);
-        }
+        }*/
+        self.mem.lock().unwrap().write(addr, data);
     }
 
     // Misc
@@ -219,7 +225,7 @@ impl PPU {
                 self.change_state(DrawingBeforePause)
             },
             HBlankLeft if self.cycle_count >= timing::SCANLINE_OFFSET => {
-                if self.scanline < 224 {
+                if self.scanline < screen::V_RES {
                     self.command_tx.send(VideoCommand::DrawLine((self.scanline - 1) as u8)).unwrap();
                 } else {
                     self.command_tx.send(VideoCommand::FrameEnd).unwrap();

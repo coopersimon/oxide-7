@@ -28,22 +28,19 @@ pub mod timing {
     // CPU pause in middle of line.
     pub const PAUSE_LEN: usize = 40;
     pub const PAUSE_START: usize = 536;
-    pub const PAUSE_END: usize = PAUSE_START + PAUSE_LEN;
-
-    pub const FRAME_TIME: usize = SCANLINE * screen::NUM_SCANLINES;
 }
 
 // Interrupt vector locations. Each contains a 16-bit address.
 pub mod int {
     pub const COP_VECTOR: u32   = 0xFFE4;
     pub const BRK_VECTOR: u32   = 0xFFE6;
-    pub const ABORT_VECTOR: u32 = 0xFFE8;
+    //pub const ABORT_VECTOR: u32 = 0xFFE8;
     pub const NMI_VECTOR: u32   = 0xFFEA;
-    pub const RESET_VECTOR: u32 = 0xFFEC;
+    //pub const RESET_VECTOR: u32 = 0xFFEC;
     pub const IRQ_VECTOR: u32   = 0xFFEE;
 
     pub const COP_VECTOR_EMU: u32   = 0xFFF4;
-    pub const ABORT_VECTOR_EMU: u32 = 0xFFF8;
+    //pub const ABORT_VECTOR_EMU: u32 = 0xFFF8;
     pub const NMI_VECTOR_EMU: u32   = 0xFFFA;
     pub const RESET_VECTOR_EMU: u32 = 0xFFFC;
     pub const BRK_VECTOR_EMU: u32   = 0xFFFE;
