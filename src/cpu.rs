@@ -837,6 +837,10 @@ impl CPU {
 
         self.p |= PFlags::from_bits_truncate(imm);
         self.clock_inc(INTERNAL_OP);
+
+        if self.is_e_set() {
+            self.p |= PFlags::M | PFlags::X;
+        }
     }
 
     fn nop(&mut self) {

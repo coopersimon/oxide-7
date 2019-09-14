@@ -1,17 +1,4 @@
-// Tools for communicating with the renderer and its thread.
-
-// Commands to send to the renderer.
-pub enum VideoCommand {
-    FrameStart,     // Start the process of rendering a frame.
-    DrawLine(u8),   // Draw a single line.
-    FrameEnd,       // End the process of rendering a frame.
-}
-
-// Signals sent back from the renderer.
-pub enum VideoSignal {
-    HBlank,         // The line has been drawn, trigger h-blank
-    VBlank,         // The frame has been rendered fully, trigger v-blank.
-}
+// Tools for communicating with the renderer (and its thread on certain platforms9.
 
 // Renderer trait.
 pub trait Renderable {

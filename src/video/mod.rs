@@ -7,26 +7,14 @@ mod render;
 mod vulkan;
 
 use std::{
-    sync::{
-        Arc,
-        Mutex,
-        mpsc::{
-            channel,
-            Sender,
-            Receiver
-        }
-    },
-    thread
+    rc::Rc,
+    cell::RefCell
 };
-
-use vulkano::instance::Instance;
-
 
 use winit::{
     EventsLoop,
     Event,
     WindowEvent,
-    WindowBuilder,
     ElementState,
     VirtualKeyCode
 };
@@ -45,7 +33,7 @@ use crate::{
 use ram::VideoMem;
 use render::*;
 
-type VRamRef = Arc<Mutex<VideoMem>>;
+type VRamRef = Rc<RefCell<VideoMem>>;
 
 bitflags! {
     #[derive(Default)]
@@ -103,61 +91,16 @@ pub struct PPU {
     h_cycle:        usize,  // Cycle into line to fire IRQ on.
     v_timer:        u16,    // $4209-a, for triggering IRQ.
 
-    //command_tx:     Sender<VideoCommand>,
-    //signal_rx:      Receiver<VideoSignal>,
-
     renderer:       vulkan::Renderer,
     events_loop:    EventsLoop
 }
 
 impl PPU {
     pub fn new() -> Self {
-        let mem = Arc::new(Mutex::new(VideoMem::new()));
-        //let thread_mem = mem.clone();
-
-        //let (command_tx, command_rx) = channel();
-        //let (signal_tx, signal_rx) = channel();
+        let mem = Rc::new(RefCell::new(VideoMem::new()));
 
         // Make instance with window extensions.
         let events_loop = EventsLoop::new();
-        /*let instance = {
-            let extensions = vulkano_win::required_extensions();
-            Instance::new(None, &extensions, None).expect("Failed to create vulkan instance")
-        };
-
-        let surface = WindowBuilder::new()
-            .with_dimensions((512, 448).into())
-            .with_title("Oxide-7")
-            .build_vk_surface(&events_loop, instance.clone())
-            .expect("Couldn't create surface");*/
-
-        /*thread::spawn(move || {
-            use VideoCommand::*;
-
-            let mut renderer = vulkan::Renderer::new(thread_mem, instance, surface);
-
-            // Process commands.
-            while let Ok(command) = command_rx.recv() {
-                let signal = match command {
-                    FrameStart => {
-                        renderer.frame_start();
-                        renderer.draw_line(0);
-                        VideoSignal::HBlank
-                    },
-                    DrawLine(y) => {
-                        renderer.draw_line(y);
-                        VideoSignal::HBlank
-                    },
-                    FrameEnd => {
-                        renderer.draw_line((screen::V_RES - 1) as u8);
-                        renderer.frame_end();
-                        VideoSignal::VBlank
-                    }
-                };
-
-                signal_tx.send(signal).expect("Could not send signal from video thread.");
-            }
-        });*/
 
         PPU {
             state:          PPUState::VBlank,
@@ -175,9 +118,6 @@ impl PPU {
             h_cycle:        0,
             v_timer:        0,
 
-            //command_tx:     command_tx,
-            //signal_rx:      signal_rx,
-
             renderer:       vulkan::Renderer::new(mem, &events_loop),
             events_loop:    events_loop
         }
@@ -185,19 +125,11 @@ impl PPU {
 
     // Memory access from CPU / B Bus
     pub fn read_mem(&mut self, addr: u8) -> u8 {
-        /*if let Ok(mut mem) = self.mem.try_lock() {
-            mem.read(addr)
-        } else {
-            0
-        }*/ // TODO: Re-introduce trylock here
-        self.mem.lock().unwrap().read(addr)
+        self.mem.borrow_mut().read(addr)
     }
 
     pub fn write_mem(&mut self, addr: u8, data: u8) {
-        /*if let Ok(mut mem) = self.mem.try_lock() {
-            mem.write(addr, data);
-        }*/
-        self.mem.lock().unwrap().write(addr, data);
+        self.mem.borrow_mut().write(addr, data);
     }
 
     // Misc
@@ -221,7 +153,6 @@ impl PPU {
 
         let signal = match self.state {
             VBlank if (self.scanline == 1) && (self.cycle_count >= timing::SCANLINE_OFFSET) => {
-                //self.command_tx.send(VideoCommand::FrameStart).unwrap();
                 self.renderer.frame_start();
                 self.renderer.draw_line(0);
                                     
@@ -229,13 +160,10 @@ impl PPU {
             },
             HBlankLeft if self.cycle_count >= timing::SCANLINE_OFFSET => {
                 if self.scanline < screen::V_RES {
-                    //self.command_tx.send(VideoCommand::DrawLine((self.scanline - 1) as u8)).unwrap();
                     self.renderer.draw_line((self.scanline - 1) as u8);
                 } else {
                     self.renderer.draw_line((screen::V_RES - 1) as u8);
                     self.renderer.frame_end();
-                    println!("Frame end!");
-                    //self.command_tx.send(VideoCommand::FrameEnd).unwrap();
                 }
                 self.change_state(DrawingBeforePause)
             },
@@ -244,17 +172,6 @@ impl PPU {
             },
             DrawingAfterPause if self.cycle_count >= timing::H_BLANK_TIME => {
                 // Enter blanking period.
-                /*let wait_for_blank = self.signal_rx.recv().unwrap();
-
-                match wait_for_blank {
-                    VideoSignal::VBlank => {
-                        self.change_state(VBlank)
-                        
-                    },
-                    VideoSignal::HBlank => {
-                        self.change_state(HBlankRight)
-                    }
-                }*/
                 if self.scanline < screen::V_RES {
                     self.change_state(HBlankRight)
                 } else {

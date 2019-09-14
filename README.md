@@ -18,6 +18,8 @@ A SNES emulator written in Rust.
 - F-blank
 - Backgrounds:
     - Better checking of dirty areas (pattern mem)
+- Reintroduce video thread if possible - (seems to work on Windows but not MacOS - can take another look at this with metal)
+- Use Metal for MacOS
 
 ##### Audio
 - Everything
@@ -26,9 +28,11 @@ A SNES emulator written in Rust.
 - Check DMA and HDMA
 - Check timings
     - CPU mid-line pause
-- Read keyboard for joypad data
 - HiROM
 - RAM save files
+- Finish joypad mapping
+- Move joypad outside of PPU.
+- Allow for custom mapping of controls.
 
 
 #### Style guide

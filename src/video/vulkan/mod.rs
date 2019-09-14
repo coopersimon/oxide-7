@@ -73,15 +73,6 @@ type RenderPipeline = GraphicsPipeline<
     Arc<dyn RenderPassAbstract + Send + Sync>
 >;
 
-// Individual Vertex.
-#[derive(Default, Copy, Clone)]
-struct Vertex {
-    pub position: [f32; 2],
-    pub data: u32
-}
-
-vulkano::impl_vertex!(Vertex, position, data);
-
 // TODO: move this and other data elsewhere
 #[derive(Clone, Copy)]
 enum Side {
@@ -89,8 +80,17 @@ enum Side {
     Right = 1 << 16
 }
 
+// Individual Vertex.
+#[derive(Default, Copy, Clone)]
+pub struct Vertex {
+    pub position: [f32; 2],
+    pub data: u32
+}
+
+vulkano::impl_vertex!(Vertex, position, data);
+
 #[derive(Copy, Clone)]
-struct PushConstants {
+pub struct PushConstants {
     pub tex_size:       [f32; 2],
     pub atlas_size:     [f32; 2],
     pub vertex_offset:  [f32; 2],
@@ -318,7 +318,7 @@ impl Renderable for Renderer {
         
         // Start building command buffer using framebuffer.
         let command_buffer_builder = AutoCommandBufferBuilder::primary_one_time_submit(self.device.clone(), self.queue.family()).unwrap()
-            .begin_render_pass(self.framebuffers[image_num].clone(), false, vec![[1.0, 0.0, 0.0, 1.0].into()]).unwrap();
+            .begin_render_pass(self.framebuffers[image_num].clone(), false, vec![[0.0, 0.0, 0.0, 1.0].into()]).unwrap();
 
         self.render_data = Some(RenderData{
             command_buffer: Some(command_buffer_builder),

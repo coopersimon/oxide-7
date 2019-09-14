@@ -93,12 +93,12 @@ impl MemoryCache {
     // Called every line. Checks mode and dirtiness of video memory.
     pub fn init(&mut self) {
         // Check mode and alter backgrounds.
-        let stored_mode = VideoMode::from(self.native_mem.lock().expect("Couldn't lock native mem.").get_registers().get_mode());
+        let stored_mode = VideoMode::from(self.native_mem.borrow().get_registers().get_mode());
         if stored_mode != self.mode {
             self.switch_mode(stored_mode);
         }
 
-        let mut mem = self.native_mem.lock().expect("Couldn't lock native mem.");
+        let mut mem = self.native_mem.borrow_mut();
 
         // Check background mem locations
         // TODO: just check relevant BGs
@@ -170,14 +170,14 @@ impl MemoryCache {
 
     // TODO: do this check elsewhere
     pub fn in_fblank(&self) -> bool {
-        let screen_display = self.native_mem.lock().expect("Couldn't lock native mem.").get_registers().get_screen_display();
+        let screen_display = self.native_mem.borrow().get_registers().get_screen_display();
         test_bit!(screen_display, 7, u8)
     }
 
     // Retrieve structures.
     // Get texture for a bg.
     pub fn get_bg_image(&mut self, bg_num: usize) -> (PatternImage, Option<PatternFuture>) {
-        let mem = self.native_mem.lock().expect("Couldn't lock native mem.");
+        let mem = self.native_mem.borrow();
         self.pattern_mem[bg_num].get_image(&mem)
     }
 
@@ -194,13 +194,13 @@ impl MemoryCache {
 
     // Get texture for sprites.
     pub fn get_sprite_image_0(&mut self) -> (PatternImage, Option<PatternFuture>) {
-        let mem = self.native_mem.lock().expect("Couldn't lock native mem.");
+        let mem = self.native_mem.borrow();
         self.sprite_pattern.get_image(&mem)
     }
 
     // Get vertices for a line of sprites.
     pub fn get_sprite_vertices(&mut self, priority: usize, y: u8) -> Option<VertexBuffer> {
-        let mut mem = self.native_mem.lock().expect("Couldn't lock native mem.");
+        let mut mem = self.native_mem.borrow_mut();
         let (oam_hi, oam_lo) = mem.get_oam();
         self.sprite_mem.get_vertex_buffer(priority, y, oam_hi, oam_lo)
     }
@@ -212,7 +212,7 @@ impl MemoryCache {
 
     // Get registers
     pub fn get_scroll_y(&self, bg_num: usize) -> u8 {
-        let mem = self.native_mem.lock().expect("Couldn't lock native mem.");
+        let mem = self.native_mem.borrow();
         let regs = mem.get_registers();
         match bg_num {
             0 => regs.bg1_scroll_y,
@@ -223,7 +223,7 @@ impl MemoryCache {
     }
 
     pub fn get_scroll_x(&self, bg_num: usize) -> u8 {
-        let mem = self.native_mem.lock().expect("Couldn't lock native mem.");
+        let mem = self.native_mem.borrow();
         let regs = mem.get_registers();
         match bg_num {
             0 => regs.bg1_scroll_x,
