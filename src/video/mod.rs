@@ -21,7 +21,6 @@ use std::{
 
 use vulkano::instance::Instance;
 
-use vulkano_win::VkSurfaceBuild;
 
 use winit::{
     EventsLoop,
@@ -104,34 +103,35 @@ pub struct PPU {
     h_cycle:        usize,  // Cycle into line to fire IRQ on.
     v_timer:        u16,    // $4209-a, for triggering IRQ.
 
-    command_tx:     Sender<VideoCommand>,
-    signal_rx:      Receiver<VideoSignal>,
+    //command_tx:     Sender<VideoCommand>,
+    //signal_rx:      Receiver<VideoSignal>,
 
+    renderer:       vulkan::Renderer,
     events_loop:    EventsLoop
 }
 
 impl PPU {
     pub fn new() -> Self {
         let mem = Arc::new(Mutex::new(VideoMem::new()));
-        let thread_mem = mem.clone();
+        //let thread_mem = mem.clone();
 
-        let (command_tx, command_rx) = channel();
-        let (signal_tx, signal_rx) = channel();
+        //let (command_tx, command_rx) = channel();
+        //let (signal_tx, signal_rx) = channel();
 
         // Make instance with window extensions.
-        let instance = {
+        let events_loop = EventsLoop::new();
+        /*let instance = {
             let extensions = vulkano_win::required_extensions();
             Instance::new(None, &extensions, None).expect("Failed to create vulkan instance")
         };
 
-        let events_loop = EventsLoop::new();
         let surface = WindowBuilder::new()
             .with_dimensions((512, 448).into())
             .with_title("Oxide-7")
             .build_vk_surface(&events_loop, instance.clone())
-            .expect("Couldn't create surface");
+            .expect("Couldn't create surface");*/
 
-        thread::spawn(move || {
+        /*thread::spawn(move || {
             use VideoCommand::*;
 
             let mut renderer = vulkan::Renderer::new(thread_mem, instance, surface);
@@ -157,11 +157,11 @@ impl PPU {
 
                 signal_tx.send(signal).expect("Could not send signal from video thread.");
             }
-        });
+        });*/
 
         PPU {
             state:          PPUState::VBlank,
-            mem:            mem,
+            mem:            mem.clone(),
             joypads:        JoypadMem::new(),
 
             cycle_count:    0,
@@ -175,9 +175,10 @@ impl PPU {
             h_cycle:        0,
             v_timer:        0,
 
-            command_tx:     command_tx,
-            signal_rx:      signal_rx,
+            //command_tx:     command_tx,
+            //signal_rx:      signal_rx,
 
+            renderer:       vulkan::Renderer::new(mem, &events_loop),
             events_loop:    events_loop
         }
     }
@@ -220,15 +221,21 @@ impl PPU {
 
         let signal = match self.state {
             VBlank if (self.scanline == 1) && (self.cycle_count >= timing::SCANLINE_OFFSET) => {
-                self.command_tx.send(VideoCommand::FrameStart).unwrap();
+                //self.command_tx.send(VideoCommand::FrameStart).unwrap();
+                self.renderer.frame_start();
+                self.renderer.draw_line(0);
                                     
                 self.change_state(DrawingBeforePause)
             },
             HBlankLeft if self.cycle_count >= timing::SCANLINE_OFFSET => {
                 if self.scanline < screen::V_RES {
-                    self.command_tx.send(VideoCommand::DrawLine((self.scanline - 1) as u8)).unwrap();
+                    //self.command_tx.send(VideoCommand::DrawLine((self.scanline - 1) as u8)).unwrap();
+                    self.renderer.draw_line((self.scanline - 1) as u8);
                 } else {
-                    self.command_tx.send(VideoCommand::FrameEnd).unwrap();
+                    self.renderer.draw_line((screen::V_RES - 1) as u8);
+                    self.renderer.frame_end();
+                    println!("Frame end!");
+                    //self.command_tx.send(VideoCommand::FrameEnd).unwrap();
                 }
                 self.change_state(DrawingBeforePause)
             },
@@ -237,20 +244,21 @@ impl PPU {
             },
             DrawingAfterPause if self.cycle_count >= timing::H_BLANK_TIME => {
                 // Enter blanking period.
-                let wait_for_blank = self.signal_rx.recv().unwrap();
+                /*let wait_for_blank = self.signal_rx.recv().unwrap();
 
                 match wait_for_blank {
                     VideoSignal::VBlank => {
                         self.change_state(VBlank)
-                        /*self.joypads.set_buttons(j, 0);
-
-                        if self.int_enable.contains(IntEnable::AUTO_JOYPAD) {
-                            self.joypads.prepare_read();
-                        }*/
+                        
                     },
                     VideoSignal::HBlank => {
                         self.change_state(HBlankRight)
                     }
+                }*/
+                if self.scanline < screen::V_RES {
+                    self.change_state(HBlankRight)
+                } else {
+                    self.change_state(VBlank)
                 }
             },
             HBlankRight if self.cycle_count >= timing::SCANLINE => {
@@ -340,6 +348,14 @@ impl PPU {
             },
             PPUState::VBlank => {
                 self.toggle_vblank(true);
+
+                let j = read_events(&mut self.events_loop, &mut self.renderer);
+
+                self.joypads.set_buttons(j, 0);
+
+                if self.int_enable.contains(IntEnable::AUTO_JOYPAD) {
+                    self.joypads.prepare_read();
+                }
 
                 if self.int_enable.contains(IntEnable::ENABLE_NMI) {
                     self.trigger_interrupt(Interrupt::NMI)

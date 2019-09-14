@@ -45,7 +45,13 @@ use vulkano::{
     buffer::cpu_pool::CpuBufferPoolChunk
 };
 
-use winit::Window;
+use vulkano_win::VkSurfaceBuild;
+
+use winit::{
+    Window,
+    WindowBuilder,
+    EventsLoop
+};
 
 use std::sync::Arc;
 
@@ -132,7 +138,12 @@ pub struct Renderer {
 
 impl Renderer {
     // Create and initialise renderer.
-    pub fn new(video_mem: VRamRef, instance: Arc<Instance>, surface: Arc<Surface<Window>>) -> Self {
+    pub fn new(video_mem: VRamRef, events_loop: &EventsLoop/*, instance: Arc<Instance>, surface: Arc<Surface<Window>>*/) -> Self {
+        let instance = {
+            let extensions = vulkano_win::required_extensions();
+            Instance::new(None, &extensions, None).expect("Failed to create vulkan instance")
+        };
+
         // Get graphics device.
         let physical = PhysicalDevice::enumerate(&instance).next()
             .expect("No device available");
@@ -168,6 +179,12 @@ impl Renderer {
             SamplerAddressMode::Repeat,
             0.0, 1.0, 0.0, 0.0
         ).expect("Couldn't create sampler!");
+
+        let surface = WindowBuilder::new()
+            .with_dimensions((512, 448).into())
+            .with_title("Oxide-7")
+            .build_vk_surface(&events_loop, instance.clone())
+            .expect("Couldn't create surface");
 
         // Get a swapchain and images for use with the swapchain, as well as the dynamic state.
         let ((swapchain, images), dynamic_state) = {
