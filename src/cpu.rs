@@ -129,6 +129,7 @@ impl CPU {
     pub fn step(&mut self) {
         // Check for interrupts.
         if let Some(int) = self.int {
+            println!("Interrupt!");
             
             match int {
                 Interrupt::NMI => self.trigger_interrupt(if self.is_e_set() {int::NMI_VECTOR_EMU} else {int::NMI_VECTOR}),
@@ -427,7 +428,7 @@ impl CPU {
             0x08 => self.ph(self.p.bits() as u16, true), // PHP
             0xAB => self.db = self.pl(false) as u8,      // PLB
             0x2B => self.dp = self.pl(true),             // PLD
-            0x28 => self.p = PFlags::from_bits_truncate(self.pl(false) as u8),    // PLP
+            0x28 => {let new_p = self.pl(true); self.set_p(new_p as u8)},    // PLP
 
             0xDB => self.stp(),
             0xCB => self.wai(),
@@ -800,7 +801,8 @@ impl CPU {
     }
 
     fn rti(&mut self) {
-        self.p = PFlags::from_bits_truncate(self.stack_pop());
+        let new_p = self.stack_pop();
+        self.set_p(new_p);
         let pc_lo = self.stack_pop();
         let pc_hi = self.stack_pop();
 
@@ -818,6 +820,12 @@ impl CPU {
 impl CPU {
     fn flag(&mut self, flag: PFlags, set: bool) {
         self.p.set(flag, set);
+
+        if (flag == PFlags::X) && set {
+            self.x = set_hi!(self.x, 0);
+            self.y = set_hi!(self.y, 0);
+        }
+
         self.clock_inc(INTERNAL_OP);
     }
 
@@ -830,6 +838,11 @@ impl CPU {
         if self.is_e_set() {
             self.p |= PFlags::M | PFlags::X;
         }
+
+        if self.is_x_set() {
+            self.x = set_hi!(self.x, 0);
+            self.y = set_hi!(self.y, 0);
+        }
     }
 
     fn sep(&mut self) {
@@ -840,6 +853,11 @@ impl CPU {
 
         if self.is_e_set() {
             self.p |= PFlags::M | PFlags::X;
+        }
+
+        if self.is_x_set() {
+            self.x = set_hi!(self.x, 0);
+            self.y = set_hi!(self.y, 0);
         }
     }
 
@@ -1035,7 +1053,7 @@ impl CPU {
     // Set N if high bit is 1, set Z if result is zero. Return 8 or 16 bit result.
     fn set_nz(&mut self, result: u16, byte: bool) -> u16 {
         if byte {
-            let result8 = result & 0xFF;
+            let result8 = result & 0xFF; // TODO: should this keep the upper 8 bits?
             self.p.set(PFlags::N, test_bit!(result8, 7));
             self.p.set(PFlags::Z, result8 == 0);
 
@@ -1055,6 +1073,16 @@ impl CPU {
             self.p.set(PFlags::Z, result8 == 0);
         } else {
             self.p.set(PFlags::Z, result == 0);
+        }
+    }
+
+    // Set the P register.
+    fn set_p(&mut self, new_p: u8) {
+        self.p = PFlags::from_bits_truncate(new_p);
+
+        if self.p.contains(PFlags::X) {
+            self.x = set_hi!(self.x, 0);
+            self.y = set_hi!(self.y, 0);
         }
     }
 

@@ -155,7 +155,7 @@ impl PPU {
             VBlank if (self.scanline == 1) && (self.cycle_count >= timing::SCANLINE_OFFSET) => {
                 self.renderer.frame_start();
                 self.renderer.draw_line(0);
-                                    
+
                 self.change_state(DrawingBeforePause)
             },
             HBlankLeft if self.cycle_count >= timing::SCANLINE_OFFSET => {
@@ -217,12 +217,12 @@ impl PPU {
 
     pub fn set_h_timer_lo(&mut self, data: u8) {
         self.h_timer = set_lo!(self.h_timer, data);
-        self.h_cycle = (self.h_timer as usize) * 4;
+        self.h_cycle = (self.h_timer as usize) * timing::DOT_TIME;
     }
 
     pub fn set_h_timer_hi(&mut self, data: u8) {
         self.h_timer = set_hi!(self.h_timer, data);
-        self.h_cycle = (self.h_timer as usize) * 4;
+        self.h_cycle = (self.h_timer as usize) * timing::DOT_TIME;
     }
 
     pub fn set_v_timer_lo(&mut self, data: u8) {

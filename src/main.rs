@@ -6,6 +6,7 @@ mod cpu;
 mod joypad;
 mod mem;
 mod video;
+mod audio;
 
 mod snes;
 

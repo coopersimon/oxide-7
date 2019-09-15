@@ -13,7 +13,8 @@ use std::{
 use crate::{
     common::Interrupt,
     constants::timing::*,
-    video::{PPU, PPUSignal}
+    video::{PPU, PPUSignal},
+    audio::APU
 };
 
 use super::{
@@ -372,20 +373,25 @@ impl MemBus {
 
 // Address Bus B, used for hardware registers.
 struct AddrBusB {
-    pub ppu: PPU
+    pub ppu:    PPU,
+    apu:        APU
 }
 
 impl AddrBusB {
     fn new() -> Self {
         AddrBusB {
-            ppu: PPU::new()
+            ppu: PPU::new(),
+            apu: APU::new()
         }
     }
 
     fn read(&mut self, addr: u8) -> u8 {
         match addr {
             0x34..=0x3F => self.ppu.read_mem(addr),
-            0x40..=0x43 => 0, // APU IO
+            0x40        => self.apu.read_port_0(),
+            0x41        => self.apu.read_port_1(),
+            0x42        => self.apu.read_port_2(),
+            0x43        => self.apu.read_port_3(),
             _ => unreachable!()
         }
     }
@@ -394,7 +400,10 @@ impl AddrBusB {
         match addr {
             0x00..=0x33 => self.ppu.write_mem(addr, data),
             0x37 => {}, // Software latch (?)
-            0x40..=0x43 => {}, // APU IO
+            0x40        => self.apu.write_port_0(data),
+            0x41        => self.apu.write_port_1(data),
+            0x42        => self.apu.write_port_2(data),
+            0x43        => self.apu.write_port_3(data),
             _ => unreachable!()
         }
     }
