@@ -387,6 +387,7 @@ impl AddrBusB {
 
     fn read(&mut self, addr: u8) -> u8 {
         match addr {
+            0x37        => self.ppu.latch_hv(),
             0x34..=0x3F => self.ppu.read_mem(addr),
             0x40        => self.apu.read_port_0(),
             0x41        => self.apu.read_port_1(),
@@ -399,7 +400,6 @@ impl AddrBusB {
     fn write(&mut self, addr: u8, data: u8) {
         match addr {
             0x00..=0x33 => self.ppu.write_mem(addr, data),
-            0x37 => {}, // Software latch (?)
             0x40        => self.apu.write_port_0(data),
             0x41        => self.apu.write_port_1(data),
             0x42        => self.apu.write_port_2(data),

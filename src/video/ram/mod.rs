@@ -14,6 +14,12 @@ use vram::VRAM;
 pub struct VideoMem {
     registers:      Registers,
 
+    h_pos:          u16,
+    v_pos:          u16,
+
+    h_hi_byte:      bool,
+    v_hi_byte:      bool,
+
     oam:            OAM,
     cgram:          CGRAM,
     vram:           VRAM
@@ -23,6 +29,12 @@ impl VideoMem {
     pub fn new() -> Self {
         VideoMem {
             registers:  Registers::new(),
+
+            h_pos:      0,
+            v_pos:      0,
+
+            h_hi_byte:  false,
+            v_hi_byte:  false,
 
             oam:        OAM::new(),
             cgram:      CGRAM::new(),
@@ -37,9 +49,24 @@ impl VideoMem {
             0x39 => self.vram.read_lo(),
             0x3A => self.vram.read_hi(),
             0x3B => self.cgram.read(),
-            0x3C => 0, // H scanline pos
-            0x3D => 0, // V scanline pos
-            0x3E..=0x3F => 0, // PPU status
+            0x3C => if !self.h_hi_byte {
+                self.h_hi_byte = true;
+                lo!(self.h_pos)
+            } else {
+                hi!(self.h_pos)
+            },
+            0x3D => if !self.v_hi_byte {
+                self.v_hi_byte = true;
+                lo!(self.v_pos)
+            } else {
+                hi!(self.v_pos)
+            },
+            0x3E => 1,  // PPU Status
+            0x3F => {   // PPU Status
+                self.h_hi_byte = false;
+                self.v_hi_byte = false;
+                2
+            },
             _ => unreachable!()
         }
     }
@@ -92,6 +119,12 @@ impl VideoMem {
             0x33 => {}, // Screen mode select
             _ => unreachable!()
         }
+    }
+
+    // Set latched h or v pos.
+    pub fn set_latched_hv(&mut self, h: u16, v: u16) {
+        self.h_pos = h;
+        self.v_pos = v;
     }
 
     // Renderer methods to get raw data.

@@ -137,6 +137,11 @@ impl PPU {
         self.joypads.is_ready()
     }
 
+    pub fn latch_hv(&mut self) -> u8 {
+        self.mem.borrow_mut().set_latched_hv((self.cycle_count / timing::DOT_TIME) as u16, self.scanline as u16);
+        0
+    }
+
     // Joypad access
     pub fn read_joypad(&mut self, addr: u16) -> u8 {
         self.joypads.read(addr)

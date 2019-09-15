@@ -2,6 +2,11 @@
 
 use bitflags::bitflags;
 
+use std::collections::BTreeSet;
+
+const VRAM_END_ADDR: u32 = 64 * 1024;
+const PATTERN_MAX_HEIGHT: u32 = 64;
+
 bitflags! {
     #[derive(Default)]
     pub struct ObjectSettings: u8 {
@@ -169,51 +174,51 @@ impl Registers {
     // Get starting locations for each block of memory, in order.
     fn get_vram_borders(&self) -> Vec<u16> {
         let mode = self.get_mode();
-        let mut borders = Vec::new();
+        let mut borders = BTreeSet::new();
 
         // Always push sprite pattern mem
-        borders.push(self.obj_0_pattern_addr());
-        borders.push(self.obj_n_pattern_addr());
+        borders.insert(self.obj_0_pattern_addr());
+        borders.insert(self.obj_n_pattern_addr());
 
-        borders.push(((self.bg1_settings & 0xFC) as u16) << 8);
-        borders.push(self.bg_1_pattern_addr());
+        borders.insert(((self.bg1_settings & 0xFC) as u16) << 8);
+        borders.insert(self.bg_1_pattern_addr());
 
-        borders.push(((self.bg2_settings & 0xFC) as u16) << 8);
-        borders.push(self.bg_2_pattern_addr());
+        borders.insert(((self.bg2_settings & 0xFC) as u16) << 8);
+        borders.insert(self.bg_2_pattern_addr());
 
         if (mode == 0) || (mode == 1) {
-            borders.push(((self.bg3_settings & 0xFC) as u16) << 8);
-            borders.push(self.bg_3_pattern_addr());
+            borders.insert(((self.bg3_settings & 0xFC) as u16) << 8);
+            borders.insert(self.bg_3_pattern_addr());
         }
         if mode == 0 {
-            borders.push(((self.bg4_settings & 0xFC) as u16) << 8);
-            borders.push(self.bg_4_pattern_addr());
+            borders.insert(((self.bg4_settings & 0xFC) as u16) << 8);
+            borders.insert(self.bg_4_pattern_addr());
         }
 
-        borders.sort();
-        borders
+        borders.iter().cloned().collect::<Vec<_>>()
     }
 
-    // Get height of pattern table from start address
+    // Get height of pattern table from start address, in pixels.
     pub fn get_pattern_table_height(&self, pattern_addr: u16, bits_per_pixel: u32) -> u32 {
         let borders = self.get_vram_borders();  // TODO: call this from outside.
 
+        // Find border after pattern addr.
         let end_addr = if let Some(idx) = borders.iter().position(|a| *a == pattern_addr) {
             if (idx + 1) < borders.len() {
                 borders[idx + 1] as u32
             } else {
-                64 * 1024
+                VRAM_END_ADDR
             }
         } else {
-            64 * 1024
+            VRAM_END_ADDR
         };
 
         let height = (end_addr - pattern_addr as u32) / (16 * 8 * bits_per_pixel);
 
-        if height < 64 {
-            height
+        if height < PATTERN_MAX_HEIGHT {
+            height * 8
         } else {
-            64
+            PATTERN_MAX_HEIGHT * 8
         }
     }
 }

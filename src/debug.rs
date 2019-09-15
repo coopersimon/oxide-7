@@ -70,6 +70,16 @@ pub fn debug_mode(cpu: &mut CPU) {
                         step_and_trace(cpu, &mut stack_trace, false);
                     }
                 }
+            } else if input.starts_with("s:") {
+                // Step x times
+                match usize::from_str_radix(&input[2..].trim(), 10) {
+                    Ok(num) => {
+                        for _ in 0..num {
+                            step_and_trace(cpu, &mut stack_trace, true);
+                        }
+                    },
+                    Err(e) => println!("Invalid number of steps: {}", e),
+                }
             } else if input.starts_with("s") {
                 // Step
                 step_and_trace(cpu, &mut stack_trace, true);
@@ -139,6 +149,7 @@ fn help() {
     println!("c:x: Clear breakpoint at memory location x (hex).");
     println!("r: Keep running until a breakpoint is hit.");
     println!("s: Step a single instruction.");
+    println!("s:x: Step multiple instructions (base 10).");
     println!("t: Print the stack trace (all the call locations).");
     println!("p: Print the current state of the CPU.");
     println!("p:x: Print x - if x is a number, print the contents of that address, otherwise print the register.");

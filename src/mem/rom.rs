@@ -47,7 +47,7 @@ impl ROM {
                 .expect("Couldn't swap in bank");
 
             self.rom_file.read_exact(&mut buf)
-                .expect(&format!("Couldn't swap in bank at pos {}-{}", offset, offset + self.bank_size as u64));
+                .expect(&format!("Couldn't swap in bank at pos {:X}-{:X}, bank: {:X}, addr: {:X}", offset, offset + self.bank_size as u64, bank, addr));
 
             let data = buf[addr as usize];
             self.banks.insert(bank, buf);

@@ -6,7 +6,7 @@ bitflags! {
     #[derive(Default)]
     struct PortControl: u8 {
         const INC =      bit!(7);
-        const REMAP =    bit!(3) | bit!(2);
+        const REMAP =    bit!(3) | bit!(2); // TODO
         const INC_RATE = bit!(1) | bit!(0);
     }
 }
@@ -14,8 +14,6 @@ bitflags! {
 // Address increment rates.
 const INC_RATE_1: u8 = 0;
 const INC_RATE_32: u8 = 1;
-const INC_RATE_64: u8 = 2;  // TODO: this might be 128 too.
-const INC_RATE_128: u8 = 3;
 
 // Size of VRAM (64kB, or 2^16)
 const VRAM_SIZE: usize = 64 * 1024;
@@ -25,7 +23,7 @@ pub struct VRAM {
     data:           Vec<u8>,
 
     port_control:   PortControl,
-    addr:           u16,        // Word address
+    byte_addr:      u16,
 
     dirty_start:    u16,
     dirty_end:      u16
@@ -37,7 +35,7 @@ impl VRAM {
             data:           vec![0; VRAM_SIZE],
 
             port_control:   PortControl::default(),
-            addr:           0,
+            byte_addr:      0,
 
             dirty_start:    MAX,
             dirty_end:      0
@@ -49,15 +47,19 @@ impl VRAM {
     }
 
     pub fn set_addr_lo(&mut self, addr: u8) {
-        self.addr = set_lo!(self.addr, addr);
+        let old_word_addr = self.byte_addr / 2;
+        let new_word_addr = set_lo!(old_word_addr, addr);
+        self.byte_addr = new_word_addr * 2;
     }
 
     pub fn set_addr_hi(&mut self, addr: u8) {
-        self.addr = set_hi!(self.addr, addr);
+        let old_word_addr = self.byte_addr / 2;
+        let new_word_addr = set_hi!(old_word_addr, addr);
+        self.byte_addr = new_word_addr * 2;
     }
 
     pub fn read_lo(&mut self) -> u8 {
-        let ret = self.data[(self.addr as usize) * 2];
+        let ret = self.data[self.byte_addr as usize];
 
         if !self.port_control.contains(PortControl::INC) {
             self.inc_addr();
@@ -67,7 +69,7 @@ impl VRAM {
     }
 
     pub fn read_hi(&mut self) -> u8 {
-        let ret = self.data[(self.addr as usize) * 2 + 1];
+        let ret = self.data[self.byte_addr.wrapping_add(1) as usize];
 
         if self.port_control.contains(PortControl::INC) {
             self.inc_addr();
@@ -77,10 +79,11 @@ impl VRAM {
     }
 
     pub fn write_lo(&mut self, data: u8) {
-        self.data[(self.addr as usize) * 2] = data;
+        //println!("Write lo: {:X}", (self.addr as usize) * 2);
+        self.data[self.byte_addr as usize] = data;
 
-        if self.dirty_start > self.addr {
-            self.dirty_start = self.addr;
+        if self.dirty_start > self.byte_addr {
+            self.dirty_start = self.byte_addr;
         }
 
         if !self.port_control.contains(PortControl::INC) {
@@ -89,10 +92,11 @@ impl VRAM {
     }
 
     pub fn write_hi(&mut self, data: u8) {
-        self.data[(self.addr as usize) * 2 + 1] = data;
+        //println!("Write hi: {:X}", (self.addr as usize) * 2 + 1);
+        self.data[self.byte_addr.wrapping_add(1) as usize] = data;
 
-        if self.dirty_end < self.addr {
-            self.dirty_end = self.addr;
+        if self.dirty_end < self.byte_addr {
+            self.dirty_end = self.byte_addr;
         }
 
         if self.port_control.contains(PortControl::INC) {
@@ -127,14 +131,13 @@ impl VRAM {
 impl VRAM {
     #[inline]
     fn inc_addr(&mut self) {
+        // Inc the bytes.
         let inc_rate = match (self.port_control & PortControl::INC_RATE).bits() {
-            INC_RATE_1   => 1,
-            INC_RATE_32  => 32,
-            INC_RATE_64  => 64,
-            INC_RATE_128 => 128,
-            _ => unreachable!()
+            INC_RATE_1  => 2,
+            INC_RATE_32 => 64,
+            _           => 256
         };
 
-        self.addr = self.addr.wrapping_add(inc_rate);
+        self.byte_addr = self.byte_addr.wrapping_add(inc_rate);
     }
 }

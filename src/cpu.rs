@@ -129,7 +129,7 @@ impl CPU {
     pub fn step(&mut self) {
         // Check for interrupts.
         if let Some(int) = self.int {
-            println!("Interrupt!");
+            //println!("Interrupt!");
             
             match int {
                 Interrupt::NMI => self.trigger_interrupt(if self.is_e_set() {int::NMI_VECTOR_EMU} else {int::NMI_VECTOR}),
@@ -426,8 +426,8 @@ impl CPU {
             0x0B => self.ph(self.dp, false),             // PHD
             0x4B => self.ph(self.pb as u16, true),       // PHK
             0x08 => self.ph(self.p.bits() as u16, true), // PHP
-            0xAB => self.db = self.pl(false) as u8,      // PLB
-            0x2B => self.dp = self.pl(true),             // PLD
+            0xAB => self.db = self.pl(true) as u8,       // PLB
+            0x2B => self.dp = self.pl(false),            // PLD
             0x28 => {let new_p = self.pl(true); self.set_p(new_p as u8)},    // PLP
 
             0xDB => self.stp(),
@@ -750,9 +750,7 @@ impl CPU {
                 self.pb = hi24!(a);
                 self.pc = lo24!(a);
             },
-            Addr::ZeroBank(a) => {
-                self.pc = a
-            }
+            Addr::ZeroBank(a) => self.pc = a
         }
 
         self.stack_push(hi!(pc));

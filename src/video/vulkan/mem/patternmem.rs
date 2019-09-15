@@ -34,8 +34,8 @@ pub enum BitsPerPixel {
 
 pub struct PatternMem {
     // Parameters
-    width:          u32,
-    height:         u32,
+    width:          u32,    // In pixels
+    height:         u32,    // In pixels
     bits_per_pixel: BitsPerPixel,
 
     start_addr:     u16,
@@ -47,20 +47,14 @@ pub struct PatternMem {
 }
 
 impl PatternMem {
-    pub fn new(queue: &Arc<Queue>, width: u32, height: u32, bits_per_pixel: BitsPerPixel, start_addr: u16) -> Self {
-        let size = (width * height * match bits_per_pixel {
-            BitsPerPixel::_2 => 16,
-            BitsPerPixel::_4 => 32,
-            BitsPerPixel::_8 => 64,
-        }) as u16;   // TODO: check against max size
-
+    pub fn new(queue: &Arc<Queue>, width: u32, height: u32, bits_per_pixel: BitsPerPixel) -> Self {
         PatternMem {
             width:          width,
             height:         height,
             bits_per_pixel: bits_per_pixel,
 
-            start_addr:     start_addr,
-            end_addr:       start_addr + size,
+            start_addr:     std::u16::MAX,
+            end_addr:       std::u16::MAX,
 
             queue:          queue.clone(),
             image:          None
@@ -89,14 +83,17 @@ impl PatternMem {
     // Set the address.
     pub fn set_addr(&mut self, start_addr: u16, height: u32) {
         self.height = height;
-        let size = (self.width * self.height * match self.bits_per_pixel {
+
+        let size = (self.width / 8) * (self.height / 8) * match self.bits_per_pixel {
             BitsPerPixel::_2 => 16,
             BitsPerPixel::_4 => 32,
             BitsPerPixel::_8 => 64,
-        }) as u16;
+        };
 
         self.start_addr = start_addr;
-        self.end_addr = start_addr + size;
+        self.end_addr = start_addr + (size as u16);
+
+        println!("Height: {}, New start and end: {}, {}", height, self.start_addr, self.end_addr);
 
         self.image = None;
     }

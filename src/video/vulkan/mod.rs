@@ -334,6 +334,7 @@ impl Renderable for Renderer {
     fn draw_line(&mut self, y: u8) {
         if let Some(render_data) = &mut self.render_data {
             if !self.mem.in_fblank() {
+                //println!("draw line, mode: {:?}", self.mem.get_mode());
                 self.mem.init();
 
                 match self.mem.get_mode() {
