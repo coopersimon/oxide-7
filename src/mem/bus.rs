@@ -25,7 +25,8 @@ use super::{
     },
     rom::{
         Cart,
-        LoROM
+        LoROM,
+        HiROM
     }
 };
 
@@ -178,18 +179,22 @@ impl MemBus {
         let mut buf = [0; 0x40];
         
         // Check for LoROM
-        reader.seek(SeekFrom::Start(0x7FB0)).expect("Couldn't seek to cartridge header.");
+        reader.seek(SeekFrom::Start(0x7FC0)).expect("Couldn't seek to cartridge header.");
         reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
 
-        if (buf[0x25] & 0x21) == 0x20 {
-            return Box::new(LoROM::new(reader, (buf[0x25] & bit!(4)) != 0));
-        } else {
-            panic!("Unrecognised ROM");
+        if (buf[0x15] & 0x21) == 0x20 {
+            return Box::new(LoROM::new(reader, test_bit!(buf[0x15], 4, u8)));
         }
 
         // Check for HiROM
-        //reader.seek(SeekFrom::Start(0xFFB0)).expect("Couldn't seek to cartridge header.");
-        //reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
+        reader.seek(SeekFrom::Start(0xFFC0)).expect("Couldn't seek to cartridge header.");
+        reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
+
+        if (buf[0x15] & 0x21) == 0x21 {
+            return Box::new(HiROM::new(reader, test_bit!(buf[0x15], 4, u8)));
+        } else {
+            panic!("Unrecognised ROM: {:X}", buf[0x15]);
+        }
     }
 
     // Internal status registers.
@@ -404,7 +409,7 @@ impl AddrBusB {
             0x41        => self.apu.write_port_1(data),
             0x42        => self.apu.write_port_2(data),
             0x43        => self.apu.write_port_3(data),
-            _ => unreachable!()
+            _ => panic!("Tried to writte silly shit"),
         }
     }
 }
