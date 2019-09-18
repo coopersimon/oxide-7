@@ -413,12 +413,12 @@ impl CPU {
             0xD4 => self.pe(Mode(Dir)), // PEI
             0x62 => self.per(),
 
-            0x48 => self.ph(self.a, self.is_m_set()),     // PHA
-            0xDA => self.ph(self.x, self.is_x_set()),     // PHX
-            0x5A => self.ph(self.y, self.is_x_set()),     // PHY
-            0x68 => self.a = self.pl(self.is_m_set()),    // PLA
-            0xFA => self.x = self.pl(self.is_x_set()),    // PLX
-            0x7A => self.y = self.pl(self.is_x_set()),    // PLY
+            0x48 => self.ph(self.a, self.is_m_set()),   // PHA
+            0xDA => self.ph(self.x, self.is_x_set()),   // PHX
+            0x5A => self.ph(self.y, self.is_x_set()),   // PHY
+            0x68 => self.pla(),                         // PLA
+            0xFA => self.x = self.pl(self.is_x_set()),  // PLX
+            0x7A => self.y = self.pl(self.is_x_set()),  // PLY
 
             0x8B => self.ph(self.db as u16, true),       // PHB
             0x0B => self.ph(self.dp, false),             // PHD
@@ -468,11 +468,11 @@ impl CPU {
             let result8 = result & 0xFF;
             let full_wraparound = (result8 == self.a) && (op != 0);
             self.p.set(PFlags::N, test_bit!(result8, 7));
-            self.p.set(PFlags::V, ((result8 as i8) < (self.a as i8)) || full_wraparound);
+            self.p.set(PFlags::V, ((result8 as i8) < (lo!(self.a) as i8)) || full_wraparound);
             self.p.set(PFlags::Z, result8 == 0);
             self.p.set(PFlags::C, (result8 < self.a) || full_wraparound);
 
-            result8
+            make16!(hi!(self.a), result8)
         } else {
             let full_wraparound = (result == self.a) && (op != 0);
             self.p.set(PFlags::N, test_bit!(result, 15));
@@ -492,11 +492,11 @@ impl CPU {
             let result8 = result & 0xFF;
             let full_wraparound = (result8 == self.a) && (op != 0);
             self.p.set(PFlags::N, test_bit!(result8, 7));
-            self.p.set(PFlags::V, ((result8 as i8) > (self.a as i8)) || full_wraparound);
+            self.p.set(PFlags::V, ((result8 as i8) > (lo!(self.a) as i8)) || full_wraparound);
             self.p.set(PFlags::Z, result8 == 0);
             self.p.set(PFlags::C, (result8 > self.a) || full_wraparound);
 
-            result8
+            make16!(hi!(self.a), result8)
         } else {
             let full_wraparound = (result == self.a) && (op != 0);
             self.p.set(PFlags::N, test_bit!(result, 15));
@@ -566,21 +566,21 @@ impl CPU {
         let op = self.read_op(data_mode, self.is_m_set());
         let result = self.a & op;
 
-        self.a = self.set_nz(result, self.is_m_set());
+        self.a = self.set_a_nz(result);
     }
 
     fn eor(&mut self, data_mode: DataMode) {
         let op = self.read_op(data_mode, self.is_m_set());
         let result = self.a ^ op;
 
-        self.a = self.set_nz(result, self.is_m_set());
+        self.a = self.set_a_nz(result);
     }
 
     fn ora(&mut self, data_mode: DataMode) {
         let op = self.read_op(data_mode, self.is_m_set());
         let result = self.a | op;
 
-        self.a = self.set_nz(result, self.is_m_set());
+        self.a = self.set_a_nz(result);
     }
 
     fn bit(&mut self, data_mode: DataMode) {
@@ -911,7 +911,7 @@ impl CPU {
     fn lda(&mut self, data_mode: DataMode) {
         let data = self.read_op(data_mode, self.is_m_set());
 
-        self.a = self.set_nz(data, self.is_m_set());
+        self.a = self.set_a_nz(data);
     }
 
     fn ldx(&mut self, data_mode: DataMode) {
@@ -1029,6 +1029,21 @@ impl CPU {
         self.set_nz(reg, byte)
     }
 
+    fn pla(&mut self) {
+        self.a = if self.is_m_set() {
+            let data = self.stack_pop();
+            let _ = self.set_nz(data as u16, true);
+            set_lo!(self.a, data)
+        } else {
+            let lo = self.stack_pop();
+            let hi = self.stack_pop();
+            let data = make16!(hi, lo);
+            self.set_nz(data, false)
+        };
+
+        self.clock_inc(INTERNAL_OP);
+    }
+
     fn transfer(&mut self, from: u16, to: u16, byte: bool, set_flags: bool) -> u16 {
         let result = if set_flags {
             self.set_nz(from, byte)
@@ -1039,7 +1054,7 @@ impl CPU {
         self.clock_inc(INTERNAL_OP);
 
         if byte {
-            set_lo!(to, result)
+            set_lo!(to, lo!(result))    // hi!(to) | result should work too.
         } else {
             result
         }
@@ -1051,7 +1066,7 @@ impl CPU {
     // Set N if high bit is 1, set Z if result is zero. Return 8 or 16 bit result.
     fn set_nz(&mut self, result: u16, byte: bool) -> u16 {
         if byte {
-            let result8 = result & 0xFF; // TODO: should this keep the upper 8 bits?
+            let result8 = result & 0xFF;
             self.p.set(PFlags::N, test_bit!(result8, 7));
             self.p.set(PFlags::Z, result8 == 0);
 
@@ -1060,6 +1075,16 @@ impl CPU {
             self.p.set(PFlags::N, test_bit!(result, 15));
             self.p.set(PFlags::Z, result == 0);
 
+            result
+        }
+    }
+
+    // Same as set_nz, but preserves the top byte of acc in 8-bit mode.
+    fn set_a_nz(&mut self, result: u16) -> u16 {
+        let result = self.set_nz(result, self.is_m_set());
+        if self.is_m_set() {
+            set_lo!(self.a, lo!(result)) // hi!(self.a) | result should work too
+        } else {
             result
         }
     }
@@ -1084,6 +1109,26 @@ impl CPU {
         }
     }
 
+    // Get the A register (8 or 16-bit depending on M flag)
+    #[inline]
+    fn get_acc(&mut self) -> u16 {
+        if self.is_m_set() {
+            set_hi!(self.a, 0)
+        } else {
+            self.a
+        }
+    }
+
+    // Set the A register (8 or 16-bit depending on M flag)
+    #[inline]
+    fn set_acc(&mut self, data: u16) {
+        self.a = if self.is_m_set() {
+            set_lo!(self.a, lo!(data))
+        } else {
+            data
+        };
+    }
+
     // Compare register with operand, and set flags accordingly.
     fn compare(&mut self, data_mode: DataMode, reg: u16, byte: bool) {
         let op = self.read_op(data_mode, byte);
@@ -1091,17 +1136,26 @@ impl CPU {
         let result = reg.wrapping_sub(op);
         let _ = self.set_nz(result, byte);
 
-        self.p.set(PFlags::C, reg >= op);
+        let cmp_reg = if byte {
+            lo!(reg) as u16
+        } else {
+            reg
+        };
+
+        self.p.set(PFlags::C, cmp_reg >= op);
     }
 
+    #[inline]
     fn is_m_set(&self) -> bool {
         self.p.contains(PFlags::M)
     }
 
+    #[inline]
     fn is_x_set(&self) -> bool {
         self.p.contains(PFlags::X)
     }
 
+    #[inline]
     fn is_e_set(&self) -> bool {
         self.pe.contains(PFlags::E)
     }
@@ -1219,7 +1273,7 @@ impl CPU {
 
         match data_mode {
             Imm => self.immediate(byte),
-            Acc => self.a,
+            Acc => self.get_acc(),
             Mode(m) => {
                 let addr = self.get_data_addr(m);
                 self.read_addr(addr, byte)
@@ -1234,7 +1288,7 @@ impl CPU {
 
         match data_mode {
             Imm => unreachable!(),  // We can't write back to immediate data.
-            Acc => (self.a, Acc),
+            Acc => (self.get_acc(), Acc),
             Mode(m) => {
                 let addr = self.get_data_addr(m);
                 (self.read_addr(addr, byte), Known(addr))
@@ -1249,7 +1303,7 @@ impl CPU {
 
         match data_mode {
             Imm => unreachable!(),  // We can't write to immediate data.
-            Acc => self.a = data,
+            Acc => self.set_acc(data),
             Mode(m) => {
                 let addr = self.get_data_addr(m);
                 self.write_addr(data, addr, byte);
