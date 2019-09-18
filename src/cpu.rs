@@ -129,8 +129,6 @@ impl CPU {
     pub fn step(&mut self) {
         // Check for interrupts.
         if let Some(int) = self.int {
-            //println!("Interrupt!");
-            
             match int {
                 Interrupt::NMI => self.trigger_interrupt(if self.is_e_set() {int::NMI_VECTOR_EMU} else {int::NMI_VECTOR}),
                 Interrupt::IRQ => if !self.p.contains(PFlags::I) {
@@ -511,15 +509,15 @@ impl CPU {
     }
 
     fn cmp(&mut self, data_mode: DataMode) {
-        self.compare(data_mode, self.a, PFlags::M);
+        self.compare(data_mode, self.a, self.is_m_set());
     }
 
     fn cpx(&mut self, data_mode: DataMode) {
-        self.compare(data_mode, self.x, PFlags::X);
+        self.compare(data_mode, self.x, self.is_x_set());
     }
 
     fn cpy(&mut self, data_mode: DataMode) {
-        self.compare(data_mode, self.y, PFlags::X);
+        self.compare(data_mode, self.y, self.is_x_set());
     }
 
     fn dec(&mut self, data_mode: DataMode) {
@@ -871,11 +869,13 @@ impl CPU {
     fn stp(&mut self) {
         // TODO
         self.clock_inc(INTERNAL_OP * 2);
+        panic!("STP not implemented.");
     }
 
     fn wai(&mut self) {
         // TODO
         self.clock_inc(INTERNAL_OP * 2);
+        panic!("WAI not implemented");
     }
 
     fn xba(&mut self) {
@@ -1085,20 +1085,13 @@ impl CPU {
     }
 
     // Compare register with operand, and set flags accordingly.
-    fn compare(&mut self, data_mode: DataMode, reg: u16, flag_check: PFlags) {
-        let op = self.read_op(data_mode, self.p.contains(flag_check));
-        let result = reg.wrapping_sub(op);
+    fn compare(&mut self, data_mode: DataMode, reg: u16, byte: bool) {
+        let op = self.read_op(data_mode, byte);
 
-        if self.p.contains(flag_check) {
-            let result8 = result & 0xFF;
-            self.p.set(PFlags::N, test_bit!(result8, 7));
-            self.p.set(PFlags::Z, result8 == 0);
-            self.p.set(PFlags::C, result8 >= reg);
-        } else {
-            self.p.set(PFlags::N, test_bit!(result, 15));
-            self.p.set(PFlags::Z, result == 0);
-            self.p.set(PFlags::C, result >= reg);
-        }
+        let result = reg.wrapping_sub(op);
+        let _ = self.set_nz(result, byte);
+
+        self.p.set(PFlags::C, reg >= op);
     }
 
     fn is_m_set(&self) -> bool {
@@ -1584,7 +1577,7 @@ impl CPU {
         let imm_lo = self.fetch();
         let imm_hi = self.fetch();
 
-        let ptr = make16!(imm_lo, imm_hi);
+        let ptr = make16!(imm_hi, imm_lo);
 
         let ptr_lo = make24!(0, ptr);
         let ptr_hi = make24!(0, ptr.wrapping_add(1));
@@ -1600,7 +1593,7 @@ impl CPU {
         let imm_lo = self.fetch();
         let imm_hi = self.fetch();
 
-        let ptr = make16!(imm_lo, imm_hi).wrapping_add(self.x);
+        let ptr = make16!(imm_hi, imm_lo).wrapping_add(self.x);
 
         let ptr_lo = make24!(self.pb, ptr);
         let ptr_hi = make24!(self.pb, ptr.wrapping_add(1));
@@ -1618,7 +1611,7 @@ impl CPU {
         let imm_lo = self.fetch();
         let imm_hi = self.fetch();
 
-        let ptr = make16!(imm_lo, imm_hi);
+        let ptr = make16!(imm_hi, imm_lo);
 
         let ptr_lo = make24!(0, ptr);
         let ptr_mid = make24!(0, ptr.wrapping_add(1));

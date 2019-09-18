@@ -289,7 +289,7 @@ impl MemBus {
                     5 => for i in 0..4 {
                         let data = self.read(src_addr + i).0;
                         self.write(dst_addr + (i % 2), data);
-                    }
+                    },
                     _ => unreachable!()
                 }
 
@@ -356,7 +356,7 @@ impl MemBus {
             5 => for i in 0_u8..4_u8 {
                 let data = self.get_hdma_data(chan, i as u32);
                 self.bus_b.write(self.dma_channels[chan].b_bus_addr + (i % 2), data);
-            }
+            },
             _ => unreachable!()
         }
 
