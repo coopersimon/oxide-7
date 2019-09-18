@@ -409,7 +409,7 @@ impl AddrBusB {
             0x41        => self.apu.write_port_1(data),
             0x42        => self.apu.write_port_2(data),
             0x43        => self.apu.write_port_3(data),
-            _ => panic!("Tried to writte silly shit"),
+            _ => panic!("Tried to write silly shit: {:X} to {:X}", data, addr),
         }
     }
 }

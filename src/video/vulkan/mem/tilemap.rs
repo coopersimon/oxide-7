@@ -23,6 +23,10 @@ const Y_FLIP_BIT: u32   = 15;
 const X_FLIP_BIT: u32   = 14;
 const PRIORITY_BIT: u32 = 13;
 
+// Tile sizes TODO: alter based on mode
+const SMALL_TILE: usize = 8;
+const LARGE_TILE: usize = 16;
+
 // BG Register bits.
 bitflags! {
     #[derive(Default)]
@@ -36,12 +40,14 @@ bitflags! {
 pub struct TileMap {
     vertices:       Vec<Vertex>,
 
-    bg_reg:         BGReg, // Address and size as stored in register.
+    bg_reg:         BGReg,      // Address and size as stored in register.
 
-    start_addr:     u16,
-    size:           u16,
-    row_len:        usize,
-    tile_height:    usize,
+    start_addr:     u16,        // Start address of tile map.
+    size:           u16,        // Size of tile map in bytes.
+    row_len:        usize,      // Length of a row of vertices.
+
+    large_tiles:    bool,       // If true, tiles are 16 pixels high/wide (depending on mode).
+    map_size:       (f32, f32), // Size of map relative to viewport.
 
     buffer_pool:    CpuBufferPool<Vertex>,
 }
@@ -56,8 +62,8 @@ impl TileMap {
         let grid_size_x = if reg_bits.contains(BGReg::MIRROR_X) {64} else {32};
         let grid_size_y = if reg_bits.contains(BGReg::MIRROR_Y) {64} else {32};
 
-        let view_size = (if large_tiles {16} else {32}, if large_tiles {16} else {32});
-        let tile_height = if large_tiles {16} else {8};
+        let view_size = (if large_tiles {16} else {32}, if large_tiles {14} else {28});
+        let tile_height = if large_tiles {LARGE_TILE} else {SMALL_TILE};
 
         let mut vertices = Vec::new();
 
@@ -85,7 +91,7 @@ impl TileMap {
             hi_y += y_frac;
         }
 
-        let start_addr = ((reg_bits & BGReg::ADDR).bits() as u16) << 8;
+        let start_addr = ((reg_bits & BGReg::ADDR).bits() as u16) << 9;
 
         TileMap {
             vertices:       vertices,
@@ -95,21 +101,24 @@ impl TileMap {
             start_addr:     start_addr,
             size:           (grid_size_x * grid_size_y * 2) as u16,
             row_len:        grid_size_x * 6,
-            tile_height:    tile_height,
+
+            large_tiles:    large_tiles,
+            map_size:       ((grid_size_x as f32 / view_size.0 as f32) * 2.0, (grid_size_y as f32 / view_size.1 as f32) * 2.0),
 
             buffer_pool:    CpuBufferPool::vertex_buffer(device.clone())
         }
     }
 
     // Check if size is the same. If it is, set the new start address. If not, return false.
-    pub fn check_and_set_addr(&mut self, settings: u8) -> bool {
+    pub fn check_and_set_addr(&mut self, settings: u8, large_tiles: bool) -> bool {
         let new_bg_reg = BGReg::from_bits_truncate(settings);
-        if new_bg_reg != self.bg_reg {
-            if (new_bg_reg & (BGReg::MIRROR_X | BGReg::MIRROR_Y)) != (self.bg_reg & (BGReg::MIRROR_X | BGReg::MIRROR_Y)) {
+        if (new_bg_reg != self.bg_reg) || (large_tiles != self.large_tiles) {
+            if ((new_bg_reg & (BGReg::MIRROR_X | BGReg::MIRROR_Y)) != (self.bg_reg & (BGReg::MIRROR_X | BGReg::MIRROR_Y))) || (large_tiles != self.large_tiles) {
                 return false;   // This map needs to be recreated.
             } else {
-                self.start_addr = ((new_bg_reg & BGReg::ADDR).bits() as u16) << 8;
+                self.start_addr = ((new_bg_reg & BGReg::ADDR).bits() as u16) << 9;
                 self.bg_reg = new_bg_reg;
+                // Force update
             }
         }
         
@@ -119,15 +128,23 @@ impl TileMap {
     // Update the tiles if the memory region is dirty.
     pub fn update(&mut self, mem: &VideoMem) {
         if mem.vram_dirty_range(self.start_addr, self.start_addr + self.size) {
+            let tile_height = self.get_tile_height();
+            let width_tiles = self.width();
+            let height_tiles = self.height();
             let mut lo = 0;
+
             for (i, data) in mem.get_vram().iter().skip(self.start_addr as usize).take(self.size as usize).enumerate() {
                 if (i % 2) == 0 {
                     lo = *data;
                 } else {
-                    let y_offset = ((i / 2) / self.row_len) * self.tile_height;
-                    let index = y_offset + ((i / 2) % self.row_len) * 6;
+                    let y_tile = (i / 2) / width_tiles;
+                    let x_tile = (i / 2) % width_tiles;
+
+                    //let y_offset = ((i / 2) / self.row_len) * tile_height;
+                    //let index = y_offset + ((i / 2) % self.row_len) * 6;
 
                     let tile_data = make16!(*data, lo) as u32;
+                    //println!("Tile data for {},{}: {:X}", (i / 2) % (self.row_len / 6), (i / 2) / (self.row_len / 6), tile_data);
 
                     let (left, right) = if test_bit!(tile_data, X_FLIP_BIT, u32) {
                         (Side::Right, Side::Left)
@@ -136,12 +153,14 @@ impl TileMap {
                     };
 
                     let y_coords = if test_bit!(tile_data, Y_FLIP_BIT, u32) {
-                        (0..(self.tile_height as u32)).rev().collect::<Vec<u32>>()
+                        (0..(tile_height as u32)).rev().collect::<Vec<u32>>()
                     } else {
-                        (0..(self.tile_height as u32)).collect::<Vec<u32>>()
+                        (0..(tile_height as u32)).collect::<Vec<u32>>()
                     };
 
-                    for (j, y) in (index..(index + (self.row_len * self.tile_height))).step_by(self.row_len).zip(&y_coords) {
+                    let index = (y_tile * self.row_len * tile_height) + (x_tile * 6);
+
+                    for (j, y) in (index..(index + (self.row_len * tile_height))).step_by(self.row_len).zip(&y_coords) {
                         let y = y << 17;
                         self.vertices[j].data =     tile_data | y | left as u32;
                         self.vertices[j + 1].data = tile_data | y | left as u32;
@@ -156,7 +175,7 @@ impl TileMap {
     }
 
     // Get a line of vertices without priority bit set.
-    pub fn get_lo_vertex_buffer(&mut self, y: u8) -> Option<VertexBuffer> {
+    pub fn get_lo_vertex_buffer(&mut self, y: u16) -> Option<VertexBuffer> {
         let start = self.row_len * y as usize;
         let tile_map = self.vertices.iter()
                 .skip(start)
@@ -173,7 +192,7 @@ impl TileMap {
     }
 
     // Get a line of vertices with priority bit set.
-    pub fn get_hi_vertex_buffer(&mut self, y: u8) -> Option<VertexBuffer> {
+    pub fn get_hi_vertex_buffer(&mut self, y: u16) -> Option<VertexBuffer> {
         let start = self.row_len * y as usize;
         let tile_map = self.vertices.iter()
                 .skip(start)
@@ -193,17 +212,22 @@ impl TileMap {
         
     }*/
 
-    pub fn get_tile_height(&self) -> f32 {
-        self.tile_height as f32
+    pub fn get_tile_height(&self) -> usize {
+        if self.large_tiles {LARGE_TILE} else {SMALL_TILE}
     }
 
     // Tile map width in tiles
-    pub fn width(&self) -> u32 {
+    pub fn width(&self) -> usize {
         if self.bg_reg.contains(BGReg::MIRROR_X) {64} else {32}
     }
 
     // Tile map height in tiles
-    pub fn height(&self) -> u32 {
+    pub fn height(&self) -> usize {
         if self.bg_reg.contains(BGReg::MIRROR_Y) {64} else {32}
+    }
+
+    // Tile map size, relative to viewport size.
+    pub fn get_map_size(&self) -> (f32, f32) {
+        self.map_size
     }
 }

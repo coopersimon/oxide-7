@@ -138,7 +138,10 @@ impl PPU {
     }
 
     pub fn latch_hv(&mut self) -> u8 {
-        self.mem.borrow_mut().set_latched_hv((self.cycle_count / timing::DOT_TIME) as u16, self.scanline as u16);
+        self.mem.borrow_mut().set_latched_hv(
+            (self.cycle_count / timing::DOT_TIME) as u16,   // H
+            self.scanline as u16                            // V
+        );
         0
     }
 
@@ -165,9 +168,9 @@ impl PPU {
             },
             HBlankLeft if self.cycle_count >= timing::SCANLINE_OFFSET => {
                 if self.scanline < screen::V_RES {
-                    self.renderer.draw_line((self.scanline - 1) as u8);
+                    self.renderer.draw_line((self.scanline - 1) as u16);
                 } else {
-                    self.renderer.draw_line((screen::V_RES - 1) as u8);
+                    self.renderer.draw_line((screen::V_RES - 1) as u16);
                     self.renderer.frame_end();
                 }
                 self.change_state(DrawingBeforePause)
@@ -253,7 +256,6 @@ impl PPU {
 
 // Internal
 impl PPU {
-    // TODO: transition state
     fn change_state(&mut self, state: PPUState) -> PPUSignal {
         self.state = state;
         match self.state {

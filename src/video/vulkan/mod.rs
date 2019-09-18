@@ -42,7 +42,8 @@ use vulkano::{
         pipeline_layout::PipelineLayoutAbstract
     },
     memory::pool::StdMemoryPool,
-    buffer::cpu_pool::CpuBufferPoolChunk
+    buffer::cpu_pool::CpuBufferPoolChunk,
+    buffer::ImmutableBuffer,
 };
 
 use vulkano_win::VkSurfaceBuild;
@@ -89,15 +90,17 @@ pub struct Vertex {
 
 vulkano::impl_vertex!(Vertex, position, data);
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct PushConstants {
-    pub tex_size:       [f32; 2],
-    pub atlas_size:     [f32; 2],
-    pub vertex_offset:  [f32; 2],
+    pub tex_size:       [f32; 2],   // Size of individual tile texture in map.
+    pub atlas_size:     [f32; 2],   // Size of texture atlas in tiles.
+    pub tile_size:      [f32; 2],   // Width of tile relative to the viewport, height of line relative to the viewport.
+    pub map_size:       [f32; 2],   // Size of tile map relative to the viewport.
+    pub vertex_offset:  [f32; 2],   // Offset to apply to vertices for scrolling.   // TODO: use a different shader for sprites.
     //pub tex_offset:     u32,
-    pub tex_pixel_height: f32,
     pub palette_offset: u32,        // TODO: just use a different shader for sprites and BGs
-    pub palette_size:   u32         // TODO: just use a different shader.
+    pub palette_size:   u32,        // TODO: just use a different shader.
+    pub tex_pixel_height: f32       // Height of individual tile in pixels.
 }
 
 type VertexBuffer = CpuBufferPoolChunk<Vertex, Arc<StdMemoryPool>>;
@@ -113,6 +116,8 @@ struct RenderData {
     //set1:           Arc<FixedSizeDescriptorSet<Arc<RenderPipeline>, ((), PersistentDescriptorSetBuf<mem::palette::PaletteBuffer>)>>
     set_pool_0:     FixedSizeDescriptorSetsPool<Arc<RenderPipeline>>,
     set_pool_1:     FixedSizeDescriptorSetsPool<Arc<RenderPipeline>>,
+    
+    debug_buffer:   Arc<ImmutableBuffer<[Vertex]>>,
 }
 
 pub struct Renderer {
@@ -320,6 +325,41 @@ impl Renderable for Renderer {
         let command_buffer_builder = AutoCommandBufferBuilder::primary_one_time_submit(self.device.clone(), self.queue.family()).unwrap()
             .begin_render_pass(self.framebuffers[image_num].clone(), false, vec![[0.0, 0.0, 0.0, 1.0].into()]).unwrap();
 
+        let (debug_buffer, debug_future) = ImmutableBuffer::from_iter(
+            vec![
+                Vertex{ position: [-1.0, -1.0], data: 0 },
+                Vertex{ position: [1.0, -1.0], data: 1 },
+                Vertex{ position: [-1.0, 1.0], data: 2 },
+                Vertex{ position: [1.0, -1.0], data: 1 },
+                Vertex{ position: [-1.0, 1.0], data: 2 },
+                Vertex{ position: [1.0, 1.0], data: 3 },
+            ].iter().cloned(),
+            vulkano::buffer::BufferUsage::vertex_buffer(),
+            self.queue.clone()
+        ).unwrap();
+
+        // Assemble
+        let vs = shaders::debug_vs::Shader::load(self.device.clone()).expect("failed to create vertex shader");
+        let fs = shaders::debug_fs::Shader::load(self.device.clone()).expect("failed to create fragment shader");
+
+        // Make pipeline.
+        let debug_pipeline = Arc::new(GraphicsPipeline::start()
+            .vertex_input_single_buffer::<Vertex>()
+            .vertex_shader(vs.main_entry_point(), ())
+            .viewports_dynamic_scissors_irrelevant(1)
+            .fragment_shader(fs.main_entry_point(), ())
+            .blend_alpha_blending()
+            .render_pass(Subpass::from(self.render_pass.clone(), 0).unwrap())
+            .build(self.device.clone())
+            .unwrap()
+        );
+
+        // Make descriptor set pools.
+        let set_pools = vec![
+            FixedSizeDescriptorSetsPool::new(debug_pipeline.clone(), 0),
+            FixedSizeDescriptorSetsPool::new(debug_pipeline.clone(), 1)
+        ];
+
         self.render_data = Some(RenderData{
             command_buffer: Some(command_buffer_builder),
             acquire_future: Box::new(acquire_future),
@@ -327,14 +367,19 @@ impl Renderable for Renderer {
             image_futures:  Vec::new(),
             pipeline:       self.pipeline.clone(),
             set_pool_0:     self.set_pools[0].clone(),
-            set_pool_1:     self.set_pools[1].clone()
+            set_pool_1:     self.set_pools[1].clone(),
+            debug_buffer:   debug_buffer
+            //image_futures:  vec![Box::new(debug_future) as Box<_>],
+            //pipeline:       debug_pipeline,
+            //set_pool_0:     set_pools[0].clone(),
+            //set_pool_1:     set_pools[1].clone(),
+            //debug_buffer:   debug_buffer
         });
     }
 
-    fn draw_line(&mut self, y: u8) {
+    fn draw_line(&mut self, y: u16) {
         if let Some(render_data) = &mut self.render_data {
             if !self.mem.in_fblank() {
-                //println!("draw line, mode: {:?}", self.mem.get_mode());
                 self.mem.init();
 
                 match self.mem.get_mode() {
@@ -347,6 +392,7 @@ impl Renderable for Renderer {
                     VideoMode::_6 => {},
                     VideoMode::_7 => {},
                 }
+                //render_data.draw_pattern_mem(&mut self.mem, &self.sampler, &self.dynamic_state, y, 1);
             }
         }
     }
@@ -388,7 +434,7 @@ impl RenderData {
         mem:            &mut MemoryCache,
         sampler:        &Arc<Sampler>,
         dynamic_state:  &DynamicState,
-        y:              u8
+        y:              u16
         ) {
 
         let mut command_buffer = std::mem::replace(&mut self.command_buffer, None).unwrap();
@@ -599,7 +645,7 @@ impl RenderData {
         mem:            &mut MemoryCache,
         sampler:        &Arc<Sampler>,
         dynamic_state:  &DynamicState,
-        y:              u8
+        y:              u16
         ) {
 
         let mut command_buffer = std::mem::replace(&mut self.command_buffer, None).unwrap();
@@ -792,5 +838,52 @@ impl RenderData {
             self.image_futures,
             self.image_num
         )
+    }
+}
+
+// Debug
+impl RenderData {
+    fn draw_pattern_mem(
+        &mut self,
+        mem:            &mut MemoryCache,
+        sampler:        &Arc<Sampler>,
+        dynamic_state:  &DynamicState,
+        y:              u16,
+        bg_num:         usize
+        ) {
+
+        let mut command_buffer = std::mem::replace(&mut self.command_buffer, None).unwrap();
+
+        // Make descriptor set for palettes.
+        let set1 = Arc::new(self.set_pool_1.next()
+            .add_buffer(mem.get_palette_buffer()).unwrap()
+            .build().unwrap());
+
+        // Make descriptor set to bind texture atlases for patterns.
+
+        let bg_set0 = {
+            let (image, write_future) = mem.get_bg_image(bg_num);
+            if let Some(future) = write_future {
+                self.image_futures.push(future);
+            }
+
+            // Make descriptor set to bind texture atlas.
+            Arc::new(self.set_pool_0.next()
+                .add_sampled_image(image, sampler.clone()).unwrap()
+                .build().unwrap())
+        };
+
+        // Draw
+        
+
+        command_buffer = command_buffer.draw(
+            self.pipeline.clone(),
+            dynamic_state,
+            self.debug_buffer.clone(),
+            (bg_set0, set1.clone()),
+            ()
+        ).unwrap();
+
+        self.command_buffer = Some(command_buffer);
     }
 }

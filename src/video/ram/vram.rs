@@ -79,7 +79,6 @@ impl VRAM {
     }
 
     pub fn write_lo(&mut self, data: u8) {
-        //println!("Write lo: {:X}", (self.addr as usize) * 2);
         self.data[self.byte_addr as usize] = data;
 
         if self.dirty_start > self.byte_addr {
@@ -92,7 +91,6 @@ impl VRAM {
     }
 
     pub fn write_hi(&mut self, data: u8) {
-        //println!("Write hi: {:X}", (self.addr as usize) * 2 + 1);
         self.data[self.byte_addr.wrapping_add(1) as usize] = data;
 
         if self.dirty_end < self.byte_addr {

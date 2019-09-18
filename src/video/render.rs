@@ -3,7 +3,7 @@
 // Renderer trait.
 pub trait Renderable {
     fn frame_start(&mut self);
-    fn draw_line(&mut self, y: u8);
+    fn draw_line(&mut self, y: u16);
     fn frame_end(&mut self);
 }
 

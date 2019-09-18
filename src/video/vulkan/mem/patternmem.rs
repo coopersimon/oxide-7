@@ -88,12 +88,10 @@ impl PatternMem {
             BitsPerPixel::_2 => 16,
             BitsPerPixel::_4 => 32,
             BitsPerPixel::_8 => 64,
-        };
+        } - 1;
 
         self.start_addr = start_addr;
         self.end_addr = start_addr + (size as u16);
-
-        println!("Height: {}, New start and end: {}, {}", height, self.start_addr, self.end_addr);
 
         self.image = None;
     }
@@ -108,9 +106,9 @@ impl PatternMem {
         self.start_addr
     }
 
-    // Get the height of the memory in tiles
-    pub fn get_height(&self) -> u32 {
-        self.height
+    // Get the size of the tex in pixels.
+    pub fn get_size(&self) -> (f32, f32) {
+        (self.width as f32, self.height as f32)
     }
 }
 
@@ -133,7 +131,7 @@ impl PatternMem {
                 let base_index = ((y + row) * row_size) + col;
 
                 for x in 0..8 {
-                    let bit = (d >> (7 - x)) & 1;
+                    let bit = (*d >> (7 - x)) & 1;
                     texture_data[base_index + x] |= bit << bitplane;
                 }
 
