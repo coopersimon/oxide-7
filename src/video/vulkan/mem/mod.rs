@@ -107,7 +107,6 @@ impl MemoryCache {
             self.pattern_mem[0].set_addr(regs.bg_1_pattern_addr(), height);
         }
         if !self.tile_maps[0].check_and_set_addr(regs.bg1_settings, regs.bg_1_large_tiles()) {
-            println!("Recreate BG 1");
             self.tile_maps[0] = TileMap::new(&self.device, regs.bg1_settings, regs.bg_1_large_tiles());
         }
 
@@ -116,7 +115,6 @@ impl MemoryCache {
             self.pattern_mem[1].set_addr(regs.bg_2_pattern_addr(), height);
         }
         if !self.tile_maps[1].check_and_set_addr(regs.bg2_settings, regs.bg_2_large_tiles()) {
-            println!("Recreate BG 2");
             self.tile_maps[1] = TileMap::new(&self.device, regs.bg2_settings, regs.bg_2_large_tiles());
         }
 
@@ -126,7 +124,6 @@ impl MemoryCache {
                 self.pattern_mem[2].set_addr(regs.bg_3_pattern_addr(), height);
             }
             if !self.tile_maps[2].check_and_set_addr(regs.bg3_settings, regs.bg_3_large_tiles()) {
-                println!("Recreate BG 3");
                 self.tile_maps[2] = TileMap::new(&self.device, regs.bg3_settings, regs.bg_3_large_tiles());
             }
         }

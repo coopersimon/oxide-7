@@ -55,7 +55,7 @@ impl JoypadMem {
 
     // Poll if the joypad is ready to be read from (new-style).
     pub fn is_ready(&self) -> u8 {
-        if self.ready {1} else {0}
+        if self.ready {0} else {1}
     }
 
     // Called at V-blank.
