@@ -6,7 +6,8 @@ pub struct CGRAM {
     hi_byte:    bool,
     buffer:     u8,
 
-    dirty:      bool
+    bg_dirty:   bool,   // If any byte is changed, this is set.
+    obj_dirty:  bool,   // If the top 256 bytes are changed, this is set.
 }
 
 impl CGRAM {
@@ -17,7 +18,8 @@ impl CGRAM {
             hi_byte:    false,
             buffer:     0,
 
-            dirty:      true
+            bg_dirty:   true,
+            obj_dirty:  true,
         }
     }
 
@@ -45,6 +47,11 @@ impl CGRAM {
         if self.hi_byte {
             let addr = (self.addr as usize) * 2;
 
+            if addr >= 256 {
+                self.obj_dirty = true;
+            }
+            self.bg_dirty = true;
+
             self.data[addr] = self.buffer;
             self.data[addr + 1] = data;
 
@@ -54,17 +61,23 @@ impl CGRAM {
             self.buffer = data;
             self.hi_byte = true;
         }
-
-        self.dirty = true;
     }
 
     // For use by renderer memory caches.
     pub fn ref_data<'a>(&'a mut self) -> &'a [u8] {
-        self.dirty = false;
         &self.data
     }
 
-    pub fn is_dirty(&self) -> bool {
-        self.dirty
+    pub fn is_bg_dirty(&self) -> bool {
+        self.bg_dirty
+    }
+
+    pub fn is_obj_dirty(&self) -> bool {
+        self.obj_dirty
+    }
+
+    pub fn reset_dirty(&mut self) {
+        self.bg_dirty = false;
+        self.obj_dirty = false;
     }
 }

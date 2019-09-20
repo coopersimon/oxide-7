@@ -139,6 +139,11 @@ impl VideoMem {
         self.v_pos = v;
     }
 
+    // OAM address reset that happens at V-blank
+    pub fn oam_reset(&mut self) {
+        self.oam.reset();
+    }
+
     // Renderer methods to get raw data.
     pub fn get_oam<'a>(&'a mut self) -> (&'a [u8], &'a [u8]) {
         self.oam.ref_data()
@@ -161,8 +166,16 @@ impl VideoMem {
         self.oam.is_dirty()
     }
 
-    pub fn is_cgram_dirty(&self) -> bool {
-        self.cgram.is_dirty()
+    pub fn is_cgram_bg_dirty(&self) -> bool {
+        self.cgram.is_bg_dirty()
+    }
+
+    pub fn is_cgram_obj_dirty(&self) -> bool {
+        self.cgram.is_obj_dirty()
+    }
+
+    pub fn cgram_reset_dirty(&mut self) {
+        self.cgram.reset_dirty()
     }
 
     pub fn is_vram_dirty(&self) -> bool {

@@ -45,8 +45,9 @@ pub struct MemoryCache {
     pattern_mem:    [PatternMem; 4],
     tile_maps:      [TileMap; 4],
 
-    sprite_mem:     SpriteMem,
-    sprite_pattern: PatternMem,
+    obj_mem:        SpriteMem,
+    obj_0_pattern:  PatternMem,
+    obj_n_pattern:  PatternMem,
 
     palette:        Palette,
 
@@ -80,8 +81,9 @@ impl MemoryCache {
             pattern_mem:    pattern_mem,
             tile_maps:      tile_maps,
 
-            sprite_mem:     SpriteMem::new(device),
-            sprite_pattern: PatternMem::new(queue, PATTERN_WIDTH, PATTERN_WIDTH, BitsPerPixel::_4),
+            obj_mem:        SpriteMem::new(device),
+            obj_0_pattern:  PatternMem::new(queue, PATTERN_WIDTH, PATTERN_WIDTH, BitsPerPixel::_4),
+            obj_n_pattern:  PatternMem::new(queue, PATTERN_WIDTH, PATTERN_WIDTH, BitsPerPixel::_4),
 
             palette:        Palette::new(device),
 
@@ -158,23 +160,30 @@ impl MemoryCache {
 
         // Check OAM dirtiness (always recreate for now TODO: caching of object vertices)
         let regs = mem.get_registers();
-        self.sprite_mem.check_and_set_obj_settings(regs.get_object_settings());
-        if self.sprite_pattern.get_start_addr() != regs.obj_0_pattern_addr() {
-            let height = regs.get_pattern_table_height(regs.obj_0_pattern_addr(), BitsPerPixel::_4 as u32);
-            self.sprite_pattern.set_addr(regs.obj_0_pattern_addr(), height);
+        self.obj_mem.check_and_set_obj_settings(regs.get_object_settings());
+        if self.obj_0_pattern.get_start_addr() != regs.obj_0_pattern_addr() {
+            let height = 128;
+            self.obj_0_pattern.set_addr(regs.obj_0_pattern_addr(), height);
         }
-        // TODO: obj_N_pattern...
+        if self.obj_n_pattern.get_start_addr() != regs.obj_n_pattern_addr() {
+            let height = 128;
+            self.obj_n_pattern.set_addr(regs.obj_n_pattern_addr(), height);
+        }
 
         // Check CGRAM dirtiness
-        if mem.is_cgram_dirty() {
-            self.palette.create_buffer(&mut mem);
+        if mem.is_cgram_bg_dirty() {
+            self.palette.create_bg_buffer(&mut mem);
+
+            if mem.is_cgram_obj_dirty() {
+                self.palette.create_obj_buffer(&mut mem);
+            }
+
+            mem.cgram_reset_dirty();
         }
     }
 
-    // TODO: do this check elsewhere
     pub fn in_fblank(&self) -> bool {
-        let screen_display = self.native_mem.borrow().get_registers().get_screen_display();
-        test_bit!(screen_display, 7, u8)
+        self.native_mem.borrow().get_registers().in_fblank()
     }
 
     // Retrieve structures.
@@ -196,19 +205,34 @@ impl MemoryCache {
     // Get texture for sprites.
     pub fn get_sprite_image_0(&mut self) -> (PatternImage, Option<PatternFuture>) {
         let mem = self.native_mem.borrow();
-        self.sprite_pattern.get_image(&mem)
+        self.obj_0_pattern.get_image(&mem)
+    }
+
+    pub fn get_sprite_image_n(&mut self) -> (PatternImage, Option<PatternFuture>) {
+        let mem = self.native_mem.borrow();
+        self.obj_n_pattern.get_image(&mem)
     }
 
     // Get vertices for a line of sprites.
-    pub fn get_sprite_vertices(&mut self, priority: usize, y: u16) -> Option<VertexBuffer> {
+    pub fn get_sprite_vertices_0(&mut self, priority: usize, y: u16) -> Option<VertexBuffer> {
         let mut mem = self.native_mem.borrow_mut();
         let (oam_hi, oam_lo) = mem.get_oam();
-        self.sprite_mem.get_vertex_buffer(priority, y as u8, oam_hi, oam_lo)
+        self.obj_mem.get_vertex_buffer_0(priority, y as u8, oam_hi, oam_lo)
+    }
+
+    pub fn get_sprite_vertices_n(&mut self, priority: usize, y: u16) -> Option<VertexBuffer> {
+        let mut mem = self.native_mem.borrow_mut();
+        let (oam_hi, oam_lo) = mem.get_oam();
+        self.obj_mem.get_vertex_buffer_n(priority, y as u8, oam_hi, oam_lo)
     }
 
     // Get the palettes.
-    pub fn get_palette_buffer(&self) -> PaletteBuffer {
-        self.palette.get_palette_buffer()
+    pub fn get_bg_palette_buffer(&self) -> PaletteBuffer {
+        self.palette.get_bg_palette_buffer()
+    }
+
+    pub fn get_obj_palette_buffer(&self) -> PaletteBuffer {
+        self.palette.get_obj_palette_buffer()
     }
 
     // Get registers
@@ -241,7 +265,7 @@ impl MemoryCache {
         y.wrapping_add(scroll_y) % height
     }
 
-    pub fn get_bg_push_constants(&self, bg_num: usize) -> super::PushConstants {
+    pub fn get_bg_push_constants(&self, bg_num: usize) -> super::BGPushConstants {
         let atlas_size_pixels = self.pattern_mem[bg_num].get_size();
         let tile_height = self.tile_maps[bg_num].get_tile_height() as f32;
 
@@ -255,7 +279,7 @@ impl MemoryCache {
         let vertex_offset_x = (self.get_scroll_x(bg_num) as f32) * SCROLL_X_FRAC;
         let vertex_offset_y = (self.get_scroll_y(bg_num) as f32) * SCROLL_Y_FRAC;
 
-        let pc = super::PushConstants {
+        let pc = super::BGPushConstants {
             tex_size:           [tex_size_x, tex_size_y],     // X: 1/16 for 8x8 tile, 1/8 for 16x16 tile
             atlas_size:         atlas_size_tiles,
             tile_size:          [tile_height / 128.0, 1.0 / 112.0],
@@ -271,19 +295,10 @@ impl MemoryCache {
         pc
     }
 
-    pub fn get_sprite_push_constants(&self) -> super::PushConstants {
-        let tex_size_x = 1.0 / 16.0;
-        let tex_size_y = 1.0 / 16.0;
-        
-        super::PushConstants {
-            tex_size:           [tex_size_x, tex_size_y],   // Different for each sprite? Or multiply this by size bit?
-            atlas_size:         [16.0, 16.0],
-            tile_size:          [0.0, 0.0],
-            map_size:           [0.0, 0.0],
-            vertex_offset:      [0.0, 0.0],
-            palette_offset:     128,
-            palette_size:       16,
-            tex_pixel_height:   8.0,    // TODO: Not relevant here: must be encoded individually for each sprite.
+    pub fn get_obj_push_constants(&self) -> super::ObjPushConstants {
+        super::ObjPushConstants {
+            small_tex_size: self.obj_mem.get_small_tex_size(),
+            large_tex_size: self.obj_mem.get_large_tex_size()
         }
     }
 

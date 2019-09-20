@@ -159,13 +159,13 @@ impl Registers {
 
     pub fn obj_0_pattern_addr(&self) -> u16 {
         let base = (self.object_settings & ObjectSettings::BASE).bits() as u16;
-        base << 13
+        base << 14
     }
 
     pub fn obj_n_pattern_addr(&self) -> u16 {
         let base = (self.object_settings & ObjectSettings::BASE).bits() as u16;
-        let table = (self.object_settings & ObjectSettings::SELECT).bits() as u16 + 1;
-        (base << 13) + (table << 10)
+        let table = (((self.object_settings & ObjectSettings::SELECT).bits() as u16) >> 3) + 1;
+        (base << 14) + (table << 13)
     }
 
     // TODO: use less magic numbers in the following.
@@ -215,6 +215,11 @@ impl Registers {
 
     pub fn bg_4_large_tiles(&self) -> bool {
         self.bg_mode.contains(BGMode::BG4_TILE_SIZE)
+    }
+
+    // Other checks
+    pub fn in_fblank(&self) -> bool {
+        test_bit!(self.screen_display, 7, u8)
     }
 }
 

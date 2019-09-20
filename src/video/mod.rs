@@ -273,6 +273,13 @@ impl PPU {
             PPUState::VBlank => {
                 self.toggle_vblank(true);
 
+                {
+                    let mut mem = self.mem.borrow_mut();
+                    if mem.get_registers().in_fblank() {
+                        mem.oam_reset();
+                    }
+                }
+
                 let j = read_events(&mut self.events_loop, &mut self.renderer);
 
                 self.joypads.set_buttons(j, 0);
