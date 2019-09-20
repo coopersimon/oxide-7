@@ -71,6 +71,7 @@ pub struct TileMap {
     row_len:        usize,      // Length of a row of vertices.
 
     large_tiles:    bool,       // If true, tiles are 16 pixels high/wide (depending on mode).
+    pixel_height:   u16,        // Height of map in pixels.
     map_size:       (f32, f32), // Size of map relative to viewport.
 
     buffer_pool:    CpuBufferPool<Vertex>,
@@ -127,6 +128,7 @@ impl TileMap {
             row_len:        grid_size_x * 6,
 
             large_tiles:    large_tiles,
+            pixel_height:   (grid_size_y * tile_height) as u16,
             map_size:       ((grid_size_x as f32 / view_size.0 as f32) * 2.0, (grid_size_y as f32 / view_size.1 as f32) * 2.0),
 
             buffer_pool:    CpuBufferPool::vertex_buffer(device.clone())
@@ -229,6 +231,11 @@ impl TileMap {
     // Tile map size, relative to viewport size.
     pub fn get_map_size(&self) -> (f32, f32) {
         self.map_size
+    }
+
+    // Tile map height in pixels.
+    pub fn get_pixel_height(&self) -> u16 {
+        self.pixel_height
     }
 }
 

@@ -1,18 +1,21 @@
 // Video memory. Connected to the B bus.
 
-mod registers;
+mod bgregs;
 mod cgram;
 mod oam;
 mod vram;
+mod windowregs;
 
-pub use registers::*;
+pub use bgregs::*;
 use cgram::CGRAM;
 use oam::OAM;
 use vram::VRAM;
+use windowregs::WindowRegisters;
 
 // Struct containing OAM, CGRAM and VRAM.
 pub struct VideoMem {
-    registers:      Registers,
+    bgregs:         Registers,
+    windowregs:     WindowRegisters,
 
     h_pos:          u16,
     v_pos:          u16,
@@ -28,7 +31,8 @@ pub struct VideoMem {
 impl VideoMem {
     pub fn new() -> Self {
         VideoMem {
-            registers:  Registers::new(),
+            bgregs:     Registers::new(),
+            windowregs: WindowRegisters::new(),
 
             h_pos:      0,
             v_pos:      0,
@@ -73,29 +77,29 @@ impl VideoMem {
 
     pub fn write(&mut self, addr: u8, data: u8) {
         match addr {
-            0x00 => self.registers.set_screen_display(data),
+            0x00 => self.bgregs.set_screen_display(data),
 
-            0x01 => self.registers.set_object_settings(data),
+            0x01 => self.bgregs.set_object_settings(data),
             0x02 => self.oam.set_addr_lo(data),
             0x03 => self.oam.set_addr_hi(data),
             0x04 => self.oam.write(data),
 
-            0x05 => self.registers.set_bg_mode(data),
-            0x06 => self.registers.set_mosaic(data),
-            0x07 => self.registers.bg1_settings = data,
-            0x08 => self.registers.bg2_settings = data,
-            0x09 => self.registers.bg3_settings = data,
-            0x0A => self.registers.bg4_settings = data,
-            0x0B => self.registers.bg12_char_addr = data,
-            0x0C => self.registers.bg34_char_addr = data,
-            0x0D => self.registers.set_bg1_scroll_x(data),
-            0x0E => self.registers.set_bg1_scroll_y(data),
-            0x0F => self.registers.set_bg2_scroll_x(data),
-            0x10 => self.registers.set_bg2_scroll_y(data),
-            0x11 => self.registers.set_bg3_scroll_x(data),
-            0x12 => self.registers.set_bg3_scroll_y(data),
-            0x13 => self.registers.set_bg4_scroll_x(data),
-            0x14 => self.registers.set_bg4_scroll_y(data),
+            0x05 => self.bgregs.set_bg_mode(data),
+            0x06 => self.bgregs.set_mosaic(data),
+            0x07 => self.bgregs.bg1_settings = data,
+            0x08 => self.bgregs.bg2_settings = data,
+            0x09 => self.bgregs.bg3_settings = data,
+            0x0A => self.bgregs.bg4_settings = data,
+            0x0B => self.bgregs.bg12_char_addr = data,
+            0x0C => self.bgregs.bg34_char_addr = data,
+            0x0D => self.bgregs.set_bg1_scroll_x(data),
+            0x0E => self.bgregs.set_bg1_scroll_y(data),
+            0x0F => self.bgregs.set_bg2_scroll_x(data),
+            0x10 => self.bgregs.set_bg2_scroll_y(data),
+            0x11 => self.bgregs.set_bg3_scroll_x(data),
+            0x12 => self.bgregs.set_bg3_scroll_y(data),
+            0x13 => self.bgregs.set_bg4_scroll_x(data),
+            0x14 => self.bgregs.set_bg4_scroll_y(data),
 
             0x15 => self.vram.set_port_control(data),
             0x16 => self.vram.set_addr_lo(data),
@@ -108,14 +112,22 @@ impl VideoMem {
             0x21 => self.cgram.set_addr(data),
             0x22 => self.cgram.write(data),
             
-            0x23 => {}, // BG1&2 window
-            0x24 => {}, // BG3&4 window
-            0x25 => {}, // Obj window
-            0x26..=0x29 => {}, // Window pos regs
-            0x2A..=0x2B => {}, // Window logic regs
-            0x2C..=0x2D => {}, // Screen dest regs
-            0x2E..=0x2F => {}, // Window mask dest regs
-            0x30..=0x32 => {}, // Color math regs
+            0x23 => self.windowregs.set_mask_bg1_2(data), // BG1&2 window
+            0x24 => self.windowregs.set_mask_bg3_4(data), // BG3&4 window
+            0x25 => self.windowregs.set_mask_obj_col(data), // Obj window
+            0x26 => self.windowregs.window_1_left = data,
+            0x27 => self.windowregs.window_1_right = data,
+            0x28 => self.windowregs.window_2_left = data,
+            0x29 => self.windowregs.window_2_right = data,
+            0x2A => self.windowregs.set_mask_logic_bg(data),
+            0x2B => self.windowregs.set_mask_logic_obj_col(data),
+            0x2C => self.windowregs.set_main_screen_desg(data),
+            0x2D => self.windowregs.set_sub_screen_desg(data),
+            0x2E => self.windowregs.set_main_mask_desg(data),
+            0x2F => self.windowregs.set_sub_mask_desg(data),
+            0x30 => self.windowregs.set_colour_add_select(data),
+            0x31 => self.windowregs.set_colour_math_desg(data),
+            0x32 => self.windowregs.set_fixed_colour(data),
             0x33 => {}, // Screen mode select
             _ => unreachable!()
         }
@@ -141,7 +153,7 @@ impl VideoMem {
     }
 
     pub fn get_registers<'a>(&'a self) -> &'a Registers {
-        &self.registers
+        &self.bgregs
     }
 
     // Renderer methods to check dirtiness of data.

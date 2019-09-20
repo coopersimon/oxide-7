@@ -39,11 +39,10 @@ void main() {
     // Vertex position offset with scroll / position
     vec2 vertex_position = position + push_constants.vertex_offset;
 
-    //if ((push_constants.flags & WRAPAROUND) != 0) {   // TODO: different shaders for bg and sprites
+    // TODO: different shaders for bg and sprites
     uint side = data & 0x10000;
     uint tex_y = (data >> 17) % 16;
     vertex_position = calc_vertex_wraparound(vertex_position, side, tex_y);
-    //}
 
     gl_Position = vec4(vertex_position, 0.0, 1.0);
 

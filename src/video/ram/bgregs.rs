@@ -165,7 +165,7 @@ impl Registers {
     pub fn obj_n_pattern_addr(&self) -> u16 {
         let base = (self.object_settings & ObjectSettings::BASE).bits() as u16;
         let table = (self.object_settings & ObjectSettings::SELECT).bits() as u16 + 1;
-        (base << 13) + (table << 12)
+        (base << 13) + (table << 10)
     }
 
     // TODO: use less magic numbers in the following.

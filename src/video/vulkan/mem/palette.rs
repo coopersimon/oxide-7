@@ -28,8 +28,9 @@ impl Palette {
 
     // Makes a new buffer and replaces the old one.
     pub fn create_buffer(&mut self, mem: &mut VideoMem) {
+        let cgram = mem.get_cgram();
         let buf = self.buffer_pool.chunk(
-            mem.get_cgram().chunks(4).map(|c| make32!(c[3], c[2], c[1], c[0]))
+            cgram.chunks(4).map(|c| make32!(c[3], c[2], c[1], c[0]))
         ).unwrap();
 
         self.current_buffer = Some(buf.clone());

@@ -513,7 +513,7 @@ impl RenderData {
         let sprite_push_constants = mem.get_sprite_push_constants();
 
         // Draw
-        let bg_4_y = y.wrapping_add(mem.get_scroll_y(3)); // TODO: fetch this
+        let bg_4_y = mem.calc_y_line(3, y);
         if let Some(bg_4_vertices) = mem.get_bg_lo_vertices(3, bg_4_y) {
             command_buffer = command_buffer.draw(
                 self.pipeline.clone(),
@@ -524,7 +524,7 @@ impl RenderData {
             ).unwrap();
         }
 
-        let bg_3_y = y.wrapping_add(mem.get_scroll_y(2)); // TODO: fetch this
+        let bg_3_y = mem.calc_y_line(2, y);
         if let Some(bg_3_vertices) = mem.get_bg_lo_vertices(2, bg_3_y) {
             command_buffer = command_buffer.draw(
                 self.pipeline.clone(),
@@ -575,7 +575,7 @@ impl RenderData {
             ).unwrap();
         }
 
-        let bg_2_y = y.wrapping_add(mem.get_scroll_y(1)); // TODO: fetch this
+        let bg_2_y = mem.calc_y_line(1, y);
         if let Some(bg_2_vertices) = mem.get_bg_lo_vertices(1, bg_2_y) {
             command_buffer = command_buffer.draw(
                 self.pipeline.clone(),
@@ -586,7 +586,7 @@ impl RenderData {
             ).unwrap();
         }
 
-        let bg_1_y = y.wrapping_add(mem.get_scroll_y(0)); // TODO: fetch this
+        let bg_1_y = mem.calc_y_line(0, y);
         if let Some(bg_1_vertices) = mem.get_bg_lo_vertices(0, bg_1_y) {
             command_buffer = command_buffer.draw(
                 self.pipeline.clone(),
@@ -711,7 +711,7 @@ impl RenderData {
         let sprite_push_constants = mem.get_sprite_push_constants();
 
         // Draw
-        let bg_3_y = y.wrapping_add(mem.get_scroll_y(2)); // TODO: fetch this
+        let bg_3_y = mem.calc_y_line(2, y);
         if let Some(bg_3_vertices) = mem.get_bg_lo_vertices(2, bg_3_y) {
             command_buffer = command_buffer.draw(
                 self.pipeline.clone(),
@@ -754,7 +754,7 @@ impl RenderData {
             ).unwrap();
         }
 
-        let bg_2_y = y.wrapping_add(mem.get_scroll_y(1)); // TODO: fetch this
+        let bg_2_y = mem.calc_y_line(1, y);
         if let Some(bg_2_vertices) = mem.get_bg_lo_vertices(1, bg_2_y) {
             command_buffer = command_buffer.draw(
                 self.pipeline.clone(),
@@ -765,7 +765,7 @@ impl RenderData {
             ).unwrap();
         }
 
-        let bg_1_y = y.wrapping_add(mem.get_scroll_y(0)); // TODO: fetch this
+        let bg_1_y = mem.calc_y_line(0, y);
         if let Some(bg_1_vertices) = mem.get_bg_lo_vertices(0, bg_1_y) {
             command_buffer = command_buffer.draw(
                 self.pipeline.clone(),

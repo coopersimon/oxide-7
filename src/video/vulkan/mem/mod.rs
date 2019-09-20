@@ -27,13 +27,13 @@ use sprite::*;
 use palette::*;
 
 const PATTERN_WIDTH: u32 = 16 * 8; // Pattern width in pixels (16 tiles)
-const PATTERN_HEIGHT: u32 = 64 * 8; // Pattern width in pixels (16 tiles)
+const PATTERN_HEIGHT: u32 = 64 * 8; // Pattern height in pixels (16 tiles)
 
 const VIEW_WIDTH: usize = 256;           // Width of visible area in pixels.
 const VIEW_HEIGHT: usize = 224;          // Height of visible area in pixels.
 
 const SCROLL_X_FRAC: f32 = -2.0 / VIEW_WIDTH as f32;   // Multiply scroll x by this to get vertex offset.
-const SCROLL_Y_FRAC: f32 = -2.0 / VIEW_HEIGHT as f32;   // Multiply scroll x by this to get vertex offset.
+const SCROLL_Y_FRAC: f32 = -2.0 / VIEW_HEIGHT as f32;   // Multiply scroll y by this to get vertex offset.
 
 pub struct MemoryCache {
     native_mem:     VRamRef,
@@ -232,6 +232,13 @@ impl MemoryCache {
             2 => regs.bg3_scroll_x,
             _ => regs.bg4_scroll_x
         }
+    }
+
+    // Calculate line to fetch
+    pub fn calc_y_line(&self, bg_num: usize, y: u16) -> u16 {
+        let scroll_y = self.get_scroll_y(bg_num);
+        let height = self.tile_maps[bg_num].get_pixel_height();
+        y.wrapping_add(scroll_y) % height
     }
 
     pub fn get_bg_push_constants(&self, bg_num: usize) -> super::PushConstants {
