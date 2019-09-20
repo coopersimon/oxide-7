@@ -466,11 +466,12 @@ impl CPU {
 
         self.a = if self.is_m_set() {
             let result8 = result & 0xFF;
-            let full_wraparound = (result8 == self.a) && (op != 0);
+            let a8 = self.a & 0xFF;
+            let full_wraparound = (result8 == a8) && (op != 0);
             self.p.set(PFlags::N, test_bit!(result8, 7));
-            self.p.set(PFlags::V, ((result8 as i8) < (lo!(self.a) as i8)) || full_wraparound);
+            self.p.set(PFlags::V, ((result8 as i8) < (a8 as i8)) || full_wraparound);
             self.p.set(PFlags::Z, result8 == 0);
-            self.p.set(PFlags::C, (result8 < self.a) || full_wraparound);
+            self.p.set(PFlags::C, (result8 < a8) || full_wraparound);
 
             make16!(hi!(self.a), result8)
         } else {
@@ -490,11 +491,12 @@ impl CPU {
 
         self.a = if self.is_m_set() {
             let result8 = result & 0xFF;
-            let full_wraparound = (result8 == self.a) && (op != 0);
+            let a8 = self.a & 0xFF;
+            let full_wraparound = (result8 == a8) && (op != 0);
             self.p.set(PFlags::N, test_bit!(result8, 7));
-            self.p.set(PFlags::V, ((result8 as i8) > (lo!(self.a) as i8)) || full_wraparound);
+            self.p.set(PFlags::V, ((result8 as i8) > (a8 as i8)) || full_wraparound);
             self.p.set(PFlags::Z, result8 == 0);
-            self.p.set(PFlags::C, (result8 > self.a) || full_wraparound);
+            self.p.set(PFlags::C, (result8 > a8) || full_wraparound);
 
             make16!(hi!(self.a), result8)
         } else {
@@ -725,6 +727,9 @@ impl CPU {
 
         match addr {
             Addr::Full(a) => {
+                if hi24!(a) == 0x90 {
+                    println!("JMP. {:X}. PB: {:X}, PC: {:X}", a, self.pb, self.pc);
+                }
                 self.pb = hi24!(a);
                 self.pc = lo24!(a);
             },
@@ -743,6 +748,10 @@ impl CPU {
 
         match addr {
             Addr::Full(a) => {
+                if hi24!(a) == 0x90 {
+                    println!("JS. {:X}. PB: {:X}, PC: {:X}", a, self.pb, self.pc);
+                }
+
                 self.stack_push(self.pb);
 
                 self.pb = hi24!(a);
@@ -759,6 +768,10 @@ impl CPU {
         let pc_lo = self.stack_pop();
         let pc_hi = self.stack_pop();
         let pb = self.stack_pop();
+
+        if pb == 0x90 {
+            println!("RTL. {:X}. PB: {:X}, PC: {:X}", pb, self.pb, self.pc);
+        }
 
         self.clock_inc(INTERNAL_OP * 2);
 
@@ -807,7 +820,11 @@ impl CPU {
         self.clock_inc(INTERNAL_OP * 2);
 
         if !self.is_e_set() {
-            self.pb = self.stack_pop();
+            let pb = self.stack_pop();
+            if pb == 0x90 {
+                println!("RTI. {:X}. PB: {:X}, PC: {:X}", pb, self.pb, self.pc);
+            }
+            self.pb = pb;
         }
     }
 }
