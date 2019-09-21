@@ -727,9 +727,6 @@ impl CPU {
 
         match addr {
             Addr::Full(a) => {
-                if hi24!(a) == 0x90 {
-                    println!("JMP. {:X}. PB: {:X}, PC: {:X}", a, self.pb, self.pc);
-                }
                 self.pb = hi24!(a);
                 self.pc = lo24!(a);
             },
@@ -748,10 +745,6 @@ impl CPU {
 
         match addr {
             Addr::Full(a) => {
-                if hi24!(a) == 0x90 {
-                    println!("JS. {:X}. PB: {:X}, PC: {:X}", a, self.pb, self.pc);
-                }
-
                 self.stack_push(self.pb);
 
                 self.pb = hi24!(a);
@@ -768,10 +761,6 @@ impl CPU {
         let pc_lo = self.stack_pop();
         let pc_hi = self.stack_pop();
         let pb = self.stack_pop();
-
-        if pb == 0x90 {
-            println!("RTL. {:X}. PB: {:X}, PC: {:X}", pb, self.pb, self.pc);
-        }
 
         self.clock_inc(INTERNAL_OP * 2);
 
@@ -820,11 +809,7 @@ impl CPU {
         self.clock_inc(INTERNAL_OP * 2);
 
         if !self.is_e_set() {
-            let pb = self.stack_pop();
-            if pb == 0x90 {
-                println!("RTI. {:X}. PB: {:X}, PC: {:X}", pb, self.pb, self.pc);
-            }
-            self.pb = pb;
+            self.pb = self.stack_pop();
         }
     }
 }
@@ -1004,14 +989,14 @@ impl CPU {
     }
 
     fn pe(&mut self, data_mode: DataMode) {
-        let data = self.read_op(data_mode, true);
+        let data = self.read_op(data_mode, false);
 
         self.stack_push(hi!(data));
         self.stack_push(lo!(data));
     }
 
     fn per(&mut self) {
-        let imm = self.immediate(true);
+        let imm = self.immediate(false);
 
         let data = self.pc.wrapping_add(imm);
 
