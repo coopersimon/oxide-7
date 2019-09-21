@@ -73,8 +73,8 @@ impl MemBus {
             dma_channels:   vec![DMAChannel::new(); 8],
 
             wram_addr:      0,
-            mult_operand:   0,
-            div_operand:    0,
+            mult_operand:   0xFF,
+            div_operand:    0xFFFF,
             div_result:     0,
             mult_result:    0,
         }
@@ -183,7 +183,7 @@ impl MemBus {
         reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
 
         if (buf[0x15] & 0x21) == 0x20 {
-            return Box::new(LoROM::new(reader, test_bit!(buf[0x15], 4, u8)));
+            return Box::new(LoROM::new(reader/*, test_bit!(buf[0x15], 4, u8)*/));
         }
 
         // Check for HiROM
@@ -191,7 +191,7 @@ impl MemBus {
         reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
 
         if (buf[0x15] & 0x21) == 0x21 {
-            return Box::new(HiROM::new(reader, test_bit!(buf[0x15], 4, u8)));
+            return Box::new(HiROM::new(reader/*, test_bit!(buf[0x15], 4, u8)*/));
         } else {
             panic!("Unrecognised ROM: {:X}", buf[0x15]);
         }
@@ -221,7 +221,10 @@ impl MemBus {
             0x4203 => self.mult_result = (self.mult_operand as u16) * (data as u16),
             0x4204 => self.div_operand = set_lo!(self.div_operand, data),
             0x4205 => self.div_operand = set_hi!(self.div_operand, data),
-            0x4206 => {
+            0x4206 => if data == 0 {
+                self.div_result = 0xFFFF;
+                self.mult_result = 0xC;
+            } else {
                 let divisor = data as u16;
                 self.div_result = self.div_operand / divisor;
                 self.mult_result = self.div_operand % divisor;
@@ -245,7 +248,7 @@ impl MemBus {
                     }
                 }
             },
-            0x420d => {}, // Fast ROM access speed
+            0x420d => self.cart.set_write_speed(data),
             _ => unreachable!(),
         }
     }
