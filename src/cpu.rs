@@ -778,6 +778,7 @@ impl CPU {
     }
 
     fn brk(&mut self) {
+        //  println!("BRK: {:X}, {:X}", self.pb, self.pc);
         self.pc = self.pc.wrapping_add(1);
 
         if self.is_e_set() {
@@ -832,28 +833,20 @@ impl CPU {
 
         self.p &= PFlags::from_bits_truncate(!imm);
         self.clock_inc(INTERNAL_OP);
-
-        if self.is_e_set() {
-            self.p |= PFlags::M | PFlags::X;
-        }
-
-        if self.is_x_set() {
-            self.x = set_hi!(self.x, 0);
-            self.y = set_hi!(self.y, 0);
-        }
     }
 
     fn sep(&mut self) {
         let imm = self.fetch();
+        let add_flags = PFlags::from_bits_truncate(imm);
 
-        self.p |= PFlags::from_bits_truncate(imm);
+        self.p |= add_flags;
         self.clock_inc(INTERNAL_OP);
 
-        if self.is_e_set() {
+        if add_flags.contains(PFlags::E) {
             self.p |= PFlags::M | PFlags::X;
-        }
-
-        if self.is_x_set() {
+            self.x = set_hi!(self.x, 0);
+            self.y = set_hi!(self.y, 0);
+        } else if add_flags.contains(PFlags::X) {
             self.x = set_hi!(self.x, 0);
             self.y = set_hi!(self.y, 0);
         }
@@ -1165,6 +1158,7 @@ impl CPU {
     fn trigger_interrupt(&mut self, vector_addr: u32) {
         if !self.is_e_set() {
             self.stack_push(self.pb);
+            self.pb = 0;
         }
 
         self.stack_push(hi!(self.pc));
