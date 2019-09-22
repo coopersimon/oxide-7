@@ -236,15 +236,10 @@ impl MemBus {
             0x420b => self.dma_transfer(data),
             0x420c => {
                 self.hdma_active = data;
+
                 for chan in 0..8 {
                     if test_bit!(self.hdma_active, chan, u8) {
                         self.dma_channels[chan].start_hdma();
-
-                        let byte = self.read(self.dma_channels[chan].hdma_table_addr).0;
-                        
-                        if !self.dma_channels[chan].init_instr(byte) {
-                            self.hdma_active ^= bit!(chan);
-                        }
                     }
                 }
             },
@@ -309,73 +304,65 @@ impl MemBus {
     fn hdma_transfer(&mut self) {
         for chan in 0..8 {
             if test_bit!(self.hdma_active, chan, u8) {
-                // Get new instruction.
-                if self.dma_channels[chan].get_line_count() == 0 {
-                    self.dma_channels[chan].inc_table_addr();
-                    // Finish channel.
-                    let instr = self.read(self.dma_channels[chan].hdma_table_addr).0;
-                    if !self.dma_channels[chan].init_instr(instr) {
-                        self.hdma_active ^= bit!(chan);
-                        continue;
-                    } else if self.dma_channels[chan].once() {
+
+                if self.dma_channels[chan].hdma_step_line() {
+                    if self.dma_channels[chan].should_repeat() {
                         self.hdma_line(chan);
                     }
-                }
+                } else {
+                    // New instruction.
+                    let instr = self.read(self.dma_channels[chan].get_hdma_table_addr()).0;
+                    if self.dma_channels[chan].hdma_init_instr(instr) {
+                        // Setup indirect address if necessary.
+                        if self.dma_channels[chan].control.contains(DMAControl::HDMA_INDIRECT) {
+                            let table_addr = self.dma_channels[chan].get_hdma_table_addr();
+                            let lo = self.read(table_addr).0;
+                            let hi = self.read(table_addr.wrapping_add(1)).0;
+                            self.dma_channels[chan].set_indirect_table_addr(make16!(hi, lo));
+                        }
 
-                // Run the instruction for each line.
-                if !self.dma_channels[chan].once() {
-                    self.hdma_line(chan);
+                        self.hdma_line(chan);
+                    } else {
+                        self.hdma_active ^= bit!(chan);
+                    }
                 }
-
-                self.dma_channels[chan].dec_line_count();
             }
         }
     }
 
     // A single HDMA line transfer.
     fn hdma_line(&mut self, chan: usize) {
+        let src_addr = self.dma_channels[chan].get_data_addr();
         // Get bytes to write.
         match (self.dma_channels[chan].control & DMAControl::TRANSFER_MODE).bits() {
             0 => {
-                let data = self.get_hdma_data(chan, 0);
+                let data = self.read(src_addr).0;
                 self.bus_b.write(self.dma_channels[chan].b_bus_addr, data);
             },
-            1 => for i in 0_u8..2_u8 {
-                let data = self.get_hdma_data(chan, i as u32);
-                self.bus_b.write(self.dma_channels[chan].b_bus_addr + i, data);
+            1 => for i in 0..2 {
+                let data = self.read(src_addr + i).0;
+                self.bus_b.write(self.dma_channels[chan].b_bus_addr + i as u8, data);
             },
-            2 | 6 => for i in 0_u8..2_u8 {
-                let data = self.get_hdma_data(chan, i as u32);
+            2 | 6 => for i in 0..2 {
+                let data = self.read(src_addr + i).0;
                 self.bus_b.write(self.dma_channels[chan].b_bus_addr, data);
             },
-            3 | 7 => for i in 0_u8..4_u8 {
-                let data = self.get_hdma_data(chan, i as u32);
-                self.bus_b.write(self.dma_channels[chan].b_bus_addr + (i / 2), data);
+            3 | 7 => for i in 0..4 {
+                let data = self.read(src_addr + i).0;
+                self.bus_b.write(self.dma_channels[chan].b_bus_addr + ((i / 2) as u8), data);
             },
-            4 => for i in 0_u8..4_u8 {
-                let data = self.get_hdma_data(chan, i as u32);
-                self.bus_b.write(self.dma_channels[chan].b_bus_addr + i, data);
+            4 => for i in 0..4 {
+                let data = self.read(src_addr + i).0;
+                self.bus_b.write(self.dma_channels[chan].b_bus_addr + i as u8, data);
             },
-            5 => for i in 0_u8..4_u8 {
-                let data = self.get_hdma_data(chan, i as u32);
-                self.bus_b.write(self.dma_channels[chan].b_bus_addr + (i % 2), data);
+            5 => for i in 0..4 {
+                let data = self.read(src_addr + i).0;
+                self.bus_b.write(self.dma_channels[chan].b_bus_addr + ((i / 2) as u8), data);
             },
             _ => unreachable!()
         }
 
         self.clock(self.dma_channels[chan].get_cycles());
-    }
-
-    // Get HDMA data for a transfer.
-    fn get_hdma_data(&mut self, chan: usize, offset: u32) -> u8 {
-        if self.dma_channels[chan].control.contains(DMAControl::HDMA_INDIRECT) {
-            let lo = self.read(self.dma_channels[chan].hdma_table_addr + (offset * 2)).0;
-            let hi = self.read(self.dma_channels[chan].hdma_table_addr + (offset * 2) + 1).0;
-            let indirect_addr = self.dma_channels[chan].indirect_table_addr(make16!(hi, lo));
-            self.read(indirect_addr).0
-        } else {
-            self.read(self.dma_channels[chan].hdma_table_addr + offset).0
-        }
     }
 }
 
