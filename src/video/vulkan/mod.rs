@@ -428,12 +428,12 @@ impl Renderable for Renderer {
                 match self.mem.get_mode() {
                     VideoMode::_0 => render_data.draw_mode_0(&mut self.mem, &self.sampler, &self.dynamic_state, y),
                     VideoMode::_1 => render_data.draw_mode_1(&mut self.mem, &self.sampler, &self.dynamic_state, y),
-                    VideoMode::_2 => {},
-                    VideoMode::_3 => {},
-                    VideoMode::_4 => {},
-                    VideoMode::_5 => {},
-                    VideoMode::_6 => {},
-                    VideoMode::_7 => {},
+                    VideoMode::_2 => panic!("Mode 2 not supported."),
+                    VideoMode::_3 => panic!("Mode 3 not supported."),
+                    VideoMode::_4 => panic!("Mode 4 not supported."),
+                    VideoMode::_5 => panic!("Mode 5 not supported."),
+                    VideoMode::_6 => panic!("Mode 6 not supported."),
+                    VideoMode::_7 => panic!("Mode 7 not supported."),
                 }
                 //render_data.draw_pattern_mem(&mut self.mem, &self.sampler, &self.dynamic_state, y, 1);
             }
@@ -1017,7 +1017,7 @@ impl RenderData {
         // Make descriptor set to bind texture atlases for patterns.
 
         let bg_set0 = {
-            let (image, write_future) = mem.get_sprite_image_0();   // Change pattern here to see all tiles.
+            let (image, write_future) = mem.get_bg_image(1);   // Change pattern here to see all tiles.
             if let Some(future) = write_future {
                 self.image_futures.push(future);
             }

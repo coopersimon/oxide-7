@@ -140,6 +140,15 @@ impl MemoryCache {
             }
         }
 
+        // Check OAM dirtiness (always recreate for now TODO: caching of object vertices)
+        self.obj_mem.check_and_set_obj_settings(regs.get_object_settings());
+        if self.obj_0_pattern.get_start_addr() != regs.obj_0_pattern_addr() {
+            self.obj_0_pattern.set_addr(regs.obj_0_pattern_addr(), PATTERN_WIDTH);
+        }
+        if self.obj_n_pattern.get_start_addr() != regs.obj_n_pattern_addr() {
+            self.obj_n_pattern.set_addr(regs.obj_n_pattern_addr(), PATTERN_WIDTH);
+        }
+
         self.bg3_priority = regs.get_bg3_priority();
 
         // Check data dirtiness
@@ -149,6 +158,9 @@ impl MemoryCache {
             self.pattern_mem[2].clear_image(&mem);
             self.pattern_mem[3].clear_image(&mem);
 
+            self.obj_0_pattern.clear_image(&mem);
+            self.obj_n_pattern.clear_image(&mem);
+
             // Clear tile maps.
             self.tile_maps[0].update(&mem);
             self.tile_maps[1].update(&mem);
@@ -156,18 +168,6 @@ impl MemoryCache {
             self.tile_maps[3].update(&mem);
 
             mem.vram_reset_dirty_range();
-        }
-
-        // Check OAM dirtiness (always recreate for now TODO: caching of object vertices)
-        let regs = mem.get_registers();
-        self.obj_mem.check_and_set_obj_settings(regs.get_object_settings());
-        if self.obj_0_pattern.get_start_addr() != regs.obj_0_pattern_addr() {
-            let height = 128;
-            self.obj_0_pattern.set_addr(regs.obj_0_pattern_addr(), height);
-        }
-        if self.obj_n_pattern.get_start_addr() != regs.obj_n_pattern_addr() {
-            let height = 128;
-            self.obj_n_pattern.set_addr(regs.obj_n_pattern_addr(), height);
         }
 
         // Check CGRAM dirtiness

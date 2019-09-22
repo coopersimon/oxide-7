@@ -778,7 +778,6 @@ impl CPU {
     }
 
     fn brk(&mut self) {
-        //  println!("BRK: {:X}, {:X}", self.pb, self.pc);
         self.pc = self.pc.wrapping_add(1);
 
         if self.is_e_set() {
@@ -939,10 +938,10 @@ impl CPU {
 
     fn mvn(&mut self) {
         let src_bank = self.fetch();
-        let dst_bank = self.fetch();
+        self.db = self.fetch();
 
         let src_addr = make24!(src_bank, self.x);
-        let dst_addr = make24!(dst_bank, self.y);
+        let dst_addr = make24!(self.db, self.y);
 
         let byte = self.read_data(src_addr);
         self.write_data(dst_addr, byte);
@@ -961,10 +960,10 @@ impl CPU {
 
     fn mvp(&mut self) {
         let src_bank = self.fetch();
-        let dst_bank = self.fetch();
+        self.db = self.fetch();
 
         let src_addr = make24!(src_bank, self.x);
-        let dst_addr = make24!(dst_bank, self.y);
+        let dst_addr = make24!(self.db, self.y);
 
         let byte = self.read_data(src_addr);
         self.write_data(dst_addr, byte);
@@ -989,6 +988,7 @@ impl CPU {
     }
 
     fn per(&mut self) {
+        println!("PER");
         let imm = self.immediate(false);
 
         let data = self.pc.wrapping_add(imm);
@@ -1001,7 +1001,7 @@ impl CPU {
 
     fn ph(&mut self, reg: u16, byte: bool) {
         if byte {
-            self.stack_push(reg as u8);
+            self.stack_push(lo!(reg));
         } else {
             self.stack_push(hi!(reg));
             self.stack_push(lo!(reg));

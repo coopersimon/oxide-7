@@ -1,13 +1,7 @@
 // OAM (Object Attribute Memory), contains sprite info
 
-use bitflags::bitflags;
-
-bitflags!{
-    #[derive(Default)]
-    struct OAMFlags: u8 {
-        const TABLE_SELECT = bit!(0);
-    }
-}
+const LO_TABLE_SIZE: usize = 512;
+const HI_TABLE_SIZE: usize = 32;
 
 pub struct OAM {
     lo_table:   Vec<u8>,
@@ -16,9 +10,8 @@ pub struct OAM {
     addr_lo:    u8, // Cached internal address values
     addr_hi:    u8,
 
-    addr:       u8,
+    addr:       usize,
     hi_byte:    bool,
-    flags:      OAMFlags,
     buffer:     u8,
 
     dirty:      bool
@@ -27,15 +20,14 @@ pub struct OAM {
 impl OAM {
     pub fn new() -> Self {
         OAM {
-            lo_table:   vec![0; 512],
-            hi_table:   vec![0; 32],
+            lo_table:   vec![0; LO_TABLE_SIZE],
+            hi_table:   vec![0; HI_TABLE_SIZE],
 
             addr_lo:    0,
             addr_hi:    0,
 
             addr:       0,
             hi_byte:    false,
-            flags:      OAMFlags::default(),
             buffer:     0,
 
             dirty:      true,
@@ -53,16 +45,17 @@ impl OAM {
     }
 
     pub fn read(&mut self) -> u8 {
-        let addr = ((self.addr as usize) * 2) + (if self.hi_byte {1} else {0});
+        let addr = self.addr + (if self.hi_byte {1} else {0});
 
-        let ret = if self.flags.contains(OAMFlags::TABLE_SELECT) {
-            self.hi_table[addr]
+        let ret = if self.addr >= LO_TABLE_SIZE {
+            let hi_addr = addr % 32;
+            self.hi_table[hi_addr]
         } else {
             self.lo_table[addr]
         };
 
         self.hi_byte = if self.hi_byte {
-            self.addr = self.addr.wrapping_add(1);
+            self.addr += 2;
             false
         } else {
             true
@@ -73,17 +66,16 @@ impl OAM {
 
     pub fn write(&mut self, data: u8) {
         if self.hi_byte {
-            let addr = (self.addr as usize) * 2;
-
-            if self.flags.contains(OAMFlags::TABLE_SELECT) {
+            if self.addr >= LO_TABLE_SIZE {
+                let addr = self.addr % 32;
                 self.hi_table[addr] = self.buffer;
                 self.hi_table[addr + 1] = data;
             } else {
-                self.lo_table[addr] = self.buffer;
-                self.lo_table[addr + 1] = data;
+                self.lo_table[self.addr] = self.buffer;
+                self.lo_table[self.addr + 1] = data;
             }
 
-            self.addr = self.addr.wrapping_add(1);
+            self.addr += 2;
             self.hi_byte = false;
         } else {
             self.buffer = data;
@@ -94,7 +86,8 @@ impl OAM {
     }
 
     pub fn reset(&mut self) {
-        self.set_addr();
+        // TODO: should this be called in f-blank?
+        self.set_addr();  // TODO: re-enable
     }
 
     // For use by renderer memory caches.
@@ -111,8 +104,7 @@ impl OAM {
 impl OAM {
     #[inline]
     fn set_addr(&mut self) {
-        self.addr = self.addr_lo;
-        self.flags = OAMFlags::from_bits_truncate(self.addr_hi);
+        self.addr = make16!(self.addr_hi, self.addr_lo) as usize;
         self.hi_byte = false;
     }
 }
