@@ -76,9 +76,15 @@ type RenderPipeline = GraphicsPipeline<
 
 // TODO: move this and other data elsewhere
 #[derive(Clone, Copy)]
-enum Side {
+enum TexSide {
     Left =  0 << 16,
     Right = 1 << 16
+}
+
+#[derive(Clone, Copy)]
+enum VertexSide {
+    Left =  0 << 21,
+    Right = 1 << 21
 }
 
 // Individual Vertex.
@@ -128,7 +134,7 @@ struct RenderData {
     obj_set_pool_0: FixedSizeDescriptorSetsPool<Arc<RenderPipeline>>,
     obj_set_pool_1: FixedSizeDescriptorSetsPool<Arc<RenderPipeline>>,
     
-    debug_buffer:   Arc<ImmutableBuffer<[Vertex]>>,
+    //debug_buffer:   Arc<ImmutableBuffer<[Vertex]>>,
 }
 
 pub struct Renderer {
@@ -360,9 +366,9 @@ impl Renderable for Renderer {
         
         // Start building command buffer using framebuffer.
         let command_buffer_builder = AutoCommandBufferBuilder::primary_one_time_submit(self.device.clone(), self.queue.family()).unwrap()
-            .begin_render_pass(self.framebuffers[image_num].clone(), false, vec![[0.0, 0.0, 0.0, 1.0].into()]).unwrap();
+            .begin_render_pass(self.framebuffers[image_num].clone(), false, vec![[1.0, 0.0, 0.0, 1.0].into()]).unwrap();
 
-        let (debug_buffer, debug_future) = ImmutableBuffer::from_iter(
+        /*let (debug_buffer, debug_future) = ImmutableBuffer::from_iter(
             vec![
                 Vertex{ position: [-1.0, -1.0], data: 0 },
                 Vertex{ position: [1.0, -1.0], data: 1 },
@@ -395,7 +401,7 @@ impl Renderable for Renderer {
         let set_pools = vec![
             FixedSizeDescriptorSetsPool::new(debug_pipeline.clone(), 0),
             FixedSizeDescriptorSetsPool::new(debug_pipeline.clone(), 1)
-        ];
+        ];*/
 
         self.render_data = Some(RenderData{
             command_buffer: Some(command_buffer_builder),
@@ -416,7 +422,7 @@ impl Renderable for Renderer {
             //bg_pipeline:    debug_pipeline,
             //bg_set_pool_0:  set_pools[0].clone(),
             //bg_set_pool_1:  set_pools[1].clone(),
-            debug_buffer:   debug_buffer
+            //debug_buffer:   debug_buffer
         });
     }
 
@@ -444,6 +450,8 @@ impl Renderable for Renderer {
         let render_data = std::mem::replace(&mut self.render_data, None);
 
         if let Some(render_data) = render_data {
+            self.previous_frame_future.cleanup_finished();
+
             // Finish command buffer.
             let (command_buffer, acquire_future, mut image_futures, image_num) = render_data.finish_drawing();
 
@@ -464,8 +472,6 @@ impl Renderable for Renderer {
                 Ok(future) => self.previous_frame_future = Box::new(future) as Box<_>,
                 Err(e) => println!("Err: {:?}", e),
             }
-
-            self.previous_frame_future.cleanup_finished();
         }
     }
 }
@@ -997,7 +1003,7 @@ impl RenderData {
 }
 
 // Debug
-impl RenderData {
+/*impl RenderData {
     fn draw_pattern_mem(
         &mut self,
         mem:            &mut MemoryCache,
@@ -1039,4 +1045,4 @@ impl RenderData {
 
         self.command_buffer = Some(command_buffer);
     }
-}
+}*/

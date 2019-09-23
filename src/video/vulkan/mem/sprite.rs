@@ -5,7 +5,7 @@ use vulkano::{
 };
 
 use super::super::{
-    Side, Vertex, VertexBuffer,
+    TexSide, Vertex, VertexBuffer,
     super::ram::ObjectSettings
 };
 
@@ -161,9 +161,9 @@ impl SpriteMem {
             let tile_data = make16!(oam_lo[3], oam_lo[2]) as u32;
 
             let (left, right) = if test_bit!(tile_data, X_FLIP_BIT, u32) {
-                (Side::Right, Side::Left)
+                (TexSide::Right, TexSide::Left)
             } else {
-                (Side::Left, Side::Right)
+                (TexSide::Left, TexSide::Right)
             };
 
             let base_tex_y = line_y.wrapping_sub(y_pos);

@@ -46,8 +46,8 @@ pub struct MemoryCache {
     tile_maps:      [TileMap; 4],
 
     obj_mem:        SpriteMem,
-    obj_0_pattern:  PatternMem,
-    obj_n_pattern:  PatternMem,
+    obj0_pattern:   PatternMem,
+    objn_pattern:   PatternMem,
 
     palette:        Palette,
 
@@ -82,8 +82,8 @@ impl MemoryCache {
             tile_maps:      tile_maps,
 
             obj_mem:        SpriteMem::new(device),
-            obj_0_pattern:  PatternMem::new(queue, PATTERN_WIDTH, PATTERN_WIDTH, BitsPerPixel::_4),
-            obj_n_pattern:  PatternMem::new(queue, PATTERN_WIDTH, PATTERN_WIDTH, BitsPerPixel::_4),
+            obj0_pattern:   PatternMem::new(queue, PATTERN_WIDTH, PATTERN_WIDTH, BitsPerPixel::_4),
+            objn_pattern:   PatternMem::new(queue, PATTERN_WIDTH, PATTERN_WIDTH, BitsPerPixel::_4),
 
             palette:        Palette::new(device),
 
@@ -104,49 +104,49 @@ impl MemoryCache {
 
         // Check background mem locations
         let regs = mem.get_registers();
-        if self.pattern_mem[0].get_start_addr() != regs.bg_1_pattern_addr() {
-            let height = regs.get_pattern_table_height(regs.bg_1_pattern_addr(), self.pattern_mem[0].get_bits_per_pixel() as u32);
-            self.pattern_mem[0].set_addr(regs.bg_1_pattern_addr(), height);
+        if self.pattern_mem[0].get_start_addr() != regs.bg1_pattern_addr() {
+            let height = regs.get_pattern_table_height(regs.bg1_pattern_addr(), self.pattern_mem[0].get_bits_per_pixel() as u32);
+            self.pattern_mem[0].set_addr(regs.bg1_pattern_addr(), height);
         }
-        if !self.tile_maps[0].check_and_set_addr(regs.bg1_settings, regs.bg_1_large_tiles()) {
-            self.tile_maps[0] = TileMap::new(&self.device, regs.bg1_settings, regs.bg_1_large_tiles());
+        if !self.tile_maps[0].check_and_set_addr(regs.bg1_settings, regs.bg1_large_tiles()) {
+            self.tile_maps[0] = TileMap::new(&self.device, regs.bg1_settings, regs.bg1_large_tiles());
         }
 
-        if self.pattern_mem[1].get_start_addr() != regs.bg_2_pattern_addr() {
-            let height = regs.get_pattern_table_height(regs.bg_2_pattern_addr(), self.pattern_mem[1].get_bits_per_pixel() as u32);
-            self.pattern_mem[1].set_addr(regs.bg_2_pattern_addr(), height);
+        if self.pattern_mem[1].get_start_addr() != regs.bg2_pattern_addr() {
+            let height = regs.get_pattern_table_height(regs.bg2_pattern_addr(), self.pattern_mem[1].get_bits_per_pixel() as u32);
+            self.pattern_mem[1].set_addr(regs.bg2_pattern_addr(), height);
         }
-        if !self.tile_maps[1].check_and_set_addr(regs.bg2_settings, regs.bg_2_large_tiles()) {
-            self.tile_maps[1] = TileMap::new(&self.device, regs.bg2_settings, regs.bg_2_large_tiles());
+        if !self.tile_maps[1].check_and_set_addr(regs.bg2_settings, regs.bg2_large_tiles()) {
+            self.tile_maps[1] = TileMap::new(&self.device, regs.bg2_settings, regs.bg2_large_tiles());
         }
 
         if (stored_mode == VideoMode::_1) || (stored_mode == VideoMode::_0) {
-            if self.pattern_mem[2].get_start_addr() != regs.bg_3_pattern_addr() {
-                let height = regs.get_pattern_table_height(regs.bg_3_pattern_addr(), self.pattern_mem[2].get_bits_per_pixel() as u32);
-                self.pattern_mem[2].set_addr(regs.bg_3_pattern_addr(), height);
+            if self.pattern_mem[2].get_start_addr() != regs.bg3_pattern_addr() {
+                let height = regs.get_pattern_table_height(regs.bg3_pattern_addr(), self.pattern_mem[2].get_bits_per_pixel() as u32);
+                self.pattern_mem[2].set_addr(regs.bg3_pattern_addr(), height);
             }
-            if !self.tile_maps[2].check_and_set_addr(regs.bg3_settings, regs.bg_3_large_tiles()) {
-                self.tile_maps[2] = TileMap::new(&self.device, regs.bg3_settings, regs.bg_3_large_tiles());
+            if !self.tile_maps[2].check_and_set_addr(regs.bg3_settings, regs.bg3_large_tiles()) {
+                self.tile_maps[2] = TileMap::new(&self.device, regs.bg3_settings, regs.bg3_large_tiles());
             }
         }
 
         if stored_mode == VideoMode::_0 {
-            if self.pattern_mem[3].get_start_addr() != regs.bg_4_pattern_addr() {
-                let height = regs.get_pattern_table_height(regs.bg_4_pattern_addr(), self.pattern_mem[3].get_bits_per_pixel() as u32);
-                self.pattern_mem[3].set_addr(regs.bg_4_pattern_addr(), height);
+            if self.pattern_mem[3].get_start_addr() != regs.bg4_pattern_addr() {
+                let height = regs.get_pattern_table_height(regs.bg4_pattern_addr(), self.pattern_mem[3].get_bits_per_pixel() as u32);
+                self.pattern_mem[3].set_addr(regs.bg4_pattern_addr(), height);
             }
-            if !self.tile_maps[3].check_and_set_addr(regs.bg4_settings, regs.bg_4_large_tiles()) {
-                self.tile_maps[3] = TileMap::new(&self.device, regs.bg4_settings, regs.bg_4_large_tiles());
+            if !self.tile_maps[3].check_and_set_addr(regs.bg4_settings, regs.bg4_large_tiles()) {
+                self.tile_maps[3] = TileMap::new(&self.device, regs.bg4_settings, regs.bg4_large_tiles());
             }
         }
 
         // Check OAM dirtiness (always recreate for now TODO: caching of object vertices)
         self.obj_mem.check_and_set_obj_settings(regs.get_object_settings());
-        if self.obj_0_pattern.get_start_addr() != regs.obj_0_pattern_addr() {
-            self.obj_0_pattern.set_addr(regs.obj_0_pattern_addr(), PATTERN_WIDTH);
+        if self.obj0_pattern.get_start_addr() != regs.obj0_pattern_addr() {
+            self.obj0_pattern.set_addr(regs.obj0_pattern_addr(), PATTERN_WIDTH);
         }
-        if self.obj_n_pattern.get_start_addr() != regs.obj_n_pattern_addr() {
-            self.obj_n_pattern.set_addr(regs.obj_n_pattern_addr(), PATTERN_WIDTH);
+        if self.objn_pattern.get_start_addr() != regs.objn_pattern_addr() {
+            self.objn_pattern.set_addr(regs.objn_pattern_addr(), PATTERN_WIDTH);
         }
 
         self.bg3_priority = regs.get_bg3_priority();
@@ -158,8 +158,8 @@ impl MemoryCache {
             self.pattern_mem[2].clear_image(&mem);
             self.pattern_mem[3].clear_image(&mem);
 
-            self.obj_0_pattern.clear_image(&mem);
-            self.obj_n_pattern.clear_image(&mem);
+            self.obj0_pattern.clear_image(&mem);
+            self.objn_pattern.clear_image(&mem);
 
             // Clear tile maps.
             self.tile_maps[0].update(&mem);
@@ -205,12 +205,12 @@ impl MemoryCache {
     // Get texture for sprites.
     pub fn get_sprite_image_0(&mut self) -> (PatternImage, Option<PatternFuture>) {
         let mem = self.native_mem.borrow();
-        self.obj_0_pattern.get_image(&mem)
+        self.obj0_pattern.get_image(&mem)
     }
 
     pub fn get_sprite_image_n(&mut self) -> (PatternImage, Option<PatternFuture>) {
         let mem = self.native_mem.borrow();
-        self.obj_n_pattern.get_image(&mem)
+        self.objn_pattern.get_image(&mem)
     }
 
     // Get vertices for a line of sprites.
@@ -240,10 +240,10 @@ impl MemoryCache {
         let mem = self.native_mem.borrow();
         let regs = mem.get_registers();
         match bg_num {
-            0 => regs.bg1_scroll_y,
-            1 => regs.bg2_scroll_y,
-            2 => regs.bg3_scroll_y,
-            _ => regs.bg4_scroll_y
+            0 => regs.get_bg1_scroll_y(),
+            1 => regs.get_bg2_scroll_y(),
+            2 => regs.get_bg3_scroll_y(),
+            _ => regs.get_bg4_scroll_y()
         }
     }
 
@@ -251,10 +251,10 @@ impl MemoryCache {
         let mem = self.native_mem.borrow();
         let regs = mem.get_registers();
         match bg_num {
-            0 => regs.bg1_scroll_x,
-            1 => regs.bg2_scroll_x,
-            2 => regs.bg3_scroll_x,
-            _ => regs.bg4_scroll_x
+            0 => regs.get_bg1_scroll_x(),
+            1 => regs.get_bg2_scroll_x(),
+            2 => regs.get_bg3_scroll_x(),
+            _ => regs.get_bg4_scroll_x()
         }
     }
 

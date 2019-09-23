@@ -14,7 +14,8 @@ use std::sync::Arc;
 use super::super::{
     Vertex,
     VertexBuffer,
-    Side,
+    VertexSide,
+    TexSide,
     super::VideoMem
 };
 
@@ -102,12 +103,12 @@ impl TileMap {
             let mut left_x = -1.0;
             let mut right_x = left_x + x_frac;
             for _ in 0..grid_size_x {
-                vertices.push(Vertex{ position: [left_x, lo_y], data: y_coord | Side::Left as u32 });
-                vertices.push(Vertex{ position: [left_x, hi_y], data: y_coord | Side::Left as u32 });
-                vertices.push(Vertex{ position: [right_x, lo_y], data: y_coord | Side::Right as u32 });
-                vertices.push(Vertex{ position: [left_x, hi_y], data: y_coord | Side::Left as u32 });
-                vertices.push(Vertex{ position: [right_x, lo_y], data: y_coord | Side::Right as u32 });
-                vertices.push(Vertex{ position: [right_x, hi_y], data: y_coord | Side::Right as u32 });
+                vertices.push(Vertex{ position: [left_x, lo_y], data: y_coord | VertexSide::Left as u32 });
+                vertices.push(Vertex{ position: [left_x, hi_y], data: y_coord | VertexSide::Left as u32 });
+                vertices.push(Vertex{ position: [right_x, lo_y], data: y_coord | VertexSide::Right as u32 });
+                vertices.push(Vertex{ position: [left_x, hi_y], data: y_coord | VertexSide::Left as u32 });
+                vertices.push(Vertex{ position: [right_x, lo_y], data: y_coord | VertexSide::Right as u32 });
+                vertices.push(Vertex{ position: [right_x, hi_y], data: y_coord | VertexSide::Right as u32 });
 
                 left_x = right_x;
                 right_x += x_frac;
@@ -258,9 +259,9 @@ impl TileMap {
                 let tile_data = make16!(*data, lo) as u32;
 
                 let (left, right) = if test_bit!(tile_data, X_FLIP_BIT, u32) {
-                    (Side::Right, Side::Left)
+                    (TexSide::Right as u32 | VertexSide::Left as u32, TexSide::Left as u32 | VertexSide::Right as u32)
                 } else {
-                    (Side::Left, Side::Right)
+                    (TexSide::Left as u32 | VertexSide::Left as u32, TexSide::Right as u32 | VertexSide::Right as u32)
                 };
 
                 let y_coords = if test_bit!(tile_data, Y_FLIP_BIT, u32) {
@@ -273,12 +274,12 @@ impl TileMap {
 
                 for (j, y) in (index..(index + (self.row_len * tile_height))).step_by(self.row_len).zip(&y_coords) {
                     let line_y = *y << 17;
-                    self.vertices[j].data =     tile_data | line_y | left as u32;
-                    self.vertices[j + 1].data = tile_data | line_y | left as u32;
-                    self.vertices[j + 2].data = tile_data | line_y | right as u32;
-                    self.vertices[j + 3].data = tile_data | line_y | left as u32;
-                    self.vertices[j + 4].data = tile_data | line_y | right as u32;
-                    self.vertices[j + 5].data = tile_data | line_y | right as u32;
+                    self.vertices[j].data =     tile_data | line_y | left;
+                    self.vertices[j + 1].data = tile_data | line_y | left;
+                    self.vertices[j + 2].data = tile_data | line_y | right;
+                    self.vertices[j + 3].data = tile_data | line_y | left;
+                    self.vertices[j + 4].data = tile_data | line_y | right;
+                    self.vertices[j + 5].data = tile_data | line_y | right;
                 }
             }
         }

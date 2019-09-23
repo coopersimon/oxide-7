@@ -39,3 +39,18 @@ pub mod debug_fs {
         path: "src/video/vulkan/shaders/debug/fragment.glsl"
     }
 }
+
+mod _refresh_files {
+    #[allow(dead_code)]
+    const S0: &str = include_str!("../shaders/bg/vertex.glsl");
+    #[allow(dead_code)]
+    const S1: &str = include_str!("../shaders/bg/fragment.glsl");
+    #[allow(dead_code)]
+    const S2: &str = include_str!("../shaders/obj/vertex.glsl");
+    #[allow(dead_code)]
+    const S3: &str = include_str!("../shaders/obj/fragment.glsl");
+    #[allow(dead_code)]
+    const S4: &str = include_str!("../shaders/debug/vertex.glsl");
+    #[allow(dead_code)]
+    const S5: &str = include_str!("../shaders/debug/fragment.glsl");
+}

@@ -39,6 +39,8 @@ bitflags! {
     }
 }
 
+const BG_SCROLL_MASK: u16 = 0x3FF;
+
 pub struct Registers {
 
         screen_display:     u8,
@@ -54,14 +56,14 @@ pub struct Registers {
     pub bg12_char_addr:     u8,
     pub bg34_char_addr:     u8,
 
-    pub bg1_scroll_x:       u16,
-    pub bg1_scroll_y:       u16,
-    pub bg2_scroll_x:       u16,
-    pub bg2_scroll_y:       u16,
-    pub bg3_scroll_x:       u16,
-    pub bg3_scroll_y:       u16,
-    pub bg4_scroll_x:       u16,
-    pub bg4_scroll_y:       u16,
+        bg1_scroll_x:       u16,
+        bg1_scroll_y:       u16,
+        bg2_scroll_x:       u16,
+        bg2_scroll_y:       u16,
+        bg3_scroll_x:       u16,
+        bg3_scroll_y:       u16,
+        bg4_scroll_x:       u16,
+        bg4_scroll_y:       u16,
 }
 
 impl Registers {
@@ -157,64 +159,96 @@ impl Registers {
         self.object_settings.bits()
     }
 
-    pub fn obj_0_pattern_addr(&self) -> u16 {
+    pub fn obj0_pattern_addr(&self) -> u16 {
         let base = (self.object_settings & ObjectSettings::BASE).bits() as u16;
         base << 14
     }
 
-    pub fn obj_n_pattern_addr(&self) -> u16 {
+    pub fn objn_pattern_addr(&self) -> u16 {
         let base = (self.object_settings & ObjectSettings::BASE).bits() as u16;
         let table = (((self.object_settings & ObjectSettings::SELECT).bits() as u16) >> 3) + 1;
         (base << 14) + (table << 13)
     }
 
     // TODO: use less magic numbers in the following.
-    pub fn bg_1_pattern_addr(&self) -> u16 {
+    pub fn bg1_pattern_addr(&self) -> u16 {
         ((self.bg12_char_addr & 0xF) as u16) << 13
     }
 
-    pub fn bg_2_pattern_addr(&self) -> u16 {
+    pub fn bg2_pattern_addr(&self) -> u16 {
         ((self.bg12_char_addr & 0xF0) as u16) << 9
     }
 
-    pub fn bg_3_pattern_addr(&self) -> u16 {
+    pub fn bg3_pattern_addr(&self) -> u16 {
         ((self.bg34_char_addr & 0xF) as u16) << 13
     }
 
-    pub fn bg_4_pattern_addr(&self) -> u16 {
+    pub fn bg4_pattern_addr(&self) -> u16 {
         ((self.bg34_char_addr & 0xF0) as u16) << 9
     }
 
-    pub fn bg_1_map_addr(&self) -> u16 {
+    pub fn bg1_map_addr(&self) -> u16 {
         ((self.bg1_settings & 0xFC) as u16) << 9
     }
 
-    pub fn bg_2_map_addr(&self) -> u16 {
+    pub fn bg2_map_addr(&self) -> u16 {
         ((self.bg2_settings & 0xFC) as u16) << 9
     }
 
-    pub fn bg_3_map_addr(&self) -> u16 {
+    pub fn bg3_map_addr(&self) -> u16 {
         ((self.bg3_settings & 0xFC) as u16) << 9
     }
 
-    pub fn bg_4_map_addr(&self) -> u16 {
+    pub fn bg4_map_addr(&self) -> u16 {
         ((self.bg4_settings & 0xFC) as u16) << 9
     }
 
-    pub fn bg_1_large_tiles(&self) -> bool {
+    pub fn bg1_large_tiles(&self) -> bool {
         self.bg_mode.contains(BGMode::BG1_TILE_SIZE)
     }
 
-    pub fn bg_2_large_tiles(&self) -> bool {
+    pub fn bg2_large_tiles(&self) -> bool {
         self.bg_mode.contains(BGMode::BG2_TILE_SIZE)
     }
 
-    pub fn bg_3_large_tiles(&self) -> bool {
+    pub fn bg3_large_tiles(&self) -> bool {
         self.bg_mode.contains(BGMode::BG3_TILE_SIZE)
     }
 
-    pub fn bg_4_large_tiles(&self) -> bool {
+    pub fn bg4_large_tiles(&self) -> bool {
         self.bg_mode.contains(BGMode::BG4_TILE_SIZE)
+    }
+
+    pub fn get_bg1_scroll_x(&self) -> u16 {
+        self.bg1_scroll_x & BG_SCROLL_MASK
+    }
+
+    pub fn get_bg1_scroll_y(&self) -> u16 {
+        self.bg1_scroll_y & BG_SCROLL_MASK
+    }
+
+    pub fn get_bg2_scroll_x(&self) -> u16 {
+        self.bg2_scroll_x & BG_SCROLL_MASK
+    }
+
+    pub fn get_bg2_scroll_y(&self) -> u16 {
+        self.bg2_scroll_y & BG_SCROLL_MASK
+    }
+
+    pub fn get_bg3_scroll_x(&self) -> u16 {
+        self.bg3_scroll_x & BG_SCROLL_MASK
+    }
+
+    pub fn get_bg3_scroll_y(&self) -> u16 {
+        self.bg3_scroll_y & BG_SCROLL_MASK
+    }
+
+    pub fn get_bg4_scroll_x(&self) -> u16 {
+        self.bg4_scroll_x & BG_SCROLL_MASK
+    }
+
+    pub fn get_bg4_scroll_y(&self) -> u16 {
+        self.bg4_scroll_y & BG_SCROLL_MASK
     }
 
     // Other checks
@@ -231,22 +265,22 @@ impl Registers {
         let mut borders = BTreeSet::new();
 
         // Always push sprite pattern mem
-        borders.insert(self.obj_0_pattern_addr());
-        borders.insert(self.obj_n_pattern_addr());
+        borders.insert(self.obj0_pattern_addr());
+        borders.insert(self.objn_pattern_addr());
 
-        borders.insert(self.bg_1_map_addr());
-        borders.insert(self.bg_1_pattern_addr());
+        borders.insert(self.bg1_map_addr());
+        borders.insert(self.bg1_pattern_addr());
 
-        borders.insert(self.bg_2_map_addr());
-        borders.insert(self.bg_2_pattern_addr());
+        borders.insert(self.bg2_map_addr());
+        borders.insert(self.bg2_pattern_addr());
 
         if (mode == 0) || (mode == 1) {
-            borders.insert(self.bg_3_map_addr());
-            borders.insert(self.bg_3_pattern_addr());
+            borders.insert(self.bg3_map_addr());
+            borders.insert(self.bg3_pattern_addr());
         }
         if mode == 0 {
-            borders.insert(self.bg_4_map_addr());
-            borders.insert(self.bg_4_pattern_addr());
+            borders.insert(self.bg4_map_addr());
+            borders.insert(self.bg4_pattern_addr());
         }
 
         borders.iter().cloned().collect::<Vec<_>>()
