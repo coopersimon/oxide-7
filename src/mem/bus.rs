@@ -89,7 +89,7 @@ impl MemBus {
                 0x0000..=0x1FFF => (self.wram.read(offset as u32), SLOW_MEM_ACCESS),
 
                 0x2134..=0x2143 => (self.bus_b.read(lo!(offset)), FAST_MEM_ACCESS),
-                0x2180          => self.read(self.wram_addr),
+                0x2180          => (self.wram.read(self.wram_addr - 0x7E0000), SLOW_MEM_ACCESS),
                 0x2100..=0x21FF => (0, FAST_MEM_ACCESS),
                 0x3000..=0x3FFF => (0, FAST_MEM_ACCESS),                                // Extensions
 
@@ -123,7 +123,7 @@ impl MemBus {
                 0x0000..=0x1FFF => {self.wram.write(offset as u32, data); SLOW_MEM_ACCESS},
 
                 0x2100..=0x2143 => {self.bus_b.write(lo!(offset), data); FAST_MEM_ACCESS},
-                0x2180          => self.write(self.wram_addr, data),
+                0x2180          => {self.wram.write(self.wram_addr - 0x7E0000, data); SLOW_MEM_ACCESS},
                 0x2181          => {self.wram_addr = set_lo24!(self.wram_addr, data); FAST_MEM_ACCESS},
                 0x2182          => {self.wram_addr = set_mid24!(self.wram_addr, data); FAST_MEM_ACCESS},
                 0x2183          => {self.wram_addr = set_hi24!(self.wram_addr, data); FAST_MEM_ACCESS},
@@ -267,32 +267,57 @@ impl MemBus {
                     0 => {
                         let data = self.read(src_addr).0;
                         self.write(dst_addr, data);
+
+                        if self.dma_channels[chan].decrement_count() {
+                            channels ^= bit!(chan);
+                        }
                     },
                     1 => for i in 0..2 {
                         let data = self.read(src_addr + i).0;
                         self.write(dst_addr + i, data);
+
+                        if self.dma_channels[chan].decrement_count() {
+                            channels ^= bit!(chan);
+                            break;
+                        }
                     },
                     2 | 6 => for i in 0..2 {
                         let data = self.read(src_addr + i).0;
                         self.write(dst_addr, data);
+
+                        if self.dma_channels[chan].decrement_count() {
+                            channels ^= bit!(chan);
+                            break;
+                        }
                     },
                     3 | 7 => for i in 0..4 {
                         let data = self.read(src_addr + i).0;
                         self.write(dst_addr + (i / 2), data);
+
+                        if self.dma_channels[chan].decrement_count() {
+                            channels ^= bit!(chan);
+                            break;
+                        }
                     },
                     4 => for i in 0..4 {
                         let data = self.read(src_addr + i).0;
                         self.write(dst_addr + i, data);
+
+                        if self.dma_channels[chan].decrement_count() {
+                            channels ^= bit!(chan);
+                            break;
+                        }
                     },
                     5 => for i in 0..4 {
                         let data = self.read(src_addr + i).0;
                         self.write(dst_addr + (i % 2), data);
+
+                        if self.dma_channels[chan].decrement_count() {
+                            channels ^= bit!(chan);
+                            break;
+                        }
                     },
                     _ => unreachable!()
-                }
-
-                if self.dma_channels[chan].decrement_count() {
-                    channels ^= bit!(chan);
                 }
 
                 self.clock(self.dma_channels[chan].get_cycles());

@@ -1,5 +1,7 @@
 // SNES Processor
-use bitflags::bitflags;
+mod types;
+
+use types::*;
 
 use crate::{
     mem::MemBus,
@@ -9,72 +11,6 @@ use crate::{
         int
     }
 };
-
-bitflags! {
-    // Flags for status bits inside the CPU.
-    #[derive(Default)]
-    struct PFlags: u8 {
-        const N = bit!(7);  // Negative
-        const V = bit!(6);  // Overflow
-        const M = bit!(5);  // Accumulator reg size
-        const X = bit!(4);  // Index reg size
-        const D = bit!(3);  // Decimal
-        const I = bit!(2);  // IRQ disable
-        const Z = bit!(1);  // Zero
-        const C = bit!(0);  // Carry
-
-        const B = bit!(5);  // Break
-        const E = bit!(0);  // 6502 Emulator Mode
-    }
-}
-
-// Addresses
-#[derive(Clone, Copy)]
-enum Addr {
-    Full(u32),      // A full, wrapping, 24-bit address.
-    ZeroBank(u16)   // A 16-bit address that wraps at bank boundaries.
-}
-
-// Data modes
-#[derive(Clone, Copy)]
-enum DataMode {
-    Imm,                // Immediate data after the instruction
-    Acc,                // Accumulator data
-    Mode(DataAddrMode), // Find the address using the given Addressing mode
-    Known(Addr)         // Use the address provided
-}
-
-// Addressing modes for data
-#[derive(Clone, Copy)]
-enum DataAddrMode {
-    Abs,
-    AbsX,
-    AbsY,
-
-    Dir,
-    DirX,
-    DirY,
-    DirPtrDbr,
-    DirPtrXDbr,
-    DirPtrDbrY,
-    DirPtr,
-    DirPtrY,
-
-    Long,
-    LongX,
-    Stack,
-    StackPtrDbrY
-}
-
-// Addressing modes for branches and jumps
-#[derive(Clone, Copy, PartialEq)]
-enum JumpAddrMode {
-    Abs,
-    AbsPtrPbr,
-    AbsPtrXPbr,
-    AbsPtr,
-    Long
-}
 
 // 65816
 pub struct CPU {
@@ -109,11 +45,11 @@ impl CPU {
             a:      0,
             x:      0,
             y:      0,
-            s:      0,
+            s:      0x100,
             db:     0,
             dp:     0,
             pb:     0,
-            p:      PFlags::M | PFlags::X,
+            p:      PFlags::M | PFlags::X | PFlags::I,
             pe:     PFlags::E,
             pc:     make16!(start_pc_hi, start_pc_lo),
 
@@ -140,6 +76,8 @@ impl CPU {
             self.halt = false;
         } else if !self.halt {
             self.execute_instruction();
+        } else {
+            self.clock_inc(INTERNAL_OP);
         }
     }
 }
@@ -319,14 +257,14 @@ impl CPU {
 
             0x82 => self.brl(),
 
-            0x4C => self.jmp(JumpAddrMode::Abs),
-            0x5C => self.jmp(JumpAddrMode::Long),
-            0x6C => self.jmp(JumpAddrMode::AbsPtrPbr),
-            0x7C => self.jmp(JumpAddrMode::AbsPtrXPbr),
-            0xDC => self.jmp(JumpAddrMode::AbsPtr),
-            0x22 => self.js(JumpAddrMode::Long),        // JSL
-            0x20 => self.js(JumpAddrMode::Abs),         // JSR
-            0xFC => self.js(JumpAddrMode::AbsPtrXPbr),  // JSR
+            0x4C => self.jmp(ProgramAddrMode::Abs),
+            0x5C => self.jmp(ProgramAddrMode::Long),
+            0x6C => self.jmp(ProgramAddrMode::AbsPtrPbr),
+            0x7C => self.jmp(ProgramAddrMode::AbsPtrXPbr),
+            0xDC => self.jmp(ProgramAddrMode::AbsPtr),
+            0x22 => self.js(ProgramAddrMode::Long),        // JSL
+            0x20 => self.js(ProgramAddrMode::Abs),         // JSR
+            0xFC => self.js(ProgramAddrMode::AbsPtrXPbr),  // JSR
 
             0x6B => self.rtl(),
             0x60 => self.rts(),
@@ -461,14 +399,17 @@ impl CPU {
 impl CPU {
     // TODO: bcd mode.
     fn adc(&mut self, data_mode: DataMode) {
+        if self.p.contains(PFlags::D) {
+            panic!("D!");
+        }
         let op = self.read_op(data_mode, self.is_m_set());
         let result = self.a.wrapping_add(op).wrapping_add((self.p & PFlags::C).bits() as u16);
 
         self.a = if self.is_m_set() {
-            let result8 = result & 0xFF;
-            let a8 = self.a & 0xFF;
+            let result8 = lo!(result);
+            let a8 = lo!(self.a);
             let full_wraparound = (result8 == a8) && (op != 0);
-            self.p.set(PFlags::N, test_bit!(result8, 7));
+            self.p.set(PFlags::N, test_bit!(result8, 7, u8));
             self.p.set(PFlags::V, ((result8 as i8) < (a8 as i8)) || full_wraparound);
             self.p.set(PFlags::Z, result8 == 0);
             self.p.set(PFlags::C, (result8 < a8) || full_wraparound);
@@ -486,14 +427,17 @@ impl CPU {
     }
 
     fn sbc(&mut self, data_mode: DataMode) {
+        if self.p.contains(PFlags::D) {
+            panic!("D!");
+        }
         let op = self.read_op(data_mode, self.is_m_set());
         let result = self.a.wrapping_sub(op).wrapping_sub(1).wrapping_add((self.p & PFlags::C).bits() as u16);
 
         self.a = if self.is_m_set() {
-            let result8 = result & 0xFF;
-            let a8 = self.a & 0xFF;
+            let result8 = lo!(result);
+            let a8 = lo!(self.a);
             let full_wraparound = (result8 == a8) && (op != 0);
-            self.p.set(PFlags::N, test_bit!(result8, 7));
+            self.p.set(PFlags::N, test_bit!(result8, 7, u8));
             self.p.set(PFlags::V, ((result8 as i8) > (a8 as i8)) || full_wraparound);
             self.p.set(PFlags::Z, result8 == 0);
             self.p.set(PFlags::C, (result8 > a8) || full_wraparound);
@@ -722,7 +666,7 @@ impl CPU {
         self.pc = self.pc.wrapping_add(make16!(imm_hi, imm_lo));
     }
 
-    fn jmp(&mut self, addr_mode: JumpAddrMode) {
+    fn jmp(&mut self, addr_mode: ProgramAddrMode) {
         let addr = self.get_jump_addr(addr_mode);
 
         match addr {
@@ -734,12 +678,12 @@ impl CPU {
         }
     }
 
-    fn js(&mut self, addr_mode: JumpAddrMode) {
+    fn js(&mut self, addr_mode: ProgramAddrMode) {
         let addr = self.get_jump_addr(addr_mode);
 
         let pc = self.pc.wrapping_sub(1);
 
-        if addr_mode != JumpAddrMode::AbsPtrXPbr {
+        if addr_mode != ProgramAddrMode::AbsPtrXPbr {
             self.clock_inc(INTERNAL_OP);
         }
 
@@ -937,8 +881,8 @@ impl CPU {
     }
 
     fn mvn(&mut self) {
-        let src_bank = self.fetch();
         self.db = self.fetch();
+        let src_bank = self.fetch();
 
         let src_addr = make24!(src_bank, self.x);
         let dst_addr = make24!(self.db, self.y);
@@ -959,8 +903,8 @@ impl CPU {
     }
 
     fn mvp(&mut self) {
-        let src_bank = self.fetch();
         self.db = self.fetch();
+        let src_bank = self.fetch();
 
         let src_addr = make24!(src_bank, self.x);
         let dst_addr = make24!(self.db, self.y);
@@ -1334,8 +1278,8 @@ impl CPU {
     }
 
     // Get an address of a branch using the specified addressing mode.
-    fn get_jump_addr(&mut self, addr_mode: JumpAddrMode) -> Addr {
-        use self::JumpAddrMode::*;
+    fn get_jump_addr(&mut self, addr_mode: ProgramAddrMode) -> Addr {
+        use self::ProgramAddrMode::*;
 
         match addr_mode {
             Abs         => self.absolute_pbr(),

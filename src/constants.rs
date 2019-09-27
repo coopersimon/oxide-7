@@ -2,7 +2,7 @@
 
 // Screen parameters
 pub mod screen {
-    pub const HORIZONTAL_DOTS: usize = 340;
+    pub const HORIZONTAL_DOTS: usize = 341;
     pub const NUM_SCANLINES: usize = 262;
 
     pub const H_RES: usize = 256;

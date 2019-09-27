@@ -117,7 +117,7 @@ impl Joypad {
     fn new() -> Self {
         Joypad {
             buttons:    Button::default(),
-            register:   0,
+            register:   0xFFFF,
         }
     }
 

@@ -121,7 +121,7 @@ impl DMAChannel {
 
     // Decrement the bytes left and return true if the transfer is complete.
     pub fn decrement_count(&mut self) -> bool {
-        self.count = self.count.wrapping_sub(self.bytes_per_cycle);
+        self.count = self.count.wrapping_sub(1);
 
         self.count == 0
     }
