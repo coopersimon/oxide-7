@@ -1,4 +1,7 @@
-// APU (SPC-700)
+// APU
+// Consists of a CPU interface, the SPC-700 8-bit processor, and an 8-channel DSP.
+
+mod spc;
 
 // CPU-side of APU. Sends and receives to/from audio thread, direct connection with CPU.
 pub struct APU {
