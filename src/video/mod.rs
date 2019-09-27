@@ -180,14 +180,14 @@ impl PPU {
             },
             DrawingAfterPause if self.cycle_count >= timing::H_BLANK_TIME => {
                 // Enter blanking period.
+                self.change_state(HBlankRight)
+            },
+            HBlankRight if self.cycle_count >= timing::SCANLINE => {
                 if self.scanline < screen::V_RES {
-                    self.change_state(HBlankRight)
+                    self.change_state(HBlankLeft)
                 } else {
                     self.change_state(VBlank)
                 }
-            },
-            HBlankRight if self.cycle_count >= timing::SCANLINE => {
-                self.change_state(HBlankLeft)
             },
             VBlank if self.cycle_count >= timing::SCANLINE => {
                 self.cycle_count -= timing::SCANLINE;
@@ -271,7 +271,10 @@ impl PPU {
                 PPUSignal::Delay
             },
             PPUState::VBlank => {
+                let irq = self.inc_scanline();
+
                 self.toggle_vblank(true);
+                self.toggle_hblank(false);
 
                 {
                     let mut mem = self.mem.borrow_mut();
@@ -291,23 +294,26 @@ impl PPU {
                 if self.int_enable.contains(IntEnable::ENABLE_NMI) {
                     self.trigger_interrupt(Interrupt::NMI)
                 } else {
-                    PPUSignal::None
+                    irq
                 }
             },
             PPUState::HBlankRight => {
                 self.toggle_hblank(true);
                 PPUSignal::HBlank
             },
-            PPUState::HBlankLeft => {
-                self.cycle_count -= timing::SCANLINE;
-                self.scanline += 1;
+            PPUState::HBlankLeft => self.inc_scanline()
+        }
+    }
 
-                if self.int_enable.contains(IntEnable::ENABLE_IRQ_Y) && (self.scanline == (self.v_timer as usize)) {
-                    self.trigger_interrupt(Interrupt::IRQ)
-                } else {
-                    PPUSignal::None
-                }
-            }
+    // Increment the scanline and return an IRQ interrupt if necessary.
+    fn inc_scanline(&mut self) -> PPUSignal {
+        self.cycle_count -= timing::SCANLINE;
+        self.scanline += 1;
+
+        if self.int_enable.contains(IntEnable::ENABLE_IRQ_Y) && (self.scanline == (self.v_timer as usize)) {
+            self.trigger_interrupt(Interrupt::IRQ)
+        } else {
+            PPUSignal::None
         }
     }
 

@@ -65,21 +65,29 @@ impl OAM {
     }
 
     pub fn write(&mut self, data: u8) {
-        if self.hi_byte {
-            if self.addr >= LO_TABLE_SIZE {
-                let addr = self.addr % 32;
-                self.hi_table[addr] = self.buffer;
+        // Hi table
+        if self.addr >= LO_TABLE_SIZE {
+            let addr = self.addr % 32;
+            if self.hi_byte {
                 self.hi_table[addr + 1] = data;
+                
+                self.addr += 2;
+                self.hi_byte = false;
             } else {
+                self.hi_table[addr] = data;
+                self.hi_byte = true;
+            }
+        } else {
+            if self.hi_byte {
                 self.lo_table[self.addr] = self.buffer;
                 self.lo_table[self.addr + 1] = data;
-            }
 
-            self.addr += 2;
-            self.hi_byte = false;
-        } else {
-            self.buffer = data;
-            self.hi_byte = true;
+                self.addr += 2;
+                self.hi_byte = false;
+            } else {
+                self.buffer = data;
+                self.hi_byte = true;
+            }
         }
 
         self.dirty = true;
