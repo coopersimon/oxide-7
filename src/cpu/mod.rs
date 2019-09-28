@@ -86,8 +86,8 @@ impl CPU {
 impl CPU {
     // Execute a single instruction.
     fn execute_instruction(&mut self) {
-        use self::DataAddrMode::*;
-        use self::DataMode::*;
+        use DataAddrMode::*;
+        use DataMode::*;
 
         let instr = self.fetch();
 
@@ -403,7 +403,7 @@ impl CPU {
             panic!("D!");
         }
         let op = self.read_op(data_mode, self.is_m_set());
-        let result = self.a.wrapping_add(op).wrapping_add((self.p & PFlags::C).bits() as u16);
+        let result = self.a.wrapping_add(op).wrapping_add(self.carry());
 
         self.a = if self.is_m_set() {
             let result8 = lo!(result);
@@ -431,7 +431,7 @@ impl CPU {
             panic!("D!");
         }
         let op = self.read_op(data_mode, self.is_m_set());
-        let result = self.a.wrapping_sub(op).wrapping_sub(1).wrapping_add((self.p & PFlags::C).bits() as u16);
+        let result = self.a.wrapping_sub(op).wrapping_sub(1).wrapping_add(self.carry());
 
         self.a = if self.is_m_set() {
             let result8 = lo!(result);
@@ -611,7 +611,7 @@ impl CPU {
 
     fn rol(&mut self, data_mode: DataMode) {
         let (op, write_mode) = self.read_op_and_addr_mode(data_mode, self.is_m_set());
-        let result = (op << 1) | ((self.p & PFlags::C).bits() as u16);
+        let result = (op << 1) | self.carry();
 
         self.p.set(PFlags::C, if self.is_m_set() {
             test_bit!(op, 7)
@@ -627,7 +627,7 @@ impl CPU {
 
     fn ror(&mut self, data_mode: DataMode) {
         let (op, write_mode) = self.read_op_and_addr_mode(data_mode, self.is_m_set());
-        let carry = ((self.p & PFlags::C).bits() as u16) << (if self.is_m_set() {7} else {15});
+        let carry = self.carry() << (if self.is_m_set() {7} else {15});
         let result = (op >> 1) | carry;
 
         self.p.set(PFlags::C, test_bit!(op, 0));
@@ -1002,6 +1002,12 @@ impl CPU {
 
 // Internal: Data and Flag setting Micro-ops
 impl CPU {
+    // Get carry as data.
+    #[inline]
+    fn carry(&self) -> u16 {
+        (self.p & PFlags::C).bits() as u16
+    }
+
     // Set N if high bit is 1, set Z if result is zero. Return 8 or 16 bit result.
     fn set_nz(&mut self, result: u16, byte: bool) -> u16 {
         if byte {
@@ -1150,7 +1156,7 @@ impl CPU {
 
     // Read one or two bytes.
     fn read_addr(&mut self, addr: Addr, byte: bool) -> u16 {
-        use self::Addr::*;
+        use Addr::*;
 
         match addr {
             Full(a) => {
@@ -1178,7 +1184,7 @@ impl CPU {
 
     // Write one or two bytes (based on the value of the M or X flag).
     fn write_addr(&mut self, data: u16, addr: Addr, byte: bool) {
-        use self::Addr::*;
+        use Addr::*;
 
         match addr {
             Full(a) => {
@@ -1209,7 +1215,7 @@ impl CPU {
 
     // Get an operand using the specified data mode.
     fn read_op(&mut self, data_mode: DataMode, byte: bool) -> u16 {
-        use self::DataMode::*;
+        use DataMode::*;
 
         match data_mode {
             Imm => self.immediate(byte),
@@ -1224,7 +1230,7 @@ impl CPU {
 
     // Get an operand using the specified data mode and return the address if an addressing mode was used.
     fn read_op_and_addr_mode(&mut self, data_mode: DataMode, byte: bool) -> (u16, DataMode) {
-        use self::DataMode::*;
+        use DataMode::*;
 
         match data_mode {
             Imm => unreachable!(),  // We can't write back to immediate data.
@@ -1239,7 +1245,7 @@ impl CPU {
 
     // Set an operand using the specified addressing mode.
     fn write_op(&mut self, data: u16, data_mode: DataMode, byte: bool) {
-        use self::DataMode::*;
+        use DataMode::*;
 
         match data_mode {
             Imm => unreachable!(),  // We can't write to immediate data.
@@ -1254,7 +1260,7 @@ impl CPU {
 
     // Get an address of data using the specified addressing mode.
     fn get_data_addr(&mut self, addr_mode: DataAddrMode) -> Addr {
-        use self::DataAddrMode::*;
+        use DataAddrMode::*;
 
         match addr_mode {
             Abs             => self.absolute(),
@@ -1279,7 +1285,7 @@ impl CPU {
 
     // Get an address of a branch using the specified addressing mode.
     fn get_jump_addr(&mut self, addr_mode: ProgramAddrMode) -> Addr {
-        use self::ProgramAddrMode::*;
+        use ProgramAddrMode::*;
 
         match addr_mode {
             Abs         => self.absolute_pbr(),
