@@ -1,8 +1,11 @@
 // Memory for the SPC-700.
+mod timer;
 
 use bitflags::bitflags;
 
 use crate::mem::RAM;
+
+use timer::Timer;
 
 bitflags! {
     struct SPCControl: u8 {
@@ -31,7 +34,7 @@ const IPL_ROM: [u8; 64] = [
 pub struct SPCBus {
     ram:        RAM,
 
-    ipl_rom:    [u8; 64],
+    ipl_rom:    &'static [u8; 64],
 
     // Registers
     control:        SPCControl,
@@ -41,12 +44,9 @@ pub struct SPCBus {
     port_1:         u8,
     port_2:         u8,
     port_3:         u8,
-    timer_0:        u8,
-    timer_1:        u8,
-    timer_2:        u8,
-    counter_0:      u8,
-    counter_1:      u8,
-    counter_2:      u8,
+    timer_0:        Timer,
+    timer_1:        Timer,
+    timer_2:        Timer,
 }
 
 impl SPCBus {
@@ -54,7 +54,7 @@ impl SPCBus {
         SPCBus {
             ram:        RAM::new(SPC_RAM_SIZE),
 
-            ipl_rom:    IPL_ROM,
+            ipl_rom:    &IPL_ROM,
 
             control:        SPCControl::ROM_ENABLE | SPCControl::CLEAR_PORT_32 | SPCControl::CLEAR_PORT_10,
             dsp_reg_addr:   0,
@@ -63,18 +63,15 @@ impl SPCBus {
             port_1:         0,
             port_2:         0,
             port_3:         0,
-            timer_0:        0,
-            timer_1:        0,
-            timer_2:        0,
-            counter_0:      0,
-            counter_1:      0,
-            counter_2:      0,
+            timer_0:        Timer::new(0x7D),
+            timer_1:        Timer::new(0x7D),
+            timer_2:        Timer::new(0x16),   // TODO: higher prec?
         }
     }
 
     pub fn read(&mut self, addr: u16) -> u8 {
         match addr {
-            0xF1 => self.control.bits(),
+            0xF1 => 0,
 
             0xF2 => self.dsp_reg_addr,
             0xF3 => self.dsp_reg_data,
@@ -84,13 +81,11 @@ impl SPCBus {
             0xF6 => self.port_2,
             0xF7 => self.port_3,
 
-            0xFA => self.timer_0,
-            0xFB => self.timer_1,
-            0xFC => self.timer_2,
+            0xFA..=0xFC => 0,
 
-            0xFD => self.counter_0,
-            0xFE => self.counter_1,
-            0xFF => self.counter_2,
+            0xFD => self.timer_0.read_counter(),
+            0xFE => self.timer_1.read_counter(),
+            0xFF => self.timer_2.read_counter(),
 
             0xFFC0..=0xFFFF if self.control.contains(SPCControl::ROM_ENABLE) => self.ipl_rom[(addr - 0xFFC0) as usize],
 
@@ -100,7 +95,7 @@ impl SPCBus {
 
     pub fn write(&mut self, addr: u16, data: u8) {
         match addr {
-            0xF1 => self.control = SPCControl::from_bits_truncate(data),
+            0xF1 => self.set_control(data),
 
             0xF2 => self.dsp_reg_addr = data,
             0xF3 => self.dsp_reg_data = data,
@@ -110,15 +105,43 @@ impl SPCBus {
             0xF6 => self.port_2 = data,
             0xF7 => self.port_3 = data,
 
-            0xFA => self.timer_0 = data,
-            0xFB => self.timer_1 = data,
-            0xFC => self.timer_2 = data,
+            0xFA => self.timer_0.write_timer_modulo(data),
+            0xFB => self.timer_1.write_timer_modulo(data),
+            0xFC => self.timer_2.write_timer_modulo(data),
 
-            0xFD => self.counter_0 = data,
-            0xFE => self.counter_1 = data,
-            0xFF => self.counter_2 = data,
+            0xFD..=0xFF => {},
 
             _ => self.ram.write(addr as u32, data)
         }
+    }
+
+    pub fn clock(&mut self, cycles: usize) {
+        if self.control.contains(SPCControl::ENABLE_TIMER_0) {
+            self.timer_0.clock(cycles);
+        }
+        if self.control.contains(SPCControl::ENABLE_TIMER_1) {
+            self.timer_1.clock(cycles);
+        }
+        if self.control.contains(SPCControl::ENABLE_TIMER_2) {
+            self.timer_2.clock(cycles);
+        }
+    }
+}
+
+impl SPCBus {
+    fn set_control(&mut self, data: u8) {
+        let control = SPCControl::from_bits_truncate(data);
+
+        if control.contains(SPCControl::ENABLE_TIMER_0) {
+            self.timer_0.reset();
+        }
+        if control.contains(SPCControl::ENABLE_TIMER_1) {
+            self.timer_1.reset();
+        }
+        if control.contains(SPCControl::ENABLE_TIMER_2) {
+            self.timer_2.reset();
+        }
+
+        self.control = control;
     }
 }

@@ -400,8 +400,9 @@ impl SPC {
         }
     }
 
-    fn clock_inc(&mut self, _cycles: usize) {
-
+    fn clock_inc(&mut self, cycles: usize) {
+        self.bus.clock(cycles);
+        // TODO: clock DSP?
     }
 
     fn fetch(&mut self) -> u8 {
