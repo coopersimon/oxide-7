@@ -44,7 +44,9 @@ enum AddrMode {
     AbsY,       // !a+Y
 }
 
-const SPC_OP: usize = 1;   // Number of cycles for an internal op.
+const SPC_OP: usize = 1;        // Number of cycles for an internal op.
+const STACK_PAGE: u16 = 0x0100; // Page used for the stack.
+const U_PAGE: u16 = 0xFF00;     // Page used for pcall.
 
 pub struct SPC {
     a:      u8,         // Accumulator
@@ -55,7 +57,7 @@ pub struct SPC {
 
     ps:     PSFlags,    // Program Status Word
 
-    bus:    SPCBus
+    bus:    SPCBus,     // Memory
 }
 
 impl SPC {
@@ -69,12 +71,12 @@ impl SPC {
 
             ps:     PSFlags::Z,
 
-            bus:    SPCBus::new()
+            bus:    SPCBus::new(),
         }
     }
 
     pub fn step(&mut self) {
-
+        self.execute_instruction();
     }
 }
 
@@ -137,6 +139,9 @@ impl SPC {
 
             0xCF => self.mul(),
             0x9E => self.div(),
+
+            0xDF => self.daa(),
+            0xBE => self.das(),
 
             0x39 => self.and(Mode(XIndir), Mode(YIndir)),
             0x28 => self.and(Acc, Imm),
@@ -220,6 +225,10 @@ impl SPC {
             0x8A => self.eor1(),
             0x2A => self.or1(true),
             0x0A => self.or1(false),
+            0xEA => self.not1(),
+
+            0x0E => self.tset1(),
+            0x4E => self.tclr1(),
 
             0x79 => self.cmp(Mode(XIndir), Mode(YIndir)),
             0x68 => self.cmp(Acc, Imm),
@@ -288,7 +297,7 @@ impl SPC {
             0xD7 => self.mov_no_flags(Mode(DirPtrY), Acc),
             0xC7 => self.mov_no_flags(Mode(DirXPtr), Acc),
 
-            0xFA => self.mov_no_flags(Mode(Dir), Mode(Dir)),
+            0xFA => self.mov_dir(),
 
             0xD4 => self.mov_no_flags(Mode(DirX), Acc),
             0xD9 => self.mov_no_flags(Mode(DirY), X),
@@ -305,7 +314,87 @@ impl SPC {
             0xC9 => self.mov_no_flags(Mode(Abs), X),
             0xCC => self.mov_no_flags(Mode(Abs), Y),
 
+            0xAA => self.mov1_C(),
+            0xCA => self.mov1_bit(),
+
+            0xBA => self.movw_ya(),
+            0xDA => self.movw_dir(),
+
             0x9F => self.xcn(),
+
+            0xAE => self.a = self.stack_pop(),
+            0x8E => self.ps = PSFlags::from_bits_truncate(self.stack_pop()),
+            0xCE => self.x = self.stack_pop(),
+            0xEE => self.y = self.stack_pop(),
+
+            0x2D => self.stack_push(self.a),
+            0x0D => self.stack_push(self.ps.bits()),
+            0x4D => self.stack_push(self.x),
+            0x6D => self.stack_push(self.y),
+
+            0x2F => self.branch_always(),
+            0xF0 => self.branch_flag(PSFlags::Z, true),
+            0xD0 => self.branch_flag(PSFlags::Z, false),
+            0xB0 => self.branch_flag(PSFlags::C, true),
+            0x90 => self.branch_flag(PSFlags::C, false),
+            0x70 => self.branch_flag(PSFlags::V, true),
+            0x50 => self.branch_flag(PSFlags::V, false),
+            0x30 => self.branch_flag(PSFlags::N, true),
+            0x10 => self.branch_flag(PSFlags::N, false),
+
+            0x03 => self.branch_bit(0, true),
+            0x23 => self.branch_bit(1, true),
+            0x43 => self.branch_bit(2, true),
+            0x63 => self.branch_bit(3, true),
+            0x83 => self.branch_bit(4, true),
+            0xA3 => self.branch_bit(5, true),
+            0xC3 => self.branch_bit(6, true),
+            0xE3 => self.branch_bit(7, true),
+
+            0x13 => self.branch_bit(0, false),
+            0x33 => self.branch_bit(1, false),
+            0x53 => self.branch_bit(2, false),
+            0x73 => self.branch_bit(3, false),
+            0x93 => self.branch_bit(4, false),
+            0xB3 => self.branch_bit(5, false),
+            0xD3 => self.branch_bit(6, false),
+            0xF3 => self.branch_bit(7, false),
+
+            0x2E => self.cmp_branch(Dir),
+            0xDE => self.cmp_branch(DirX),
+            0x6E => self.dbnz_dir(),
+            0xFE => self.dbnz_y(),
+
+            0x5F => self.jump(),
+            0x1F => self.jump_x_ptr(),
+
+            0x3F => self.call(),
+            0x4F => self.pcall(),
+
+            0x01 => self.tcall(0xDE),
+            0x11 => self.tcall(0xDC),
+            0x21 => self.tcall(0xDA),
+            0x31 => self.tcall(0xD8),
+            0x41 => self.tcall(0xD6),
+            0x51 => self.tcall(0xD4),
+            0x61 => self.tcall(0xD2),
+            0x71 => self.tcall(0xD0),
+            0x81 => self.tcall(0xCE),
+            0x91 => self.tcall(0xCC),
+            0xA1 => self.tcall(0xCA),
+            0xB1 => self.tcall(0xC8),
+            0xC1 => self.tcall(0xC6),
+            0xD1 => self.tcall(0xC4),
+            0xE1 => self.tcall(0xC2),
+            0xF1 => self.tcall(0xC0),
+
+            0x6F => self.ret(),
+            0x7F => self.ret1(),
+
+            0x0F => self.brk(),
+
+            0xEF => self.sleep(),
+            0xFF => self.stop(),
 
             0x00 => self.nop(),
         }
@@ -326,8 +415,8 @@ impl SPC {
 impl SPC {
     // op1 = op1 + op2 + C
     fn adc(&mut self, op1_mode: DataMode, op2_mode: DataMode) {
-        let (op1, op1_addr) = self.read_op_and_addr(op1_mode);
         let op2 = self.read_op(op2_mode);
+        let (op1, op1_addr) = self.read_op_and_addr(op1_mode);
 
         let result = op1.wrapping_add(op2).wrapping_add(self.carry());
 
@@ -343,8 +432,8 @@ impl SPC {
 
     // op1 = op1 + op2 + C
     fn sbc(&mut self, op1_mode: DataMode, op2_mode: DataMode) {
-        let (op1, op1_addr) = self.read_op_and_addr(op1_mode);
         let op2 = self.read_op(op2_mode);
+        let (op1, op1_addr) = self.read_op_and_addr(op1_mode);
 
         let result = op1.wrapping_sub(op2).wrapping_sub(1).wrapping_add(self.carry());
 
@@ -360,7 +449,7 @@ impl SPC {
 
     // 16-bit add
     fn addw(&mut self) {
-        let ya = make16!(self.y, self.a);
+        let ya = self.get_ya();
 
         let result = ya.wrapping_add(self.read_op_16().0);
 
@@ -370,13 +459,12 @@ impl SPC {
         self.ps.set(PSFlags::Z, result == 0);
         self.ps.set(PSFlags::C, result < ya);
 
-        self.y = hi!(result);
-        self.a = lo!(result);
+        self.set_ya(result);
     }
 
     // 16-bit sub
     fn subw(&mut self) {
-        let ya = make16!(self.y, self.a);
+        let ya = self.get_ya();
 
         let result = ya.wrapping_sub(self.read_op_16().0);
 
@@ -386,8 +474,7 @@ impl SPC {
         self.ps.set(PSFlags::Z, result == 0);
         self.ps.set(PSFlags::C, result > ya);
 
-        self.y = hi!(result);
-        self.a = lo!(result);
+        self.set_ya(result);
     }
 
     fn mul(&mut self) {
@@ -401,12 +488,12 @@ impl SPC {
     }
 
     fn div(&mut self) {
-        let ya = make16!(self.y, self.a);
+        let ya = self.get_ya();
         let result = lo!(ya.wrapping_div(self.x as u16));
         let modulo = lo!(ya % (self.x as u16));
 
         self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
-        self.ps.set(PSFlags::Z, hi!(result) == 0);
+        self.ps.set(PSFlags::Z, result == 0);
 
         self.y = modulo;
         self.a = result;
@@ -460,8 +547,8 @@ impl SPC {
 // Instructions: bitwise
 impl SPC {
     fn and(&mut self, op1_mode: DataMode, op2_mode: DataMode) {
-        let (op1, write_mode) = self.read_op_and_addr(op1_mode);
         let op2 = self.read_op(op2_mode);
+        let (op1, write_mode) = self.read_op_and_addr(op1_mode);
 
         let result = op1 & op2;
 
@@ -472,8 +559,8 @@ impl SPC {
     }
 
     fn eor(&mut self, op1_mode: DataMode, op2_mode: DataMode) {
-        let (op1, write_mode) = self.read_op_and_addr(op1_mode);
         let op2 = self.read_op(op2_mode);
+        let (op1, write_mode) = self.read_op_and_addr(op1_mode);
 
         let result = op1 ^ op2;
 
@@ -484,8 +571,8 @@ impl SPC {
     }
 
     fn or(&mut self, op1_mode: DataMode, op2_mode: DataMode) {
-        let (op1, write_mode) = self.read_op_and_addr(op1_mode);
         let op2 = self.read_op(op2_mode);
+        let (op1, write_mode) = self.read_op_and_addr(op1_mode);
 
         let result = op1 | op2;
 
@@ -557,6 +644,17 @@ impl SPC {
 
         self.write_data(op_addr, data);
     }
+
+    fn not1(&mut self) {
+        let (addr, bit_num) = self.absolute_bit();
+        let bit = bit!(bit_num);
+        let mask = !bit;
+        let data = self.read_data(addr);
+
+        let result = (data & mask) | (!data & bit);
+
+        self.write_data(addr, result);
+    }
 }
 
 // Instructions: Flags
@@ -595,6 +693,27 @@ impl SPC {
         self.ps.toggle(PSFlags::C);
     }
 
+    // C = m.b
+    fn mov1_C(&mut self) {
+        let (addr, bit) = self.absolute_bit();
+        let data = self.read_data(addr);
+
+        self.ps.set(PSFlags::C, test_bit!(data, bit, u8));
+    }
+
+    // m.b = C
+    fn mov1_bit(&mut self) {
+        let (addr, bit) = self.absolute_bit();
+
+        let data = if self.ps.contains(PSFlags::C) {
+            self.read_data(addr) | bit!(bit)
+        } else {
+            self.read_data(addr) & !bit!(bit)
+        };
+
+        self.write_data(addr, data);
+    }
+
     fn set_flag(&mut self, flag: PSFlags) {
         self.ps.insert(flag);
     }
@@ -604,8 +723,8 @@ impl SPC {
     }
 
     fn cmp(&mut self, op1_mode: DataMode, op2_mode: DataMode) {
-        let op1 = self.read_op(op1_mode);
         let op2 = self.read_op(op2_mode);
+        let op1 = self.read_op(op1_mode);
         let result = op1.wrapping_sub(op2);
 
         self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
@@ -614,7 +733,7 @@ impl SPC {
     }
 
     fn cmpw(&mut self) {
-        let ya = make16!(self.y, self.a);
+        let ya = self.get_ya();
         let op = self.read_op_16().0;
 
         let result = ya.wrapping_sub(op);
@@ -623,6 +742,34 @@ impl SPC {
         self.ps.set(PSFlags::N, test_bit!(result, 15));
         self.ps.set(PSFlags::Z, result == 0);
         self.ps.set(PSFlags::C, ya >= op);
+    }
+
+    // Test and set bits.
+    fn tset1(&mut self) {
+        let addr = self.absolute();
+        let data = self.read_data(addr);
+
+        let result = data | self.a;
+        let flag_check = self.a - data;
+
+        self.ps.set(PSFlags::N, test_bit!(flag_check, 7, u8));
+        self.ps.set(PSFlags::Z, flag_check == 0);
+
+        self.write_data(addr, result);
+    }
+
+    // Test and clear bits.
+    fn tclr1(&mut self) {
+        let addr = self.absolute();
+        let data = self.read_data(addr);
+
+        let result = data & !self.a;
+        let flag_check = self.a - data;
+
+        self.ps.set(PSFlags::N, test_bit!(flag_check, 7, u8));
+        self.ps.set(PSFlags::Z, flag_check == 0);
+
+        self.write_data(addr, result);
     }
 }
 
@@ -645,6 +792,15 @@ impl SPC {
         self.write_op(dst_mode, data);
     }
 
+    // Move within direct page of mem.
+    fn mov_dir(&mut self) {
+        let dst_addr = self.direct();
+        let src_addr = self.direct();
+
+        let data = self.read_data(src_addr);
+        self.write_data(dst_addr, data);
+    }
+
     // Move SP into X, and set flags.
     fn mov_x_sp(&mut self) {
         self.x = self.sp;
@@ -657,10 +813,186 @@ impl SPC {
     fn mov_sp_x(&mut self) {
         self.sp = self.x;
     }
+
+    // Load word into YA register, and set flags.
+    fn movw_ya(&mut self) {
+        let data = self.read_op_16().0;
+
+        self.ps.set(PSFlags::N, test_bit!(data, 15));
+        self.ps.set(PSFlags::Z, data == 0);
+
+        self.set_ya(data);
+    }
+
+    // Store word into memory.
+    fn movw_dir(&mut self) {
+        let addr = self.fetch();
+        let ya = self.get_ya();
+
+        self.write_op_16(addr, ya);
+    }
+}
+
+// Instructions: branching and jumping
+impl SPC {
+    // Branch using relative offset.
+    fn branch(&mut self, rel: i16) {
+        self.pc = self.pc.wrapping_add(rel as u16);
+    }
+
+    // Always branch.
+    fn branch_always(&mut self) {
+        let imm = (self.fetch() as i8) as i16;
+
+        self.branch(imm);
+    }
+
+    // Branch if a flag is set or clear.
+    fn branch_flag(&mut self, flag: PSFlags, set: bool) {
+        let imm = (self.fetch() as i8) as i16;
+
+        if self.ps.contains(flag) == set {
+            self.branch(imm);
+        }
+    }
+
+    // Branch if a bit is set or clear.
+    fn branch_bit(&mut self, bit_num: u8, set: bool) {
+        let addr = self.direct();
+        let data = self.read_data(addr);
+
+        let imm = (self.fetch() as i8) as i16;
+
+        if test_bit!(data, bit_num, u8) == set {
+            self.branch(imm);
+        }
+    }
+
+    // Compare A to op and branch if not equal.
+    fn cmp_branch(&mut self, op_mode: AddrMode) {
+        let addr = self.get_op_addr(op_mode);
+        let data = self.read_data(addr);
+
+        let imm = (self.fetch() as i8) as i16;
+
+        if data != self.a {
+            self.branch(imm);
+        }
+    }
+
+    // Y-- and branch if 0.
+    fn dbnz_y(&mut self) {
+        self.y = self.y.wrapping_sub(1);
+
+        let imm = (self.fetch() as i8) as i16;
+
+        if self.y != 0 {
+            self.branch(imm);
+        }
+    }
+
+    // (d)-- and branch if 0.
+    fn dbnz_dir(&mut self) {
+        let addr = self.direct();
+        let data = self.read_data(addr).wrapping_sub(1);
+
+        let imm = (self.fetch() as i8) as i16;
+
+        self.write_data(addr, data);
+
+        if data != 0 {
+            self.branch(imm);
+        }
+    }
+
+    // JMP !a
+    fn jump(&mut self) {
+        self.pc = self.absolute();
+    }
+
+    // JMP [!a+X]
+    fn jump_x_ptr(&mut self) {
+        let addr = self.absoluteX();
+
+        let pc_lo = self.read_data(addr);
+        let pc_hi = self.read_data(addr.wrapping_add(1));
+
+        self.pc = make16!(pc_hi, pc_lo);
+    }
+}
+
+// Instructions: calling and returning
+impl SPC {
+    // Call absolute.
+    fn call(&mut self) {
+        let new_pc = self.absolute();
+
+        self.stack_push(hi!(self.pc));
+        self.stack_push(lo!(self.pc));
+
+        self.pc = new_pc;
+    }
+
+    // Call in page 0xFF00
+    fn pcall(&mut self) {
+        let new_pc_lo = self.fetch();
+
+        self.stack_push(hi!(self.pc));
+        self.stack_push(lo!(self.pc));
+
+        self.pc = set_lo!(U_PAGE, new_pc_lo);
+    }
+
+    // Call table address.
+    fn tcall(&mut self, addr_lo: u8) {
+        self.stack_push(hi!(self.pc));
+        self.stack_push(lo!(self.pc));
+
+        self.pc = set_lo!(U_PAGE, addr_lo);
+    }
+
+    // Return.
+    fn ret(&mut self) {
+        let pc_lo = self.stack_pop();
+        let pc_hi = self.stack_pop();
+
+        self.pc = make16!(pc_hi, pc_lo);
+    }
+
+    // Return from interrupt.
+    fn ret1(&mut self) {
+        let ps = self.stack_pop();
+        self.ps = PSFlags::from_bits_truncate(ps);
+
+        let pc_lo = self.stack_pop();
+        let pc_hi = self.stack_pop();
+
+        self.pc = make16!(pc_hi, pc_lo);
+    }
 }
 
 // Instructions: misc
 impl SPC {
+    fn daa(&mut self) {
+        if (self.a > 0x99) || self.ps.contains(PSFlags::C) {
+            self.a += 0x60;
+            self.ps.insert(PSFlags::C);
+        }
+        if ((self.a & 0xF) > 0x9) || self.ps.contains(PSFlags::H) {
+            self.a += 0x6;
+        }
+    }
+
+    fn das(&mut self) {
+        if (self.a > 0x99) || self.ps.contains(PSFlags::C) {
+            self.a -= 0x60;
+            self.ps.insert(PSFlags::C);
+        }
+        if ((self.a & 0xF) > 0x9) || self.ps.contains(PSFlags::H) {
+            self.a -= 0x6;
+        }
+    }
+
     fn xcn(&mut self) {
         let a_lo = (self.a >> 4) & 0xF;
         let a_hi = (self.a & 0xF) << 4;
@@ -674,6 +1006,23 @@ impl SPC {
     fn nop(&mut self) {
         self.clock_inc(SPC_OP);
     }
+
+    fn sleep(&mut self) {
+        // TODO
+    }
+
+    fn stop(&mut self) {
+        // TODO
+    }
+
+    fn brk(&mut self) {
+        self.stack_push(hi!(self.pc));
+        self.stack_push(lo!(self.pc));
+        self.stack_push(self.ps.bits());
+
+        self.ps.insert(PSFlags::B);
+        self.ps.remove(PSFlags::I);
+    }
 }
 
 // Misc helper functions
@@ -681,6 +1030,22 @@ impl SPC {
     #[inline]
     fn carry(&self) -> u8 {
         (self.ps & PSFlags::C).bits()
+    }
+
+    #[inline]
+    fn get_ya(&self) -> u16 {
+        make16!(self.y, self.a)
+    }
+
+    #[inline]
+    fn set_ya(&mut self, data: u16) {
+        self.y = hi!(data);
+        self.a = lo!(data);
+    }
+
+    #[inline]
+    fn stack_ptr(&self) -> u16 {
+        set_lo!(STACK_PAGE, self.sp)
     }
 }
 
@@ -697,6 +1062,18 @@ impl SPC {
     fn write_data(&mut self, addr: u16, data: u8) {
         self.bus.write(addr, data);
         self.clock_inc(SPC_OP);
+    }
+
+    // Pop a byte from stack.
+    fn stack_pop(&mut self) -> u8 {
+        self.sp = self.sp.wrapping_add(1);
+        self.read_data(self.stack_ptr())
+    }
+
+    // Push a byte onto stack.
+    fn stack_push(&mut self, data: u8) {
+        self.write_data(self.stack_ptr(), data);
+        self.sp = self.sp.wrapping_sub(1);
     }
 
     // Get an operand using the specified data mode.
