@@ -1,52 +1,9 @@
 // SPC-700 Audio processor
 mod mem;
+mod types;
 
-use bitflags::bitflags;
-
-use mem::SPCBus;
-
-bitflags! {
-    #[derive(Default)]
-    struct PSFlags: u8 {
-        const N = bit!(7);  // Negative
-        const V = bit!(6);  // Overflow
-        const P = bit!(5);  // Direct page
-        const B = bit!(4);  // Break
-        const H = bit!(3);  // Half carry
-        const I = bit!(2);  // Interrupt
-        const Z = bit!(1);  // Zero
-        const C = bit!(0);  // Carry
-    }
-}
-
-enum DataMode {
-    Imm,            // Immediate data
-    Acc,            // Accumulator register data
-    X,              // X register data
-    Y,              // Y register data
-    Mode(AddrMode), // Data in memory
-    Known(u16)      // Data in memory with known address
-}
-
-enum AddrMode {
-    XIndir,     // (X)
-    YIndir,     // (Y)
-    XIndirInc,  // (X)+
-
-    Dir,        // (d)
-    DirX,       // (d+X)
-    DirY,       // (d+Y)
-    DirPtrY,    // [d]+Y
-    DirXPtr,    // [d+X]
-
-    Abs,        // !a
-    AbsX,       // !a+X
-    AbsY,       // !a+Y
-}
-
-const SPC_OP: usize = 1;        // Number of cycles for an internal op.
-const STACK_PAGE: u16 = 0x0100; // Page used for the stack.
-const U_PAGE: u16 = 0xFF00;     // Page used for pcall.
+pub use mem::SPCBus;
+use types::*;
 
 pub struct SPC {
     a:      u8,         // Accumulator
@@ -58,10 +15,12 @@ pub struct SPC {
     ps:     PSFlags,    // Program Status Word
 
     bus:    SPCBus,     // Memory
+
+    cycle_count:    isize,  // Temp. cycle count for an instruction
 }
 
 impl SPC {
-    pub fn new() -> Self {
+    pub fn new(bus: SPCBus) -> Self {
         SPC {
             a:      0,
             x:      0,
@@ -71,12 +30,23 @@ impl SPC {
 
             ps:     PSFlags::Z,
 
-            bus:    SPCBus::new(),
+            bus:    bus,
+
+            cycle_count:    0,
         }
     }
 
-    pub fn step(&mut self) {
+    // Run a single instruction and return how many cycles passed.
+    pub fn step(&mut self) -> isize {
         self.execute_instruction();
+        let cycles_passed = self.cycle_count;
+        self.cycle_count = 0;
+        cycles_passed
+    }
+
+    // Write to memory port from extern.
+    pub fn write_port(&mut self, port: usize, data: u8) {
+        self.bus.write_port(port, data);
     }
 }
 

@@ -3,9 +3,11 @@ mod timer;
 
 use bitflags::bitflags;
 
-use crate::mem::RAM;
+use std::sync::mpsc::Sender;
 
+use crate::mem::RAM;
 use timer::Timer;
+use super::super::SPCPortData;
 
 bitflags! {
     struct SPCControl: u8 {
@@ -40,17 +42,23 @@ pub struct SPCBus {
     control:        SPCControl,
     dsp_reg_addr:   u8,
     dsp_reg_data:   u8,
-    port_0:         u8,
-    port_1:         u8,
-    port_2:         u8,
-    port_3:         u8,
+
+    // Port data sent in from CPU.
+    port_0_in:      u8,
+    port_1_in:      u8,
+    port_2_in:      u8,
+    port_3_in:      u8,
+
+    // Port data sent out from APU.
+    port_out:       Sender<SPCPortData>,
+
     timer_0:        Timer,
     timer_1:        Timer,
     timer_2:        Timer,
 }
 
 impl SPCBus {
-    pub fn new() -> Self {
+    pub fn new(tx: Sender<SPCPortData>) -> Self {
         SPCBus {
             ram:        RAM::new(SPC_RAM_SIZE),
 
@@ -59,13 +67,17 @@ impl SPCBus {
             control:        SPCControl::ROM_ENABLE | SPCControl::CLEAR_PORT_32 | SPCControl::CLEAR_PORT_10,
             dsp_reg_addr:   0,
             dsp_reg_data:   0,
-            port_0:         0,
-            port_1:         0,
-            port_2:         0,
-            port_3:         0,
-            timer_0:        Timer::new(0x7D),
-            timer_1:        Timer::new(0x7D),
-            timer_2:        Timer::new(0x16),   // TODO: higher prec?
+
+            port_0_in:      0,
+            port_1_in:      0,
+            port_2_in:      0,
+            port_3_in:      0,
+
+            port_out:       tx,
+
+            timer_0:        Timer::new(128),
+            timer_1:        Timer::new(128),
+            timer_2:        Timer::new(16),
         }
     }
 
@@ -76,10 +88,10 @@ impl SPCBus {
             0xF2 => self.dsp_reg_addr,
             0xF3 => self.dsp_reg_data,
 
-            0xF4 => self.port_0,
-            0xF5 => self.port_1,
-            0xF6 => self.port_2,
-            0xF7 => self.port_3,
+            0xF4 => self.port_0_in,
+            0xF5 => self.port_1_in,
+            0xF6 => self.port_2_in,
+            0xF7 => self.port_3_in,
 
             0xFA..=0xFC => 0,
 
@@ -100,10 +112,10 @@ impl SPCBus {
             0xF2 => self.dsp_reg_addr = data,
             0xF3 => self.dsp_reg_data = data,
 
-            0xF4 => self.port_0 = data,
-            0xF5 => self.port_1 = data,
-            0xF6 => self.port_2 = data,
-            0xF7 => self.port_3 = data,
+            0xF4 => self.port_out.send(SPCPortData::Port0(data)).unwrap(),
+            0xF5 => self.port_out.send(SPCPortData::Port1(data)).unwrap(),
+            0xF6 => self.port_out.send(SPCPortData::Port2(data)).unwrap(),
+            0xF7 => self.port_out.send(SPCPortData::Port3(data)).unwrap(),
 
             0xFA => self.timer_0.write_timer_modulo(data),
             0xFB => self.timer_1.write_timer_modulo(data),
@@ -126,6 +138,17 @@ impl SPCBus {
             self.timer_2.clock(cycles);
         }
     }
+
+    // CPU-side write.
+    pub fn write_port(&mut self, port: usize, data: u8) {
+        match port {
+            0 => self.port_0_in = data,
+            1 => self.port_1_in = data,
+            2 => self.port_2_in = data,
+            3 => self.port_3_in = data,
+            _ => unreachable!()
+        }
+    }
 }
 
 impl SPCBus {
@@ -140,6 +163,15 @@ impl SPCBus {
         }
         if control.contains(SPCControl::ENABLE_TIMER_2) {
             self.timer_2.reset();
+        }
+
+        if control.contains(SPCControl::CLEAR_PORT_10) {
+            self.port_0_in = 0;
+            self.port_1_in = 0;
+        }
+        if control.contains(SPCControl::CLEAR_PORT_32) {
+            self.port_2_in = 0;
+            self.port_3_in = 0;
         }
 
         self.control = control;

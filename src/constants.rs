@@ -28,6 +28,9 @@ pub mod timing {
     // CPU pause in middle of line.
     pub const PAUSE_LEN: usize = 40;
     pub const PAUSE_START: usize = 536;
+
+    // Clock rate of CPU.
+    pub const MASTER_HZ: usize = SCANLINE * screen::NUM_SCANLINES * 60;
 }
 
 // Interrupt vector locations. Each contains a 16-bit address.
