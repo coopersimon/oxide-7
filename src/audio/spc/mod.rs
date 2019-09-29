@@ -31,9 +31,11 @@ enum DataMode {
 enum AddrMode {
     XIndir,     // (X)
     YIndir,     // (Y)
+    XIndirInc,  // (X)+
 
     Dir,        // (d)
     DirX,       // (d+X)
+    DirY,       // (d+Y)
     DirPtrY,    // [d]+Y
     DirXPtr,    // [d+X]
 
@@ -62,10 +64,10 @@ impl SPC {
             a:      0,
             x:      0,
             y:      0,
-            sp:     0,
+            sp:     0xEF,
             pc:     0xFFC0,
 
-            ps:     PSFlags::default(),
+            ps:     PSFlags::Z,
 
             bus:    SPCBus::new()
         }
@@ -133,6 +135,9 @@ impl SPC {
 
             0x1A => self.decw(),
 
+            0xCF => self.mul(),
+            0x9E => self.div(),
+
             0x39 => self.and(Mode(XIndir), Mode(YIndir)),
             0x28 => self.and(Acc, Imm),
             0x26 => self.and(Acc, Mode(XIndir)),
@@ -192,6 +197,24 @@ impl SPC {
             0x7B => self.ror(Mode(DirX)),
             0x6C => self.ror(Mode(Abs)),
 
+            0x02 => self.set1(0),
+            0x22 => self.set1(1),
+            0x42 => self.set1(2),
+            0x62 => self.set1(3),
+            0x82 => self.set1(4),
+            0xA2 => self.set1(5),
+            0xC2 => self.set1(6),
+            0xE2 => self.set1(7),
+
+            0x12 => self.clr1(0),
+            0x32 => self.clr1(1),
+            0x52 => self.clr1(2),
+            0x72 => self.clr1(3),
+            0x92 => self.clr1(4),
+            0xB2 => self.clr1(5),
+            0xD2 => self.clr1(6),
+            0xF2 => self.clr1(7),
+
             0x6A => self.and1(true),
             0x4A => self.and1(false),
             0x8A => self.eor1(),
@@ -232,6 +255,58 @@ impl SPC {
             0xE0 => self.clear_flag(PSFlags::V | PSFlags::H),   // CLRV
             0xC0 => self.clear_flag(PSFlags::I),    // DI TODO: is this the right way around?
 
+            0xE8 => self.mov_set_flags(Acc, Imm),
+            0xE6 => self.mov_set_flags(Acc, Mode(XIndir)),
+            0xBF => self.mov_set_flags(Acc, Mode(XIndirInc)),
+            0xF7 => self.mov_set_flags(Acc, Mode(DirPtrY)),
+            0xE7 => self.mov_set_flags(Acc, Mode(DirXPtr)),
+            0x7D => self.mov_set_flags(Acc, X),
+            0xDD => self.mov_set_flags(Acc, Y),
+            0xE4 => self.mov_set_flags(Acc, Mode(Dir)),
+            0xF4 => self.mov_set_flags(Acc, Mode(DirX)),
+            0xE5 => self.mov_set_flags(Acc, Mode(Abs)),
+            0xF5 => self.mov_set_flags(Acc, Mode(AbsX)),
+            0xF6 => self.mov_set_flags(Acc, Mode(AbsY)),
+
+            0xBD => self.mov_sp_x(),
+            0x9D => self.mov_x_sp(),
+
+            0xCD => self.mov_set_flags(X, Imm),
+            0x5D => self.mov_set_flags(X, Acc),
+            0xF8 => self.mov_set_flags(X, Mode(Dir)),
+            0xF9 => self.mov_set_flags(X, Mode(DirY)),
+            0xE9 => self.mov_set_flags(X, Mode(Abs)),
+
+            0x8D => self.mov_set_flags(Y, Imm),
+            0xFD => self.mov_set_flags(Y, Acc),
+            0xEB => self.mov_set_flags(Y, Mode(Dir)),
+            0xFB => self.mov_set_flags(Y, Mode(DirX)),
+            0xEC => self.mov_set_flags(Y, Mode(Abs)),
+
+            0xAF => self.mov_no_flags(Mode(XIndirInc), Acc),
+            0xC6 => self.mov_no_flags(Mode(XIndir), Acc),
+            0xD7 => self.mov_no_flags(Mode(DirPtrY), Acc),
+            0xC7 => self.mov_no_flags(Mode(DirXPtr), Acc),
+
+            0xFA => self.mov_no_flags(Mode(Dir), Mode(Dir)),
+
+            0xD4 => self.mov_no_flags(Mode(DirX), Acc),
+            0xD9 => self.mov_no_flags(Mode(DirY), X),
+            0xDB => self.mov_no_flags(Mode(DirX), Y),
+
+            0x8F => self.mov_no_flags(Mode(Dir), Imm),
+            0xC4 => self.mov_no_flags(Mode(Dir), Acc),
+            0xD8 => self.mov_no_flags(Mode(Dir), X),
+            0xCB => self.mov_no_flags(Mode(Dir), Y),
+
+            0xD5 => self.mov_no_flags(Mode(AbsX), Acc),
+            0xD6 => self.mov_no_flags(Mode(AbsY), Acc),
+            0xC5 => self.mov_no_flags(Mode(Abs), Acc),
+            0xC9 => self.mov_no_flags(Mode(Abs), X),
+            0xCC => self.mov_no_flags(Mode(Abs), Y),
+
+            0x9F => self.xcn(),
+
             0x00 => self.nop(),
         }
     }
@@ -247,7 +322,7 @@ impl SPC {
     }
 }
 
-// Instructions: Arithmetic and logic
+// Instructions: Arithmetic
 impl SPC {
     // op1 = op1 + op2 + C
     fn adc(&mut self, op1_mode: DataMode, op2_mode: DataMode) {
@@ -315,6 +390,28 @@ impl SPC {
         self.a = lo!(result);
     }
 
+    fn mul(&mut self) {
+        let result = (self.a as u16).wrapping_mul(self.y as u16);
+
+        self.ps.set(PSFlags::N, test_bit!(result, 15));
+        self.ps.set(PSFlags::Z, hi!(result) == 0);
+
+        self.y = hi!(result);
+        self.a = lo!(result);
+    }
+
+    fn div(&mut self) {
+        let ya = make16!(self.y, self.a);
+        let result = lo!(ya.wrapping_div(self.x as u16));
+        let modulo = lo!(ya % (self.x as u16));
+
+        self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
+        self.ps.set(PSFlags::Z, hi!(result) == 0);
+
+        self.y = modulo;
+        self.a = result;
+    }
+
     fn inc(&mut self, op_mode: DataMode) {
         let (op, write_mode) = self.read_op_and_addr(op_mode);
 
@@ -358,7 +455,10 @@ impl SPC {
 
         self.write_op_16(op_addr, result);
     }
+}
 
+// Instructions: bitwise
+impl SPC {
     fn and(&mut self, op1_mode: DataMode, op2_mode: DataMode) {
         let (op1, write_mode) = self.read_op_and_addr(op1_mode);
         let op2 = self.read_op(op2_mode);
@@ -439,6 +539,24 @@ impl SPC {
 
         self.write_op(write_mode, result);
     }
+
+    fn set1(&mut self, bit_num: u8) {
+        let bit = bit!(bit_num);
+        let op_addr = self.direct();
+
+        let data = self.read_data(op_addr) | bit;
+
+        self.write_data(op_addr, data);
+    }
+
+    fn clr1(&mut self, bit_num: u8) {
+        let mask = !bit!(bit_num);
+        let op_addr = self.direct();
+
+        let data = self.read_data(op_addr) & mask;
+
+        self.write_data(op_addr, data);
+    }
 }
 
 // Instructions: Flags
@@ -508,8 +626,51 @@ impl SPC {
     }
 }
 
+// Instructions: moving data
+impl SPC {
+    // Load into register, and set flags.
+    fn mov_set_flags(&mut self, dst_mode: DataMode, src_mode: DataMode) {
+        let data = self.read_op(src_mode);
+
+        self.ps.set(PSFlags::N, test_bit!(data, 7, u8));
+        self.ps.set(PSFlags::Z, data == 0);
+
+        self.write_op(dst_mode, data);
+    }
+
+    // Store into memory.
+    fn mov_no_flags(&mut self, dst_mode: DataMode, src_mode: DataMode) {
+        let data = self.read_op(src_mode);
+
+        self.write_op(dst_mode, data);
+    }
+
+    // Move SP into X, and set flags.
+    fn mov_x_sp(&mut self) {
+        self.x = self.sp;
+
+        self.ps.set(PSFlags::N, test_bit!(self.x, 7, u8));
+        self.ps.set(PSFlags::Z, self.x == 0);
+    }
+
+    // Move X into SP.
+    fn mov_sp_x(&mut self) {
+        self.sp = self.x;
+    }
+}
+
 // Instructions: misc
 impl SPC {
+    fn xcn(&mut self) {
+        let a_lo = (self.a >> 4) & 0xF;
+        let a_hi = (self.a & 0xF) << 4;
+
+        self.a = a_lo | a_hi;
+
+        self.ps.set(PSFlags::N, test_bit!(self.a, 7, u8));
+        self.ps.set(PSFlags::Z, self.a == 0);
+    }
+
     fn nop(&mut self) {
         self.clock_inc(SPC_OP);
     }
@@ -609,17 +770,19 @@ impl SPC {
         use AddrMode::*;
 
         match addr_mode {
-            XIndir  => self.addr_x(),
-            YIndir  => self.addr_y(),
+            XIndir      => self.x_indirect(),
+            YIndir      => self.y_indirect(),
+            XIndirInc   => self.x_indirect_inc(),
 
-            Dir     => self.direct(),
-            DirX    => self.direct_x(),
-            DirPtrY => self.direct_ptr_y(),
-            DirXPtr => self.direct_x_ptr(),
+            Dir         => self.direct(),
+            DirX        => self.direct_x(),
+            DirY        => self.direct_y(),
+            DirPtrY     => self.direct_ptr_y(),
+            DirXPtr     => self.direct_x_ptr(),
 
-            Abs     => self.absolute(),
-            AbsX    => self.absoluteX(),
-            AbsY    => self.absoluteY()
+            Abs         => self.absolute(),
+            AbsX        => self.absoluteX(),
+            AbsY        => self.absoluteY()
         }
     }
 }
@@ -634,13 +797,20 @@ impl SPC {
     }
 
     // (X)
-    fn addr_x(&self) -> u16 {
+    fn x_indirect(&self) -> u16 {
         self.direct_page(self.x)
     }
 
     // (Y)
-    fn addr_y(&self) -> u16 {
+    fn y_indirect(&self) -> u16 {
         self.direct_page(self.y)
+    }
+
+    // (X)+
+    fn x_indirect_inc(&mut self) -> u16 {
+        let addr = self.direct_page(self.x);
+        self.x = self.x.wrapping_add(1);
+        addr
     }
 
     // dp
