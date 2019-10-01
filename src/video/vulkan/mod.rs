@@ -489,16 +489,16 @@ impl RenderData {
         let mut command_buffer = std::mem::replace(&mut self.command_buffer, None).unwrap();
 
         // Make descriptor sets for palettes.
-        let bg_set1 = Arc::new(self.bg_set_pool_1.next()
+        let bg_palettes = Arc::new(self.bg_set_pool_1.next()
             .add_buffer(mem.get_bg_palette_buffer()).unwrap()
             .build().unwrap());
 
-        let obj_set1 = Arc::new(self.obj_set_pool_1.next()
+        let obj_palettes = Arc::new(self.obj_set_pool_1.next()
             .add_buffer(mem.get_obj_palette_buffer()).unwrap()
             .build().unwrap());
 
         // Make descriptor set to bind texture atlases for patterns.
-        let bg_4_set0 = {
+        let bg_4_tiles = {
             let (image, write_future) = mem.get_bg_image(3);
             if let Some(future) = write_future {
                 self.image_futures.push(future);
@@ -510,7 +510,7 @@ impl RenderData {
                 .build().unwrap())
         };
 
-        let bg_3_set0 = {
+        let bg_3_tiles = {
             let (image, write_future) = mem.get_bg_image(2);
             if let Some(future) = write_future {
                 self.image_futures.push(future);
@@ -522,7 +522,7 @@ impl RenderData {
                 .build().unwrap())
         };
 
-        let bg_2_set0 = {
+        let bg_2_tiles = {
             let (image, write_future) = mem.get_bg_image(1);
             if let Some(future) = write_future {
                 self.image_futures.push(future);
@@ -534,7 +534,7 @@ impl RenderData {
                 .build().unwrap())
         };
 
-        let bg_1_set0 = {
+        let bg_1_tiles = {
             let (image, write_future) = mem.get_bg_image(0);
             if let Some(future) = write_future {
                 self.image_futures.push(future);
@@ -546,7 +546,7 @@ impl RenderData {
                 .build().unwrap())
         };
 
-        let obj_0_set0 = {
+        let obj_0_tiles = {
             let (image, write_future) = mem.get_sprite_image_0();
             if let Some(future) = write_future {
                 self.image_futures.push(future);
@@ -558,7 +558,7 @@ impl RenderData {
                 .build().unwrap())
         };
 
-        let obj_n_set0 = {
+        let obj_n_tiles = {
             let (image, write_future) = mem.get_sprite_image_n();
             if let Some(future) = write_future {
                 self.image_futures.push(future);
@@ -584,7 +584,7 @@ impl RenderData {
                 self.bg_pipeline.clone(),
                 dynamic_state,
                 bg_4_vertices,
-                (bg_4_set0.clone(), bg_set1.clone()),
+                (bg_4_tiles.clone(), bg_palettes.clone()),
                 bg_4_push_constants.clone()
             ).unwrap();
         }
@@ -595,7 +595,7 @@ impl RenderData {
                 self.bg_pipeline.clone(),
                 dynamic_state,
                 bg_3_vertices,
-                (bg_3_set0.clone(), bg_set1.clone()),
+                (bg_3_tiles.clone(), bg_palettes.clone()),
                 bg_3_push_constants.clone()
             ).unwrap();
         }
@@ -605,7 +605,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_0,
-                (obj_0_set0.clone(), obj_set1.clone()),
+                (obj_0_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -615,7 +615,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_0,
-                (obj_n_set0.clone(), obj_set1.clone()),
+                (obj_n_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -625,7 +625,7 @@ impl RenderData {
                 self.bg_pipeline.clone(),
                 dynamic_state,
                 bg_4_vertices,
-                (bg_4_set0, bg_set1.clone()),
+                (bg_4_tiles, bg_palettes.clone()),
                 bg_4_push_constants
             ).unwrap();
         }
@@ -635,7 +635,7 @@ impl RenderData {
                 self.bg_pipeline.clone(),
                 dynamic_state,
                 bg_3_vertices,
-                (bg_3_set0, bg_set1.clone()),
+                (bg_3_tiles, bg_palettes.clone()),
                 bg_3_push_constants
             ).unwrap();
         }
@@ -645,7 +645,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_1,
-                (obj_0_set0.clone(), obj_set1.clone()),
+                (obj_0_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -655,7 +655,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_1,
-                (obj_n_set0.clone(), obj_set1.clone()),
+                (obj_n_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -666,7 +666,7 @@ impl RenderData {
                 self.bg_pipeline.clone(),
                 dynamic_state,
                 bg_2_vertices,
-                (bg_2_set0.clone(), bg_set1.clone()),
+                (bg_2_tiles.clone(), bg_palettes.clone()),
                 bg_2_push_constants.clone()
             ).unwrap();
         }
@@ -677,7 +677,7 @@ impl RenderData {
                 self.bg_pipeline.clone(),
                 dynamic_state,
                 bg_1_vertices,
-                (bg_1_set0.clone(), bg_set1.clone()),
+                (bg_1_tiles.clone(), bg_palettes.clone()),
                 bg_1_push_constants.clone()
             ).unwrap();
         }
@@ -687,7 +687,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_2,
-                (obj_0_set0.clone(), obj_set1.clone()),
+                (obj_0_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -697,7 +697,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_2,
-                (obj_n_set0.clone(), obj_set1.clone()),
+                (obj_n_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -707,7 +707,7 @@ impl RenderData {
                 self.bg_pipeline.clone(),
                 dynamic_state,
                 bg_2_vertices,
-                (bg_2_set0, bg_set1.clone()),
+                (bg_2_tiles, bg_palettes.clone()),
                 bg_2_push_constants
             ).unwrap();
         }
@@ -717,7 +717,7 @@ impl RenderData {
                 self.bg_pipeline.clone(),
                 dynamic_state,
                 bg_1_vertices,
-                (bg_1_set0, bg_set1.clone()),
+                (bg_1_tiles, bg_palettes.clone()),
                 bg_1_push_constants
             ).unwrap();
         }
@@ -727,7 +727,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_3,
-                (obj_0_set0.clone(), obj_set1.clone()),
+                (obj_0_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -737,7 +737,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_3,
-                (obj_n_set0.clone(), obj_set1.clone()),
+                (obj_n_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -756,16 +756,16 @@ impl RenderData {
         let mut command_buffer = std::mem::replace(&mut self.command_buffer, None).unwrap();
 
         // Make descriptor set for palettes.
-        let bg_set1 = Arc::new(self.bg_set_pool_1.next()
+        let bg_palettes = Arc::new(self.bg_set_pool_1.next()
             .add_buffer(mem.get_bg_palette_buffer()).unwrap()
             .build().unwrap());
 
-        let obj_set1 = Arc::new(self.obj_set_pool_1.next()
+        let obj_palettes = Arc::new(self.obj_set_pool_1.next()
             .add_buffer(mem.get_obj_palette_buffer()).unwrap()
             .build().unwrap());
 
         // Make descriptor set to bind texture atlases for patterns.
-        let bg_3_set0 = {
+        let bg_3_tiles = {
             let (image, write_future) = mem.get_bg_image(2);
             if let Some(future) = write_future {
                 self.image_futures.push(future);
@@ -777,7 +777,7 @@ impl RenderData {
                 .build().unwrap())
         };
 
-        let bg_2_set0 = {
+        let bg_2_tiles = {
             let (image, write_future) = mem.get_bg_image(1);
             if let Some(future) = write_future {
                 self.image_futures.push(future);
@@ -789,7 +789,7 @@ impl RenderData {
                 .build().unwrap())
         };
 
-        let bg_1_set0 = {
+        let bg_1_tiles = {
             let (image, write_future) = mem.get_bg_image(0);
             if let Some(future) = write_future {
                 self.image_futures.push(future);
@@ -801,7 +801,7 @@ impl RenderData {
                 .build().unwrap())
         };
 
-        let obj_0_set0 = {
+        let obj_0_tiles = {
             let (image, write_future) = mem.get_sprite_image_0();
             if let Some(future) = write_future {
                 self.image_futures.push(future);
@@ -813,7 +813,7 @@ impl RenderData {
                 .build().unwrap())
         };
 
-        let obj_n_set0 = {
+        let obj_n_tiles = {
             let (image, write_future) = mem.get_sprite_image_n();
             if let Some(future) = write_future {
                 self.image_futures.push(future);
@@ -838,7 +838,7 @@ impl RenderData {
                 self.bg_pipeline.clone(),
                 dynamic_state,
                 bg_3_vertices,
-                (bg_3_set0.clone(), bg_set1.clone()),
+                (bg_3_tiles.clone(), bg_palettes.clone()),
                 bg_3_push_constants.clone()
             ).unwrap();
         }
@@ -848,7 +848,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_0,
-                (obj_0_set0.clone(), obj_set1.clone()),
+                (obj_0_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -858,7 +858,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_0,
-                (obj_n_set0.clone(), obj_set1.clone()),
+                (obj_n_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -869,7 +869,7 @@ impl RenderData {
                     self.bg_pipeline.clone(),
                     dynamic_state,
                     bg_3_vertices,
-                    (bg_3_set0.clone(), bg_set1.clone()),
+                    (bg_3_tiles.clone(), bg_palettes.clone()),
                     bg_3_push_constants.clone()
                 ).unwrap();
             }
@@ -880,7 +880,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_1,
-                (obj_0_set0.clone(), obj_set1.clone()),
+                (obj_0_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -890,7 +890,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_1,
-                (obj_n_set0.clone(), obj_set1.clone()),
+                (obj_n_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -901,7 +901,7 @@ impl RenderData {
                 self.bg_pipeline.clone(),
                 dynamic_state,
                 bg_2_vertices,
-                (bg_2_set0.clone(), bg_set1.clone()),
+                (bg_2_tiles.clone(), bg_palettes.clone()),
                 bg_2_push_constants.clone()
             ).unwrap();
         }
@@ -912,7 +912,7 @@ impl RenderData {
                 self.bg_pipeline.clone(),
                 dynamic_state,
                 bg_1_vertices,
-                (bg_1_set0.clone(), bg_set1.clone()),
+                (bg_1_tiles.clone(), bg_palettes.clone()),
                 bg_1_push_constants.clone()
             ).unwrap();
         }
@@ -922,7 +922,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_2,
-                (obj_0_set0.clone(), obj_set1.clone()),
+                (obj_0_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -932,7 +932,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_2,
-                (obj_n_set0.clone(), obj_set1.clone()),
+                (obj_n_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -942,7 +942,7 @@ impl RenderData {
                 self.bg_pipeline.clone(),
                 dynamic_state,
                 bg_2_vertices,
-                (bg_2_set0, bg_set1.clone()),
+                (bg_2_tiles, bg_palettes.clone()),
                 bg_2_push_constants
             ).unwrap();
         }
@@ -952,7 +952,7 @@ impl RenderData {
                 self.bg_pipeline.clone(),
                 dynamic_state,
                 bg_1_vertices,
-                (bg_1_set0, bg_set1.clone()),
+                (bg_1_tiles, bg_palettes.clone()),
                 bg_1_push_constants
             ).unwrap();
         }
@@ -962,7 +962,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_3,
-                (obj_0_set0.clone(), obj_set1.clone()),
+                (obj_0_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -972,7 +972,7 @@ impl RenderData {
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites_3,
-                (obj_n_set0.clone(), obj_set1.clone()),
+                (obj_n_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
@@ -983,7 +983,7 @@ impl RenderData {
                     self.bg_pipeline.clone(),
                     dynamic_state,
                     bg_3_vertices,
-                    (bg_3_set0, bg_set1.clone()),
+                    (bg_3_tiles, bg_palettes.clone()),
                     bg_3_push_constants
                 ).unwrap();
             }
@@ -1016,7 +1016,7 @@ impl RenderData {
         let mut command_buffer = std::mem::replace(&mut self.command_buffer, None).unwrap();
 
         // Make descriptor set for palettes.
-        let set1 = Arc::new(self.bg_set_pool_1.next()
+        let palettes = Arc::new(self.bg_set_pool_1.next()
             .add_buffer(mem.get_bg_palette_buffer()).unwrap()
             .build().unwrap());
 
@@ -1039,7 +1039,7 @@ impl RenderData {
             self.bg_pipeline.clone(),
             dynamic_state,
             self.debug_buffer.clone(),
-            (bg_set0, set1.clone()),
+            (bg_set0, palettes.clone()),
             ()
         ).unwrap();
 

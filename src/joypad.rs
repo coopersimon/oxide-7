@@ -39,7 +39,7 @@ impl JoypadMem {
             joypad_regs:    [0; 8],
 
             counter:        false,
-            ready:          false,
+            ready:          true,
         }
     }
 

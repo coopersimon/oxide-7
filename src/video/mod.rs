@@ -134,7 +134,7 @@ impl PPU {
 
     // Misc
     pub fn get_status(&mut self) -> u8 {
-        self.joypads.is_ready()
+        self.status.bits() | self.joypads.is_ready()
     }
 
     pub fn latch_hv(&mut self) -> u8 {
