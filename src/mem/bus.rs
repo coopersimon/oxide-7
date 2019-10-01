@@ -89,7 +89,7 @@ impl MemBus {
                 0x0000..=0x1FFF => (self.wram.read(offset as u32), SLOW_MEM_ACCESS),
 
                 0x2134..=0x2143 => (self.bus_b.read(lo!(offset)), FAST_MEM_ACCESS),
-                0x2180          => (self.wram.read(self.wram_addr - 0x7E0000), SLOW_MEM_ACCESS),
+                0x2180          => self.read_wram(),
                 0x2100..=0x21FF => (0, FAST_MEM_ACCESS),
                 0x3000..=0x3FFF => (0, FAST_MEM_ACCESS),                                // Extensions
 
@@ -123,10 +123,10 @@ impl MemBus {
                 0x0000..=0x1FFF => {self.wram.write(offset as u32, data); SLOW_MEM_ACCESS},
 
                 0x2100..=0x2143 => {self.bus_b.write(lo!(offset), data); FAST_MEM_ACCESS},
-                0x2180          => {self.wram.write(self.wram_addr - 0x7E0000, data); SLOW_MEM_ACCESS},
+                0x2180          => self.write_wram(data),
                 0x2181          => {self.wram_addr = set_lo24!(self.wram_addr, data); FAST_MEM_ACCESS},
                 0x2182          => {self.wram_addr = set_mid24!(self.wram_addr, data); FAST_MEM_ACCESS},
-                0x2183          => {self.wram_addr = set_hi24!(self.wram_addr, data); FAST_MEM_ACCESS},
+                0x2183          => {self.wram_addr = set_hi24!(self.wram_addr, data & 1); FAST_MEM_ACCESS},
                 0x2100..=0x21FF => FAST_MEM_ACCESS,
                 0x3000..=0x3FFF => FAST_MEM_ACCESS, // Extensions
 
@@ -155,7 +155,8 @@ impl MemBus {
 
     // Clock the PPU and APU, and handle any signals coming from the PPU.
     pub fn clock(&mut self, cycles: usize) -> Option<Interrupt> {
-        // TODO: clock APU.
+        self.bus_b.apu.clock(cycles);   // TODO: call this after like 300 cycles, not every cycle.
+
         match self.bus_b.ppu.clock(cycles) {
             PPUSignal::NMI => Some(Interrupt::NMI),
             PPUSignal::IRQ => Some(Interrupt::IRQ),
@@ -195,6 +196,19 @@ impl MemBus {
         } else {
             panic!("Unrecognised ROM: {:X}", buf[0x15]);
         }
+    }
+
+    // WRAM access from special register.
+    fn read_wram(&mut self) -> (u8, usize) {
+        let data = self.wram.read(self.wram_addr);
+        self.wram_addr = self.wram_addr.wrapping_add(1) & 0x1FFFF;
+        (data, SLOW_MEM_ACCESS)
+    }
+
+    fn write_wram(&mut self, data: u8) -> usize {
+        self.wram.write(self.wram_addr, data);
+        self.wram_addr = self.wram_addr.wrapping_add(1) & 0x1FFFF;
+        SLOW_MEM_ACCESS
     }
 
     // Internal status registers.
@@ -424,7 +438,7 @@ impl AddrBusB {
             0x41        => self.apu.write_port_1(data),
             0x42        => self.apu.write_port_2(data),
             0x43        => self.apu.write_port_3(data),
-            _ => panic!("Tried to write silly shit: {:X} to {:X}", data, addr),
+            _ => {}//panic!("Tried to write silly shit: {:X} to {:X}", data, addr),
         }
     }
 }

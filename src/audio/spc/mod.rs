@@ -16,7 +16,7 @@ pub struct SPC {
 
     bus:    SPCBus,     // Memory
 
-    cycle_count:    isize,  // Temp. cycle count for an instruction
+    cycle_count:    usize,  // Temp. cycle count for an instruction
 }
 
 impl SPC {
@@ -37,7 +37,7 @@ impl SPC {
     }
 
     // Run a single instruction and return how many cycles passed.
-    pub fn step(&mut self) -> isize {
+    pub fn step(&mut self) -> usize {
         self.execute_instruction();
         let cycles_passed = self.cycle_count;
         self.cycle_count = 0;
@@ -284,7 +284,7 @@ impl SPC {
             0xC9 => self.mov_no_flags(Mode(Abs), X),
             0xCC => self.mov_no_flags(Mode(Abs), Y),
 
-            0xAA => self.mov1_C(),
+            0xAA => self.mov1_c(),
             0xCA => self.mov1_bit(),
 
             0xBA => self.movw_ya(),
@@ -371,6 +371,8 @@ impl SPC {
     }
 
     fn clock_inc(&mut self, cycles: usize) {
+        self.cycle_count += cycles;
+
         self.bus.clock(cycles);
         // TODO: clock DSP?
     }
@@ -665,7 +667,7 @@ impl SPC {
     }
 
     // C = m.b
-    fn mov1_C(&mut self) {
+    fn mov1_c(&mut self) {
         let (addr, bit) = self.absolute_bit();
         let data = self.read_data(addr);
 
@@ -883,7 +885,7 @@ impl SPC {
 
     // JMP [!a+X]
     fn jump_x_ptr(&mut self) {
-        let addr = self.absoluteX();
+        let addr = self.absolute_x();
 
         let pc_lo = self.read_data(addr);
         let pc_hi = self.read_data(addr.wrapping_add(1));
@@ -1129,8 +1131,8 @@ impl SPC {
             DirXPtr     => self.direct_x_ptr(),
 
             Abs         => self.absolute(),
-            AbsX        => self.absoluteX(),
-            AbsY        => self.absoluteY()
+            AbsX        => self.absolute_x(),
+            AbsY        => self.absolute_y()
         }
     }
 }
@@ -1191,7 +1193,7 @@ impl SPC {
     }
 
     // !abs+X
-    fn absoluteX(&mut self) -> u16 {
+    fn absolute_x(&mut self) -> u16 {
         let addr_lo = self.fetch();
         let addr_hi = self.fetch();
 
@@ -1199,7 +1201,7 @@ impl SPC {
     }
 
     // !abs+Y
-    fn absoluteY(&mut self) -> u16 {
+    fn absolute_y(&mut self) -> u16 {
         let addr_lo = self.fetch();
         let addr_hi = self.fetch();
 
