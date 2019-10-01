@@ -399,59 +399,23 @@ impl CPU {
 impl CPU {
     // TODO: bcd mode.
     fn adc(&mut self, data_mode: DataMode) {
-        if self.p.contains(PFlags::D) {
-            panic!("D!");
-        }
         let op = self.read_op(data_mode, self.is_m_set());
-        let result = self.a.wrapping_add(op).wrapping_add(self.carry());
-
-        self.a = if self.is_m_set() {
-            let result8 = lo!(result);
-            let a8 = lo!(self.a);
-            let full_wraparound = (result8 == a8) && (op != 0);
-            self.p.set(PFlags::N, test_bit!(result8, 7, u8));
-            self.p.set(PFlags::V, ((result8 as i8) < (a8 as i8)) || full_wraparound);
-            self.p.set(PFlags::Z, result8 == 0);
-            self.p.set(PFlags::C, (result8 < a8) || full_wraparound);
-
-            make16!(hi!(self.a), result8)
+        
+        if self.p.contains(PFlags::D) {
+            panic!("ADC not implemented for BCD");
         } else {
-            let full_wraparound = (result == self.a) && (op != 0);
-            self.p.set(PFlags::N, test_bit!(result, 15));
-            self.p.set(PFlags::V, ((result as i16) < (self.a as i16)) || full_wraparound);
-            self.p.set(PFlags::Z, result == 0);
-            self.p.set(PFlags::C, (result < self.a) || full_wraparound);
-
-            result
-        };
+            self.bin_arith(op);
+        }
     }
 
     fn sbc(&mut self, data_mode: DataMode) {
-        if self.p.contains(PFlags::D) {
-            panic!("D!");
-        }
         let op = self.read_op(data_mode, self.is_m_set());
-        let result = self.a.wrapping_sub(op).wrapping_sub(1).wrapping_add(self.carry());
 
-        self.a = if self.is_m_set() {
-            let result8 = lo!(result);
-            let a8 = lo!(self.a);
-            let full_wraparound = (result8 == a8) && (op != 0);
-            self.p.set(PFlags::N, test_bit!(result8, 7, u8));
-            self.p.set(PFlags::V, ((result8 as i8) > (a8 as i8)) || full_wraparound);
-            self.p.set(PFlags::Z, result8 == 0);
-            self.p.set(PFlags::C, (result8 > a8) || full_wraparound);
-
-            make16!(hi!(self.a), result8)
+        if self.p.contains(PFlags::D) {
+            panic!("SBC not implemented for BCD");
         } else {
-            let full_wraparound = (result == self.a) && (op != 0);
-            self.p.set(PFlags::N, test_bit!(result, 15));
-            self.p.set(PFlags::V, ((result as i16) > (self.a as i16)) || full_wraparound);
-            self.p.set(PFlags::Z, result == 0);
-            self.p.set(PFlags::C, (result > self.a) || full_wraparound);
-
-            result
-        };
+            self.bin_arith(!op);
+        }
     }
 
     fn cmp(&mut self, data_mode: DataMode) {
@@ -1048,6 +1012,11 @@ impl CPU {
     fn set_p(&mut self, new_p: u8) {
         self.p = PFlags::from_bits_truncate(new_p);
 
+        if self.is_e_set() {
+            self.p.insert(PFlags::M);
+            self.p.insert(PFlags::X);
+        }
+
         if self.p.contains(PFlags::X) {
             self.x = set_hi!(self.x, 0);
             self.y = set_hi!(self.y, 0);
@@ -1072,6 +1041,37 @@ impl CPU {
         } else {
             data
         };
+    }
+
+    // Binary add/sub operation.
+    fn bin_arith(&mut self, op: u16) {
+        if self.is_m_set() {
+            let acc = lo!(self.a) as u16;
+            let add_op = lo!(op) as u16;
+            let result = acc.wrapping_add(add_op).wrapping_add(self.carry());
+            let final_result = lo!(result);
+
+            // D adjust?
+            self.p.set(PFlags::N, test_bit!(final_result, 7, u8));
+            self.p.set(PFlags::V, test_bit!(!(acc ^ op) & (acc ^ result), 7));
+            self.p.set(PFlags::Z, final_result == 0);
+            self.p.set(PFlags::C, test_bit!(result, 8));
+
+            self.a = set_lo!(self.a, final_result);
+        } else {
+            let acc = self.a as u32;
+            let add_op = op as u32;
+            let result = acc.wrapping_add(add_op).wrapping_add(self.carry() as u32);
+            let final_result = lo32!(result);
+
+            // D adjust?
+            self.p.set(PFlags::N, test_bit!(final_result, 15));
+            self.p.set(PFlags::V, test_bit!(!(acc ^ add_op) & (acc ^ result), 15, u32));
+            self.p.set(PFlags::Z, final_result == 0);
+            self.p.set(PFlags::C, test_bit!(result, 16, u32));
+
+            self.a = final_result;
+        }
     }
 
     // Compare register with operand, and set flags accordingly.
