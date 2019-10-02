@@ -36,7 +36,7 @@ const LARGE_TILE: usize = 16;
 bitflags! {
     #[derive(Default)]
     struct BGReg: u8 {
-        const ADDR      = bit!(7) | bit!(6) | bit!(5) | bit!(4) | bit!(3) | bit!(2);
+        const ADDR      = bits![7, 6, 5, 4, 3, 2];
         const MIRROR_Y  = bit!(1);
         const MIRROR_X  = bit!(0);
     }

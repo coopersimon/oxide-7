@@ -31,7 +31,7 @@ impl Timer {
 
             if self.timer == self.timer_mod {
                 self.timer = 0;
-                self.counter = self.counter.wrapping_add(1) % 0xF;
+                self.counter = self.counter.wrapping_add(1) & 0xF;
             }
         }
     }

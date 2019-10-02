@@ -24,6 +24,13 @@ macro_rules! bit {
     };
 }
 
+// Multiple bit selection.
+macro_rules! bits {
+    [ $($bit_num:expr),* ] => {
+        $(bit!($bit_num, u8))|*
+    };
+}
+
 // Check if a bit is set.
 macro_rules! test_bit {
     ($val:expr, $bit_num:expr) => {
@@ -40,7 +47,7 @@ macro_rules! test_bit {
     };
 }
 
-
+/**** BYTE MACROS ****/
 // Make a 16-bit value from two 8-bit values.
 macro_rules! make16 {
     ($hi:expr, $lo:expr) => {

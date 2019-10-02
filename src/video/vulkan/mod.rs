@@ -2,6 +2,7 @@
 
 mod mem;
 mod shaders;
+mod uniforms;
 
 use vulkano::{
     instance::{
@@ -23,27 +24,15 @@ use vulkano::{
         AutoCommandBuffer,
         DynamicState
     },
-    sampler::{
-        Filter,
-        MipmapMode,
-        Sampler,
-        SamplerAddressMode
-    },
     swapchain::{
         Swapchain, Surface, SurfaceTransform, PresentMode, acquire_next_image
     },
     sync::{
         now, GpuFuture
     },
-    descriptor::{
-        descriptor_set::{
-            FixedSizeDescriptorSetsPool
-        },
-        pipeline_layout::PipelineLayoutAbstract
-    },
+    descriptor::pipeline_layout::PipelineLayoutAbstract,
     memory::pool::StdMemoryPool,
     buffer::cpu_pool::CpuBufferPoolChunk,
-    buffer::ImmutableBuffer,
 };
 
 use vulkano_win::VkSurfaceBuild;
@@ -127,12 +116,6 @@ struct RenderData {
 
     bg_pipeline:    Arc<RenderPipeline>,
     obj_pipeline:   Arc<RenderPipeline>,
-    //set0:           Arc<FixedSizeDescriptorSet<Arc<RenderPipeline>, (((), PersistentDescriptorSetImg<mem::patternmem::PatternImage>), PersistentDescriptorSetSampler)>>,
-    //set1:           Arc<FixedSizeDescriptorSet<Arc<RenderPipeline>, ((), PersistentDescriptorSetBuf<mem::palette::PaletteBuffer>)>>
-    bg_set_pool_0:  FixedSizeDescriptorSetsPool<Arc<RenderPipeline>>,
-    bg_set_pool_1:  FixedSizeDescriptorSetsPool<Arc<RenderPipeline>>,
-    obj_set_pool_0: FixedSizeDescriptorSetsPool<Arc<RenderPipeline>>,
-    obj_set_pool_1: FixedSizeDescriptorSetsPool<Arc<RenderPipeline>>,
     
     //debug_buffer:   Arc<ImmutableBuffer<[Vertex]>>,
 }
@@ -147,10 +130,6 @@ pub struct Renderer {
     obj_pipeline:   Arc<RenderPipeline>,    // Pipeline used for rendering sprites.
     render_pass:    Arc<dyn RenderPassAbstract + Send + Sync>,
     surface:        Arc<Surface<Window>>,
-    // Uniforms
-    sampler:        Arc<Sampler>,
-    bg_set_pools:   Vec<FixedSizeDescriptorSetsPool<Arc<RenderPipeline>>>,
-    obj_set_pools:  Vec<FixedSizeDescriptorSetsPool<Arc<RenderPipeline>>>,
     // Swapchain and frames
     swapchain:      Arc<Swapchain<Window>>,
     framebuffers:   Vec<Arc<dyn FramebufferAbstract + Send + Sync>>,
@@ -191,18 +170,6 @@ impl Renderer {
 
         // Get a queue from the iterator.
         let queue = queues.next().unwrap();
-
-        // Make the sampler for the texture.
-        let sampler = Sampler::new(
-            device.clone(),
-            Filter::Nearest,
-            Filter::Nearest,
-            MipmapMode::Nearest,
-            SamplerAddressMode::Repeat,
-            SamplerAddressMode::Repeat,
-            SamplerAddressMode::Repeat,
-            0.0, 1.0, 0.0, 0.0
-        ).expect("Couldn't create sampler!");
 
         let surface = WindowBuilder::new()
             .with_dimensions((512, 448).into())
@@ -274,12 +241,6 @@ impl Renderer {
             .unwrap()
         );
 
-        // Make descriptor set pools.
-        let bg_set_pools = vec![
-            FixedSizeDescriptorSetsPool::new(bg_pipeline.clone(), 0),
-            FixedSizeDescriptorSetsPool::new(bg_pipeline.clone(), 1)
-        ];
-
         // Assemble sprite shaders.
         let obj_vs = shaders::obj_vs::Shader::load(device.clone()).expect("failed to create obj vertex shader");
         let obj_fs = shaders::obj_fs::Shader::load(device.clone()).expect("failed to create obj fragment shader");
@@ -296,14 +257,10 @@ impl Renderer {
             .unwrap()
         );
 
-        // Make descriptor set pools.
-        let obj_set_pools = vec![
-            FixedSizeDescriptorSetsPool::new(obj_pipeline.clone(), 0),
-            FixedSizeDescriptorSetsPool::new(obj_pipeline.clone(), 1)
-        ];
+        let uniform_cache = uniforms::UniformCache::new(&device, &bg_pipeline, &obj_pipeline);
 
         Renderer {
-            mem:            MemoryCache::new(video_mem, &device, &queue),
+            mem:            MemoryCache::new(video_mem, &device, &queue, uniform_cache),
 
             device:         device.clone(),
             queue:          queue,
@@ -311,10 +268,6 @@ impl Renderer {
             obj_pipeline:   obj_pipeline,
             render_pass:    render_pass,
             surface:        surface,
-
-            sampler:        sampler,
-            bg_set_pools:   bg_set_pools,
-            obj_set_pools:  obj_set_pools,
 
             swapchain:      swapchain,
             framebuffers:   framebuffers,
@@ -412,10 +365,10 @@ impl Renderable for Renderer {
             bg_pipeline:    self.bg_pipeline.clone(),
             obj_pipeline:   self.obj_pipeline.clone(),
 
-            bg_set_pool_0:  self.bg_set_pools[0].clone(),
-            bg_set_pool_1:  self.bg_set_pools[1].clone(),
-            obj_set_pool_0: self.obj_set_pools[0].clone(),
-            obj_set_pool_1: self.obj_set_pools[1].clone(),
+            //bg_set_pool_0:  self.bg_set_pools[0].clone(),
+            //bg_set_pool_1:  self.bg_set_pools[1].clone(),
+            //obj_set_pool_0: self.obj_set_pools[0].clone(),
+            //obj_set_pool_1: self.obj_set_pools[1].clone(),
 
             // Uncomment the below for debug:
             //image_futures:  vec![Box::new(debug_future) as Box<_>],
@@ -432,8 +385,8 @@ impl Renderable for Renderer {
                 self.mem.init();
 
                 match self.mem.get_mode() {
-                    VideoMode::_0 => render_data.draw_mode_0(&mut self.mem, &self.sampler, &self.dynamic_state, y),
-                    VideoMode::_1 => render_data.draw_mode_1(&mut self.mem, &self.sampler, &self.dynamic_state, y),
+                    VideoMode::_0 => render_data.draw_mode_0(&mut self.mem, &self.dynamic_state, y),
+                    VideoMode::_1 => render_data.draw_mode_1(&mut self.mem, &self.dynamic_state, y),
                     VideoMode::_2 => panic!("Mode 2 not supported."),
                     VideoMode::_3 => panic!("Mode 3 not supported."),
                     VideoMode::_4 => panic!("Mode 4 not supported."),
@@ -481,7 +434,6 @@ impl RenderData {
     fn draw_mode_0(
         &mut self,
         mem:            &mut MemoryCache,
-        sampler:        &Arc<Sampler>,
         dynamic_state:  &DynamicState,
         y:              u16
         ) {
@@ -489,13 +441,8 @@ impl RenderData {
         let mut command_buffer = std::mem::replace(&mut self.command_buffer, None).unwrap();
 
         // Make descriptor sets for palettes.
-        let bg_palettes = Arc::new(self.bg_set_pool_1.next()
-            .add_buffer(mem.get_bg_palette_buffer()).unwrap()
-            .build().unwrap());
-
-        let obj_palettes = Arc::new(self.obj_set_pool_1.next()
-            .add_buffer(mem.get_obj_palette_buffer()).unwrap()
-            .build().unwrap());
+        let bg_palettes = mem.get_bg_palette_buffer();
+        let obj_palettes = mem.get_obj_palette_buffer();
 
         // Make descriptor set to bind texture atlases for patterns.
         let bg_4_tiles = {
@@ -503,11 +450,7 @@ impl RenderData {
             if let Some(future) = write_future {
                 self.image_futures.push(future);
             }
-
-            // Make descriptor set to bind texture atlas.
-            Arc::new(self.bg_set_pool_0.next()
-                .add_sampled_image(image, sampler.clone()).unwrap()
-                .build().unwrap())
+            image
         };
 
         let bg_3_tiles = {
@@ -515,11 +458,7 @@ impl RenderData {
             if let Some(future) = write_future {
                 self.image_futures.push(future);
             }
-
-            // Make descriptor set to bind texture atlas.
-            Arc::new(self.bg_set_pool_0.next()
-                .add_sampled_image(image, sampler.clone()).unwrap()
-                .build().unwrap())
+            image
         };
 
         let bg_2_tiles = {
@@ -527,11 +466,7 @@ impl RenderData {
             if let Some(future) = write_future {
                 self.image_futures.push(future);
             }
-
-            // Make descriptor set to bind texture atlas.
-            Arc::new(self.bg_set_pool_0.next()
-                .add_sampled_image(image, sampler.clone()).unwrap()
-                .build().unwrap())
+            image
         };
 
         let bg_1_tiles = {
@@ -539,11 +474,7 @@ impl RenderData {
             if let Some(future) = write_future {
                 self.image_futures.push(future);
             }
-
-            // Make descriptor set to bind texture atlas.
-            Arc::new(self.bg_set_pool_0.next()
-                .add_sampled_image(image, sampler.clone()).unwrap()
-                .build().unwrap())
+            image
         };
 
         let obj_0_tiles = {
@@ -551,11 +482,7 @@ impl RenderData {
             if let Some(future) = write_future {
                 self.image_futures.push(future);
             }
-
-            // Make descriptor set to bind texture atlas.
-            Arc::new(self.obj_set_pool_0.next()
-                .add_sampled_image(image, sampler.clone()).unwrap()
-                .build().unwrap())
+            image
         };
 
         let obj_n_tiles = {
@@ -563,11 +490,7 @@ impl RenderData {
             if let Some(future) = write_future {
                 self.image_futures.push(future);
             }
-
-            // Make descriptor set to bind texture atlas.
-            Arc::new(self.obj_set_pool_0.next()
-                .add_sampled_image(image, sampler.clone()).unwrap()
-                .build().unwrap())
+            image
         };
 
         // Push constants
@@ -748,21 +671,15 @@ impl RenderData {
     fn draw_mode_1(
         &mut self,
         mem:            &mut MemoryCache,
-        sampler:        &Arc<Sampler>,
         dynamic_state:  &DynamicState,
         y:              u16
         ) {
 
         let mut command_buffer = std::mem::replace(&mut self.command_buffer, None).unwrap();
 
-        // Make descriptor set for palettes.
-        let bg_palettes = Arc::new(self.bg_set_pool_1.next()
-            .add_buffer(mem.get_bg_palette_buffer()).unwrap()
-            .build().unwrap());
-
-        let obj_palettes = Arc::new(self.obj_set_pool_1.next()
-            .add_buffer(mem.get_obj_palette_buffer()).unwrap()
-            .build().unwrap());
+        // Make descriptor sets for palettes.
+        let bg_palettes = mem.get_bg_palette_buffer();
+        let obj_palettes = mem.get_obj_palette_buffer();
 
         // Make descriptor set to bind texture atlases for patterns.
         let bg_3_tiles = {
@@ -770,11 +687,7 @@ impl RenderData {
             if let Some(future) = write_future {
                 self.image_futures.push(future);
             }
-
-            // Make descriptor set to bind texture atlas.
-            Arc::new(self.bg_set_pool_0.next()
-                .add_sampled_image(image, sampler.clone()).unwrap()
-                .build().unwrap())
+            image
         };
 
         let bg_2_tiles = {
@@ -782,11 +695,7 @@ impl RenderData {
             if let Some(future) = write_future {
                 self.image_futures.push(future);
             }
-
-            // Make descriptor set to bind texture atlas.
-            Arc::new(self.bg_set_pool_0.next()
-                .add_sampled_image(image, sampler.clone()).unwrap()
-                .build().unwrap())
+            image
         };
 
         let bg_1_tiles = {
@@ -794,11 +703,7 @@ impl RenderData {
             if let Some(future) = write_future {
                 self.image_futures.push(future);
             }
-
-            // Make descriptor set to bind texture atlas.
-            Arc::new(self.bg_set_pool_0.next()
-                .add_sampled_image(image, sampler.clone()).unwrap()
-                .build().unwrap())
+            image
         };
 
         let obj_0_tiles = {
@@ -806,11 +711,7 @@ impl RenderData {
             if let Some(future) = write_future {
                 self.image_futures.push(future);
             }
-
-            // Make descriptor set to bind texture atlas.
-            Arc::new(self.obj_set_pool_0.next()
-                .add_sampled_image(image, sampler.clone()).unwrap()
-                .build().unwrap())
+            image
         };
 
         let obj_n_tiles = {
@@ -818,11 +719,7 @@ impl RenderData {
             if let Some(future) = write_future {
                 self.image_futures.push(future);
             }
-
-            // Make descriptor set to bind texture atlas.
-            Arc::new(self.obj_set_pool_0.next()
-                .add_sampled_image(image, sampler.clone()).unwrap()
-                .build().unwrap())
+            image
         };
 
         // Push constants

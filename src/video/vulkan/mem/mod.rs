@@ -17,6 +17,7 @@ use std::sync::Arc;
 use crate::video::VRamRef;
 
 use super::{
+    uniforms::UniformCache,
     VertexBuffer,
     super::VideoMode
 };
@@ -53,11 +54,12 @@ pub struct MemoryCache {
 
     // Vulkan things
     device:         Arc<Device>,
-    queue:          Arc<Queue>
+    queue:          Arc<Queue>,
+    uniform_cache:  UniformCache,
 }
 
 impl MemoryCache {
-    pub fn new(vram: VRamRef, device: &Arc<Device>, queue: &Arc<Queue>) -> Self {
+    pub fn new(vram: VRamRef, device: &Arc<Device>, queue: &Arc<Queue>, uniform_cache: UniformCache) -> Self {
         let pattern_mem = [
             PatternMem::new(queue, PATTERN_WIDTH, 0, BitsPerPixel::_2),  // BG 1 can be 2, 4 or 8 BPP
             PatternMem::new(queue, PATTERN_WIDTH, 0, BitsPerPixel::_2),  // BG 2 can be 2, 4 or 7 BPP
@@ -88,7 +90,8 @@ impl MemoryCache {
             palette:        Palette::new(device),
 
             device:         device.clone(),
-            queue:          queue.clone()
+            queue:          queue.clone(),
+            uniform_cache:  uniform_cache
         }
     }
 
@@ -172,10 +175,10 @@ impl MemoryCache {
 
         // Check CGRAM dirtiness
         if mem.is_cgram_bg_dirty() {
-            self.palette.create_bg_buffer(&mut mem);
+            self.palette.create_bg_buffer(&mut mem, &mut self.uniform_cache);
 
             if mem.is_cgram_obj_dirty() {
-                self.palette.create_obj_buffer(&mut mem);
+                self.palette.create_obj_buffer(&mut mem, &mut self.uniform_cache);
             }
 
             mem.cgram_reset_dirty();
@@ -188,9 +191,9 @@ impl MemoryCache {
 
     // Retrieve structures.
     // Get texture for a bg.
-    pub fn get_bg_image(&mut self, bg_num: usize) -> (PatternImage, Option<PatternFuture>) {
+    pub fn get_bg_image(&mut self, bg_num: usize) -> (ImageDescriptorSet, Option<PatternFuture>) {
         let mem = self.native_mem.borrow();
-        self.pattern_mem[bg_num].get_image(&mem)
+        self.pattern_mem[bg_num].get_image(&mem, &mut self.uniform_cache, true)
     }
 
     // Get vertices for a line on a bg.
@@ -203,14 +206,14 @@ impl MemoryCache {
     }
 
     // Get texture for sprites.
-    pub fn get_sprite_image_0(&mut self) -> (PatternImage, Option<PatternFuture>) {
+    pub fn get_sprite_image_0(&mut self) -> (ImageDescriptorSet, Option<PatternFuture>) {
         let mem = self.native_mem.borrow();
-        self.obj0_pattern.get_image(&mem)
+        self.obj0_pattern.get_image(&mem, &mut self.uniform_cache, false)
     }
 
-    pub fn get_sprite_image_n(&mut self) -> (PatternImage, Option<PatternFuture>) {
+    pub fn get_sprite_image_n(&mut self) -> (ImageDescriptorSet, Option<PatternFuture>) {
         let mem = self.native_mem.borrow();
-        self.objn_pattern.get_image(&mem)
+        self.objn_pattern.get_image(&mem, &mut self.uniform_cache, false)
     }
 
     // Get vertices for a line of sprites.
@@ -227,11 +230,12 @@ impl MemoryCache {
     }
 
     // Get the palettes.
-    pub fn get_bg_palette_buffer(&self) -> PaletteBuffer {
+    // A buffer wrapped in a descriptor set.
+    pub fn get_bg_palette_buffer(&self) -> PaletteDescriptorSet {
         self.palette.get_bg_palette_buffer()
     }
 
-    pub fn get_obj_palette_buffer(&self) -> PaletteBuffer {
+    pub fn get_obj_palette_buffer(&self) -> PaletteDescriptorSet {
         self.palette.get_obj_palette_buffer()
     }
 

@@ -400,7 +400,7 @@ impl CPU {
     // TODO: bcd mode.
     fn adc(&mut self, data_mode: DataMode) {
         let op = self.read_op(data_mode, self.is_m_set());
-        
+
         if self.p.contains(PFlags::D) {
             panic!("ADC not implemented for BCD");
         } else {
@@ -896,7 +896,6 @@ impl CPU {
     }
 
     fn per(&mut self) {
-        println!("PER");
         let imm = self.immediate(false);
 
         let data = self.pc.wrapping_add(imm);

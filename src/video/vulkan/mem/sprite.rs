@@ -11,7 +11,7 @@ use super::super::{
 
 use std::sync::Arc;
 
-const PRIORITY_BITS: u8 = bit!(5) | bit!(4);
+const PRIORITY_BITS: u8 = bits![5, 4];
 const PRIORITY_0: u8 = 0 << 4;
 const PRIORITY_1: u8 = 1 << 4;
 const PRIORITY_2: u8 = 2 << 4;
@@ -22,8 +22,8 @@ const X_FLIP_BIT: u32 = 14;
 
 const LINE_HEIGHT: f32 = 1.0 / 112.0;
 
-const SMALL: u32 = 0 << 23;
-const LARGE: u32 = 1 << 23;
+const SMALL: u32 = 0;
+const LARGE: u32 = bit!(23, u32);
 
 const ATLAS_SIZE: f32 = 16.0 * 8.0; // Atlas width/height (16x16 tiles of 8x8 pixels)
 
@@ -124,7 +124,7 @@ impl SpriteMem {
             if (priority == priority_check) && (name_table == name_table_select) {
                 let hi_addr = lo / 16;
                 let shift_amt = ((lo / 4) % 4) * 2;
-                let hi = (oam_hi[hi_addr] >> shift_amt) & 0x3;
+                let hi = (oam_hi[hi_addr] >> shift_amt) & bits![1, 0];
                 self.make_vertices(y, &oam_lo[lo..(lo + 4)], hi, &mut buffer)
             }
         }

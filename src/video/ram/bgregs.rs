@@ -4,15 +4,12 @@ use bitflags::bitflags;
 
 use std::collections::BTreeSet;
 
-const VRAM_END_ADDR: u32 = 64 * 1024;
-const PATTERN_MAX_HEIGHT: u32 = 64;
-
 bitflags! {
     #[derive(Default)]
     pub struct ObjectSettings: u8 {
-        const SIZE = bit!(7) | bit!(6) | bit!(5);
-        const SELECT = bit!(4) | bit!(3);
-        const BASE = bit!(2) | bit!(1) | bit!(0);
+        const SIZE      = bits![7, 6, 5];
+        const SELECT    = bits![4, 3];
+        const BASE      = bits![2, 1, 0];
     }
 }
 
@@ -24,14 +21,14 @@ bitflags! {
         const BG2_TILE_SIZE = bit!(5);
         const BG1_TILE_SIZE = bit!(4);
         const BG3_PRIORITY  = bit!(3);
-        const MODE          = bit!(2) | bit!(1) | bit!(0);
+        const MODE          = bits![2, 1, 0];
     }
 }
 
 bitflags! {
     #[derive(Default)]
     pub struct Mosaic: u8 {
-        const PIXEL_SIZE = bit!(7) | bit!(6) | bit!(5) | bit!(4);
+        const PIXEL_SIZE = bits![7, 6, 5, 4];
         const BG4_ENABLE = bit!(3);
         const BG3_ENABLE = bit!(2);
         const BG2_ENABLE = bit!(1);
@@ -39,6 +36,8 @@ bitflags! {
     }
 }
 
+const VRAM_END_ADDR: u32 = 64 * 1024;
+const PATTERN_MAX_HEIGHT: u32 = 64;
 const BG_SCROLL_MASK: u16 = 0x3FF;
 
 pub struct Registers {

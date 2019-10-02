@@ -22,7 +22,7 @@ pub enum VideoMode {
 
 impl From<u8> for VideoMode {
     fn from(val: u8) -> Self {
-        match val & (bit!(2) | bit!(1) | bit!(0)) {
+        match val & bits![2, 1, 0] {
             0 => VideoMode::_0,
             1 => VideoMode::_1,
             2 => VideoMode::_2,

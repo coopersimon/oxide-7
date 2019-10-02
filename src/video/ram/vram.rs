@@ -6,8 +6,8 @@ bitflags! {
     #[derive(Default)]
     struct PortControl: u8 {
         const INC =      bit!(7);
-        const REMAP =    bit!(3) | bit!(2); // TODO
-        const INC_RATE = bit!(1) | bit!(0);
+        const REMAP =    bits![3, 2]; // TODO
+        const INC_RATE = bits![1, 0];
     }
 }
 
@@ -44,6 +44,9 @@ impl VRAM {
 
     pub fn set_port_control(&mut self, data: u8) {
         self.port_control = PortControl::from_bits_truncate(data);
+        if self.port_control.contains(PortControl::REMAP) {
+            panic!("Remap VRAM not implemented!");
+        }
     }
 
     pub fn set_addr_lo(&mut self, addr: u8) {

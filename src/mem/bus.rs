@@ -155,7 +155,7 @@ impl MemBus {
 
     // Clock the PPU and APU, and handle any signals coming from the PPU.
     pub fn clock(&mut self, cycles: usize) -> Option<Interrupt> {
-        self.bus_b.apu.clock(cycles);   // TODO: call this after like 300 cycles, not every cycle.
+        self.bus_b.clock_apu(cycles);
 
         match self.bus_b.ppu.clock(cycles) {
             PPUSignal::NMI => Some(Interrupt::NMI),
@@ -405,17 +405,24 @@ impl MemBus {
     }
 }
 
+// Amount of cycles to wait before telling the APU to clock.
+const APU_CYCLE_BATCH: usize = 300;
+
 // Address Bus B, used for hardware registers.
 struct AddrBusB {
-    pub ppu:    PPU,
-    apu:        APU
+    ppu:        PPU,
+    apu:        APU,
+
+    apu_cycle_count:    usize
 }
 
 impl AddrBusB {
     fn new() -> Self {
         AddrBusB {
             ppu: PPU::new(),
-            apu: APU::new()
+            apu: APU::new(),
+
+            apu_cycle_count:    0
         }
     }
 
@@ -439,6 +446,17 @@ impl AddrBusB {
             0x42        => self.apu.write_port_2(data),
             0x43        => self.apu.write_port_3(data),
             _ => {}//panic!("Tried to write silly shit: {:X} to {:X}", data, addr),
+        }
+    }
+
+    // Increase APU cycle count and send message if threshold is reached.
+    fn clock_apu(&mut self, cycles: usize) {
+        self.apu_cycle_count += cycles;
+
+        if self.apu_cycle_count >= APU_CYCLE_BATCH {
+            self.apu.clock(self.apu_cycle_count);
+
+            self.apu_cycle_count = 0;
         }
     }
 }

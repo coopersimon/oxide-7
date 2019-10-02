@@ -6,6 +6,11 @@ use vulkano::{
         CommandBufferExecFuture
     },
     device::Queue,
+    descriptor::descriptor_set::{
+        FixedSizeDescriptorSet,
+        PersistentDescriptorSetImg,
+        PersistentDescriptorSetSampler
+    },
     image::{
         Dimensions,
         immutable::ImmutableImage
@@ -21,9 +26,18 @@ use vulkano::{
 use std::sync::Arc;
 
 use super::super::super::VideoMem;
+use super::super::{
+    RenderPipeline,
+    uniforms::UniformCache
+};
 
 pub type PatternImage = Arc<ImmutableImage<R8Uint>>;
 pub type PatternFuture = Box<dyn GpuFuture>;
+
+pub type ImageDescriptorSet = Arc<FixedSizeDescriptorSet<
+    Arc<RenderPipeline>,
+    (( (), PersistentDescriptorSetImg<PatternImage> ), PersistentDescriptorSetSampler)
+>>;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum BitsPerPixel {
@@ -43,7 +57,7 @@ pub struct PatternMem {
 
     // Vulkan
     queue:          Arc<Queue>,
-    image:          Option<PatternImage>
+    image:          Option<ImageDescriptorSet>
 }
 
 impl PatternMem {
@@ -69,14 +83,21 @@ impl PatternMem {
     }
 
     // Return cached image or create one if none is cached.
-    pub fn get_image(&mut self, mem: &VideoMem) -> (PatternImage, Option<PatternFuture>) {
+    pub fn get_image(&mut self, mem: &VideoMem, uniform_cache: &mut UniformCache, is_bg: bool) -> (ImageDescriptorSet, Option<PatternFuture>) {
         if let Some(image) = &self.image {
             (image.clone(), None)
         } else {
             let data = &mem.get_vram()[(self.start_addr as usize)..(self.end_addr as usize)];
             let (image, future) = self.make_image(data);
-            self.image = Some(image.clone());
-            (image, Some(Box::new(future)))
+
+            let descriptor_set = if is_bg {
+                uniform_cache.bg_image(image)
+            } else {
+                uniform_cache.obj_image(image)
+            };
+
+            self.image = Some(descriptor_set.clone());
+            (descriptor_set, Some(Box::new(future)))
         }
     }
 
