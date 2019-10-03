@@ -36,6 +36,7 @@ pub struct SpriteMem {
 
     settings:       u8,
 
+    buffer:         Vec<Vertex>,
     buffer_pool:    CpuBufferPool<Vertex>
 }
 
@@ -50,6 +51,7 @@ impl SpriteMem {
 
             settings:       0,
 
+            buffer:         Vec::new(),
             buffer_pool:    CpuBufferPool::vertex_buffer(device.clone())
         }
     }
@@ -116,7 +118,7 @@ impl SpriteMem {
 impl SpriteMem {
     // Check each object's priority and add it to the buffer if we need it.
     fn make_vertex_buffer(&mut self, priority_check: u8, name_table_select: u8, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
-        let mut buffer = Vec::new();
+        self.buffer.clear();
 
         for lo in (0..oam_lo.len()).step_by(4) {
             let name_table = oam_lo[lo + 3] & 1;
@@ -125,19 +127,19 @@ impl SpriteMem {
                 let hi_addr = lo / 16;
                 let shift_amt = ((lo / 4) % 4) * 2;
                 let hi = (oam_hi[hi_addr] >> shift_amt) & bits![1, 0];
-                self.make_vertices(y, &oam_lo[lo..(lo + 4)], hi, &mut buffer)
+                self.make_vertices(y, &oam_lo[lo..(lo + 4)], hi)
             }
         }
 
-        if buffer.is_empty() {
+        if self.buffer.is_empty() {
             None
         } else {
-            Some(self.buffer_pool.chunk(buffer).unwrap())
+            Some(self.buffer_pool.chunk(self.buffer.drain(..)).unwrap())
         }
     }
 
     // Make vertices for a sprite on a line.
-    fn make_vertices(&self, line_y: u8, oam_lo: &[u8], hi: u8, out: &mut Vec<Vertex>) {
+    fn make_vertices(&mut self, line_y: u8, oam_lo: &[u8], hi: u8) {
         let large = test_bit!(hi, 1, u8);
         let size = if large {self.large_size} else {self.small_size};
         let y_pos = oam_lo[1];
@@ -175,12 +177,12 @@ impl SpriteMem {
 
             let size = if large {LARGE} else {SMALL};
 
-            out.push(Vertex{ position: [x_left, y_top],     data: size | tex_y | left as u32 | tile_data });
-            out.push(Vertex{ position: [x_right, y_top],    data: size | tex_y | right as u32 | tile_data });
-            out.push(Vertex{ position: [x_left, y_bottom],  data: size | tex_y | left as u32 | tile_data });
-            out.push(Vertex{ position: [x_right, y_top],    data: size | tex_y | right as u32 | tile_data });
-            out.push(Vertex{ position: [x_left, y_bottom],  data: size | tex_y | left as u32 | tile_data });
-            out.push(Vertex{ position: [x_right, y_bottom], data: size | tex_y | right as u32 | tile_data });
+            self.buffer.push(Vertex{ position: [x_left, y_top],     data: size | tex_y | left as u32 | tile_data });
+            self.buffer.push(Vertex{ position: [x_right, y_top],    data: size | tex_y | right as u32 | tile_data });
+            self.buffer.push(Vertex{ position: [x_left, y_bottom],  data: size | tex_y | left as u32 | tile_data });
+            self.buffer.push(Vertex{ position: [x_right, y_top],    data: size | tex_y | right as u32 | tile_data });
+            self.buffer.push(Vertex{ position: [x_left, y_bottom],  data: size | tex_y | left as u32 | tile_data });
+            self.buffer.push(Vertex{ position: [x_right, y_bottom], data: size | tex_y | right as u32 | tile_data });
         }
     }
 }

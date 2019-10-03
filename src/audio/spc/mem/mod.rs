@@ -3,11 +3,13 @@ mod timer;
 
 use bitflags::bitflags;
 
-use std::sync::mpsc::Sender;
+use std::sync::{
+    Arc,
+    Mutex
+};
 
 use crate::mem::RAM;
 use timer::Timer;
-use super::super::SPCPortData;
 
 bitflags! {
     struct SPCControl: u8 {
@@ -50,7 +52,10 @@ pub struct SPCBus {
     port_3_in:      u8,
 
     // Port data sent out from APU.
-    port_out:       Sender<SPCPortData>,
+    port_0_out:     Arc<Mutex<u8>>,
+    port_1_out:     Arc<Mutex<u8>>,
+    port_2_out:     Arc<Mutex<u8>>,
+    port_3_out:     Arc<Mutex<u8>>,
 
     timer_0:        Timer,
     timer_1:        Timer,
@@ -58,7 +63,7 @@ pub struct SPCBus {
 }
 
 impl SPCBus {
-    pub fn new(tx: Sender<SPCPortData>) -> Self {
+    pub fn new(ports: [Arc<Mutex<u8>>; 4]) -> Self {
         SPCBus {
             ram:        RAM::new(SPC_RAM_SIZE),
 
@@ -73,7 +78,10 @@ impl SPCBus {
             port_2_in:      0,
             port_3_in:      0,
 
-            port_out:       tx,
+            port_0_out:     ports[0].clone(),
+            port_1_out:     ports[1].clone(),
+            port_2_out:     ports[2].clone(),
+            port_3_out:     ports[3].clone(),
 
             timer_0:        Timer::new(128),
             timer_1:        Timer::new(128),
@@ -112,10 +120,10 @@ impl SPCBus {
             0xF2 => self.dsp_reg_addr = data,
             0xF3 => self.dsp_reg_data = data,
 
-            0xF4 => self.port_out.send(SPCPortData::Port0(data)).unwrap(),
-            0xF5 => self.port_out.send(SPCPortData::Port1(data)).unwrap(),
-            0xF6 => self.port_out.send(SPCPortData::Port2(data)).unwrap(),
-            0xF7 => self.port_out.send(SPCPortData::Port3(data)).unwrap(),
+            0xF4 => *self.port_0_out.lock().unwrap() = data,
+            0xF5 => *self.port_1_out.lock().unwrap() = data,
+            0xF6 => *self.port_2_out.lock().unwrap() = data,
+            0xF7 => *self.port_3_out.lock().unwrap() = data,
 
             0xFA => self.timer_0.write_timer_modulo(data),
             0xFB => self.timer_1.write_timer_modulo(data),

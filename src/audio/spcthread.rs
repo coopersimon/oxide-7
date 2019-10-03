@@ -1,12 +1,12 @@
 // Deals with communication between APU on CPU side, and SPC thread.
 
-use std::{
-    sync::mpsc::{
-        Sender,
-        Receiver
-    },
-    thread
+use std::sync::{
+    Arc,
+    Mutex,
+    mpsc::Receiver,
 };
+
+use std::thread;
 
 use super::spc::{
     SPC,
@@ -27,22 +27,14 @@ pub enum SPCCommand {
     Clock(usize)    // Sends how many SNES master cycles have passed.
 }
 
-// Port data that are sent back from the SPC.
-pub enum SPCPortData {
-    Port0(u8),
-    Port1(u8),
-    Port2(u8),
-    Port3(u8),
-}
-
 pub struct SPCThread {
     thread: thread::JoinHandle<()>
 }
 
 impl SPCThread {
-    pub fn new(rx: Receiver<SPCCommand>, tx: Sender<SPCPortData>) -> Self {
+    pub fn new(rx: Receiver<SPCCommand>, ports: [Arc<Mutex<u8>>; 4]) -> Self {
         let thread = thread::spawn(move || {
-            let bus = SPCBus::new(tx);
+            let bus = SPCBus::new(ports);
             let mut spc = SPC::new(bus);
             let mut cycle_count = 0.0;
 

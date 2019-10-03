@@ -313,6 +313,8 @@ impl Renderer {
 
 impl Renderable for Renderer {
     fn frame_start(&mut self) {
+        self.previous_frame_future.cleanup_finished();
+
         // Get current framebuffer index from the swapchain.
         let (image_num, acquire_future) = acquire_next_image(self.swapchain.clone(), None)
             .expect("Didn't get next image");
@@ -403,8 +405,6 @@ impl Renderable for Renderer {
         let render_data = std::mem::replace(&mut self.render_data, None);
 
         if let Some(render_data) = render_data {
-            self.previous_frame_future.cleanup_finished();
-
             // Finish command buffer.
             let (command_buffer, acquire_future, mut image_futures, image_num) = render_data.finish_drawing();
 

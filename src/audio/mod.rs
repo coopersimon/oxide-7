@@ -6,21 +6,23 @@ mod spcthread;
 
 use spcthread::*;
 
-use std::sync::mpsc::{
-    channel,
-    Sender,
-    Receiver
+use std::sync::{
+    Arc,
+    Mutex,
+    mpsc::{
+        channel,
+        Sender,
+    }
 };
 
 // CPU-side of APU. Sends and receives to/from audio thread, direct connection with CPU.
 pub struct APU {
     command_tx:     Sender<SPCCommand>,
-    port_data_rx:   Receiver<SPCPortData>,
 
-    port_0:         u8,
-    port_1:         u8,
-    port_2:         u8,
-    port_3:         u8,
+    port_0:         Arc<Mutex<u8>>,
+    port_1:         Arc<Mutex<u8>>,
+    port_2:         Arc<Mutex<u8>>,
+    port_3:         Arc<Mutex<u8>>,
 
     spc_thread:     SPCThread
 }
@@ -28,18 +30,18 @@ pub struct APU {
 impl APU {
     pub fn new() -> Self {
         let (command_tx, command_rx) = channel();
-        let (port_data_tx, port_data_rx) = channel();
+
+        let ports = [Arc::new(Mutex::new(0)), Arc::new(Mutex::new(0)), Arc::new(Mutex::new(0)), Arc::new(Mutex::new(0))];
 
         APU {
             command_tx:     command_tx,
-            port_data_rx:   port_data_rx,
 
-            port_0:         0,
-            port_1:         0,
-            port_2:         0,
-            port_3:         0,
+            port_0:         ports[0].clone(),
+            port_1:         ports[1].clone(),
+            port_2:         ports[2].clone(),
+            port_3:         ports[3].clone(),
 
-            spc_thread:     SPCThread::new(command_rx, port_data_tx)
+            spc_thread:     SPCThread::new(command_rx, ports)
         }
     }
 
@@ -48,23 +50,19 @@ impl APU {
     }
 
     pub fn read_port_0(&mut self) -> u8 {
-        self.refresh_ports();
-        self.port_0
+        *self.port_0.lock().unwrap()
     }
 
     pub fn read_port_1(&mut self) -> u8 {
-        self.refresh_ports();
-        self.port_1
+        *self.port_1.lock().unwrap()
     }
 
     pub fn read_port_2(&mut self) -> u8 {
-        self.refresh_ports();
-        self.port_2
+        *self.port_2.lock().unwrap()
     }
 
     pub fn read_port_3(&mut self) -> u8 {
-        self.refresh_ports();
-        self.port_3
+        *self.port_3.lock().unwrap()
     }
 
     pub fn write_port_0(&mut self, data: u8) {
@@ -81,21 +79,5 @@ impl APU {
 
     pub fn write_port_3(&mut self, data: u8) {
         self.command_tx.send(SPCCommand::Port3Write(data)).unwrap();
-    }
-}
-
-impl APU {
-    // Check port data to see if there is anything new and store the latest data.
-    fn refresh_ports(&mut self) {
-        use SPCPortData::*;
-
-        for d in self.port_data_rx.try_iter() {
-            match d {
-                Port0(d) => self.port_0 = d,
-                Port1(d) => self.port_1 = d,
-                Port2(d) => self.port_2 = d,
-                Port3(d) => self.port_3 = d,
-            }
-        }
     }
 }

@@ -406,7 +406,7 @@ impl MemBus {
 }
 
 // Amount of cycles to wait before telling the APU to clock.
-const APU_CYCLE_BATCH: usize = 300;
+const APU_CYCLE_BATCH: usize = 100;
 
 // Address Bus B, used for hardware registers.
 struct AddrBusB {
