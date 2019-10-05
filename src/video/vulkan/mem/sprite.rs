@@ -11,12 +11,6 @@ use super::super::{
 
 use std::sync::Arc;
 
-const PRIORITY_BITS: u8 = bits![5, 4];
-const PRIORITY_0: u8 = 0 << 4;
-const PRIORITY_1: u8 = 1 << 4;
-const PRIORITY_2: u8 = 2 << 4;
-const PRIORITY_3: u8 = 3 << 4;
-
 const Y_FLIP_BIT: u32 = 15;
 const X_FLIP_BIT: u32 = 14;
 
@@ -85,24 +79,12 @@ impl SpriteMem {
         }
     }
 
-    pub fn get_vertex_buffer_0(&mut self, priority: usize, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
-        self.make_vertex_buffer(match priority {
-            0 => PRIORITY_0,
-            1 => PRIORITY_1,
-            2 => PRIORITY_2,
-            3 => PRIORITY_3,
-            _ => unreachable!()
-        }, 0, y, oam_hi, oam_lo)
+    pub fn get_vertex_buffer_0(&mut self, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
+        self.make_vertex_buffer(0, y, oam_hi, oam_lo)
     }
 
-    pub fn get_vertex_buffer_n(&mut self, priority: usize, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
-        self.make_vertex_buffer(match priority {
-            0 => PRIORITY_0,
-            1 => PRIORITY_1,
-            2 => PRIORITY_2,
-            3 => PRIORITY_3,
-            _ => unreachable!()
-        }, 1, y, oam_hi, oam_lo)
+    pub fn get_vertex_buffer_n(&mut self, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
+        self.make_vertex_buffer(1, y, oam_hi, oam_lo)
     }
 
     pub fn get_small_tex_size(&self) -> [f32; 2] {
@@ -116,14 +98,12 @@ impl SpriteMem {
 
 // Internal
 impl SpriteMem {
-    // Check each object's priority and add it to the buffer if we need it.
-    fn make_vertex_buffer(&mut self, priority_check: u8, name_table_select: u8, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
+    fn make_vertex_buffer(&mut self, name_table_select: u8, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
         self.buffer.clear();
 
         for lo in (0..oam_lo.len()).step_by(4) {
             let name_table = oam_lo[lo + 3] & 1;
-            let priority = oam_lo[lo + 3] & PRIORITY_BITS;
-            if (priority == priority_check) && (name_table == name_table_select) {
+            if name_table == name_table_select {    // TODO: check the name table in GPU
                 let hi_addr = lo / 16;
                 let shift_amt = ((lo / 4) % 4) * 2;
                 let hi = (oam_hi[hi_addr] >> shift_amt) & bits![1, 0];
@@ -136,7 +116,6 @@ impl SpriteMem {
         } else {
             Some(self.buffer_pool.chunk(self.buffer.drain(..)).unwrap())
         }
-        //None
     }
 
     // Make vertices for a sprite on a line.

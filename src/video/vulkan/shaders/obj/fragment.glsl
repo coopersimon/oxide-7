@@ -19,7 +19,7 @@ void main() {
     uint texel = texture(atlas, texCoord).x;
 
     if (texel == 0) {
-        outColour = vec4(0.0);
+        discard;
     } else {
         // Colour is 0-255.
         uint colour_offset = (PALETTE_SIZE * paletteNum) + texel;
@@ -35,5 +35,4 @@ void main() {
 
         outColour = vec4(red, green, blue, 1.0);
     }
-    //outColour = vec4(1.0, 0.0, 0.0, 1.0);
 }

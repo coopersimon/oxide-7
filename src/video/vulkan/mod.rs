@@ -12,9 +12,11 @@ use vulkano::{
     device::{
         Device, DeviceExtensions, Queue
     },
+    format::Format::D16Unorm,   // TODO: is this the best format?
     framebuffer::{
         Framebuffer, Subpass, FramebufferAbstract, RenderPassAbstract
     },
+    image::attachment::AttachmentImage,
     pipeline::{
         GraphicsPipeline,
         viewport::Viewport,
@@ -61,7 +63,7 @@ use super::{
 use mem::MemoryCache;
 use types::*;
 
-const FRAME_TIME: i64 = 16_666;
+//const FRAME_TIME: i64 = 16_666;
 
 // Data for a single render
 struct RenderData {
@@ -94,9 +96,9 @@ pub struct Renderer {
     previous_frame_future: Box<dyn GpuFuture>,
     render_data: Option<RenderData>,
 
-    time:           SystemTime,
+    //time:           SystemTime,
 
-    frame_time:     DateTime<Utc>,
+    //frame_time:     DateTime<Utc>,
 }
 
 impl Renderer {
@@ -138,7 +140,7 @@ impl Renderer {
             .expect("Couldn't create surface");
 
         // Get a swapchain and images for use with the swapchain, as well as the dynamic state.
-        let ((swapchain, images), dynamic_state) = {
+        let ((swapchain, images), dynamic_state, depth_buffer) = {
 
             let caps = surface.capabilities(physical)
                     .expect("Failed to get surface capabilities");
@@ -158,7 +160,12 @@ impl Renderer {
                     depth_range: 0.0 .. 1.0,
                 }]),
                 .. DynamicState::none()
-            })
+            },
+            AttachmentImage::transient(
+                device.clone(),
+                dimensions,
+                D16Unorm
+            ).unwrap())
         };
 
         // Make the render pass to insert into the command queue.
@@ -167,13 +174,19 @@ impl Renderer {
                 color: {
                     load: Clear,
                     store: Store,
-                    format: swapchain.format(),//Format::R8G8B8A8Unorm,
+                    format: swapchain.format(),
+                    samples: 1,
+                },
+                depth: {
+                    load: Clear,
+                    store: DontCare,
+                    format: D16Unorm,
                     samples: 1,
                 }
             },
             pass: {
                 color: [color],
-                depth_stencil: {}
+                depth_stencil: {depth}
             }
         ).unwrap()) as Arc<dyn RenderPassAbstract + Send + Sync>;
 
@@ -181,6 +194,7 @@ impl Renderer {
             Arc::new(
                 Framebuffer::start(render_pass.clone())
                     .add(image.clone()).unwrap()
+                    .add(depth_buffer.clone()).unwrap()
                     .build().unwrap()
             ) as Arc<dyn FramebufferAbstract + Send + Sync>
         }).collect::<Vec<_>>();
@@ -195,7 +209,8 @@ impl Renderer {
             .vertex_shader(bg_vs.main_entry_point(), ())
             .viewports_dynamic_scissors_irrelevant(1)
             .fragment_shader(bg_fs.main_entry_point(), ())
-            .blend_alpha_blending()
+            .depth_stencil_simple_depth()
+            //.blend_alpha_blending()
             .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
             .build(device.clone())
             .unwrap()
@@ -211,7 +226,8 @@ impl Renderer {
             .vertex_shader(obj_vs.main_entry_point(), ())
             .viewports_dynamic_scissors_irrelevant(1)
             .fragment_shader(obj_fs.main_entry_point(), ())
-            .blend_alpha_blending()
+            //.blend_alpha_blending()
+            .depth_stencil_simple_depth()
             .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
             .build(device.clone())
             .unwrap()
@@ -233,12 +249,12 @@ impl Renderer {
             framebuffers:   framebuffers,
             dynamic_state:  dynamic_state,
 
-            previous_frame_future: Box::new(now(device)),
-            render_data: None,
+            previous_frame_future:  Box::new(now(device)),
+            render_data:            None,
 
-            time:           SystemTime::now(),
+            //time:           SystemTime::now(),
 
-            frame_time:     Utc::now(),
+            //frame_time:     Utc::now(),
         }
     }
 
@@ -261,12 +277,15 @@ impl Renderer {
             depth_range: 0.0 .. 1.0,
         };
 
+        let depth_buffer = AttachmentImage::transient(self.device.clone(), dimensions, D16Unorm).unwrap();
+
         self.dynamic_state.viewports = Some(vec![viewport]);
 
         self.framebuffers = images.iter().map(|image| {
             Arc::new(
                 Framebuffer::start(self.render_pass.clone())
                     .add(image.clone()).unwrap()
+                    .add(depth_buffer.clone()).unwrap()
                     .build().unwrap()
             ) as Arc<dyn FramebufferAbstract + Send + Sync>
         }).collect::<Vec<_>>();
@@ -278,8 +297,8 @@ impl Renderer {
 impl Renderable for Renderer {
     fn frame_start(&mut self) {
         //println!("Frame time: {:?}", now.duration_since(self.time));
-        let now = SystemTime::now();
-        self.time = now;
+        //let now = SystemTime::now();
+        //self.time = now;
 
         self.previous_frame_future.cleanup_finished();
 
@@ -289,7 +308,7 @@ impl Renderable for Renderer {
         
         // Start building command buffer using framebuffer.
         let command_buffer_builder = AutoCommandBufferBuilder::primary_one_time_submit(self.device.clone(), self.queue.family()).unwrap()
-            .begin_render_pass(self.framebuffers[image_num].clone(), false, vec![[0.0, 0.0, 0.0, 1.0].into()]).unwrap();
+            .begin_render_pass(self.framebuffers[image_num].clone(), false, vec![[0.0, 0.0, 0.0, 1.0].into(), 1.0.into()]).unwrap();
 
         /*let (debug_buffer, debug_future) = ImmutableBuffer::from_iter(
             vec![
@@ -394,8 +413,8 @@ impl Renderable for Renderer {
                 Err(e) => println!("Err: {:?}", e),
             }
 
-            while (Utc::now() - self.frame_time) < Duration::microseconds(FRAME_TIME) {}
-            self.frame_time = Utc::now();
+            //while (Utc::now() - self.frame_time) < Duration::microseconds(FRAME_TIME) {}
+            //self.frame_time = Utc::now();
         }
     }
 }
@@ -465,11 +484,11 @@ impl RenderData {
         };
 
         // Push constants
-        let bg_4_push_constants = mem.get_bg_push_constants(3);
-        let bg_3_push_constants = mem.get_bg_push_constants(2);
-        let bg_2_push_constants = mem.get_bg_push_constants(1);
-        let bg_1_push_constants = mem.get_bg_push_constants(0);
-        let obj_push_constants = mem.get_obj_push_constants();
+        let bg_4_push_constants = mem.get_bg_push_constants(3, [1.0, 0.8]);
+        let bg_3_push_constants = mem.get_bg_push_constants(2, [0.9, 0.7]);
+        let bg_2_push_constants = mem.get_bg_push_constants(1, [0.5, 0.2]);
+        let bg_1_push_constants = mem.get_bg_push_constants(0, [0.4, 0.1]);
+        let obj_push_constants = mem.get_obj_push_constants([0.85, 0.6, 0.3, 0.0]);
 
         // Draw
         let bg_4_y = mem.calc_y_line(3, y);
@@ -481,7 +500,7 @@ impl RenderData {
             bg_4_vertices.clone(),
             bg_4_indices.clone(),
             (bg_4_tiles.clone(), bg_palettes.clone()),
-            bg_4_push_constants.clone()
+            bg_4_push_constants
         ).unwrap();
 
         let bg_3_y = mem.calc_y_line(2, y);
@@ -493,66 +512,8 @@ impl RenderData {
             bg_3_vertices.clone(),
             bg_3_indices.clone(),
             (bg_3_tiles.clone(), bg_palettes.clone()),
-            bg_3_push_constants.clone()
+            bg_3_push_constants
         ).unwrap();
-
-        if let Some(sprites_0) = mem.get_sprite_vertices_0(0, y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites_0,
-                (obj_0_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
-            ).unwrap();
-        }
-
-        if let Some(sprites_0) = mem.get_sprite_vertices_n(0, y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites_0,
-                (obj_n_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
-            ).unwrap();
-        }
-
-        command_buffer = command_buffer.draw_indexed(
-            self.bg_pipeline.clone(),
-            dynamic_state,
-            bg_4_vertices,
-            bg_4_indices,
-            (bg_4_tiles.clone(), bg_palettes.clone()),
-            bg_4_push_constants.set_priority()
-        ).unwrap();
-
-        command_buffer = command_buffer.draw_indexed(
-            self.bg_pipeline.clone(),
-            dynamic_state,
-            bg_3_vertices,
-            bg_3_indices,
-            (bg_3_tiles.clone(), bg_palettes.clone()),
-            bg_3_push_constants.set_priority()
-        ).unwrap();
-
-        if let Some(sprites_1) = mem.get_sprite_vertices_0(1, y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites_1,
-                (obj_0_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
-            ).unwrap();
-        }
-
-        if let Some(sprites_1) = mem.get_sprite_vertices_n(1, y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites_1,
-                (obj_n_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
-            ).unwrap();
-        }
 
         let bg_2_y = mem.calc_y_line(1, y);
         let bg_2_vertices = mem.get_bg_vertex_buffer(1);
@@ -563,7 +524,7 @@ impl RenderData {
             bg_2_vertices.clone(),
             bg_2_indices.clone(),
             (bg_2_tiles.clone(), bg_palettes.clone()),
-            bg_2_push_constants.clone()
+            bg_2_push_constants
         ).unwrap();
 
         let bg_1_y = mem.calc_y_line(0, y);
@@ -575,64 +536,26 @@ impl RenderData {
             bg_1_vertices.clone(),
             bg_1_indices.clone(),
             (bg_1_tiles.clone(), bg_palettes.clone()),
-            bg_1_push_constants.clone()
+            bg_1_push_constants
         ).unwrap();
 
-        if let Some(sprites_2) = mem.get_sprite_vertices_0(2, y) {
+        if let Some(sprites) = mem.get_sprite_vertices_0(y) {
             command_buffer = command_buffer.draw(
                 self.obj_pipeline.clone(),
                 dynamic_state,
-                sprites_2,
+                sprites,
                 (obj_0_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
 
-        if let Some(sprites_2) = mem.get_sprite_vertices_n(2, y) {
+        if let Some(sprites) = mem.get_sprite_vertices_n(y) {
             command_buffer = command_buffer.draw(
                 self.obj_pipeline.clone(),
                 dynamic_state,
-                sprites_2,
+                sprites,
                 (obj_n_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
-            ).unwrap();
-        }
-
-        command_buffer = command_buffer.draw_indexed(
-            self.bg_pipeline.clone(),
-            dynamic_state,
-            bg_2_vertices,
-            bg_2_indices,
-            (bg_2_tiles.clone(), bg_palettes.clone()),
-            bg_2_push_constants.set_priority()
-        ).unwrap();
-
-        command_buffer = command_buffer.draw_indexed(
-            self.bg_pipeline.clone(),
-            dynamic_state,
-            bg_1_vertices,
-            bg_1_indices,
-            (bg_1_tiles.clone(), bg_palettes.clone()),
-            bg_1_push_constants.set_priority()
-        ).unwrap();
-
-        if let Some(sprites_3) = mem.get_sprite_vertices_0(3, y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites_3,
-                (obj_0_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
-            ).unwrap();
-        }
-
-        if let Some(sprites_3) = mem.get_sprite_vertices_n(3, y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites_3,
-                (obj_n_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
+                obj_push_constants
             ).unwrap();
         }
 
@@ -694,12 +617,12 @@ impl RenderData {
         };
 
         // Push constants
-        let bg_3_push_constants = mem.get_bg_push_constants(2);
-        let bg_2_push_constants = mem.get_bg_push_constants(1);
-        let bg_1_push_constants = mem.get_bg_push_constants(0);
-        let obj_push_constants = mem.get_obj_push_constants();
+        let bg_3_push_constants = mem.get_bg_push_constants(2, [0.95, if mem.get_bg3_priority() {0.0} else {0.8}]);
+        let bg_2_push_constants = mem.get_bg_push_constants(1, [0.6, 0.3]);
+        let bg_1_push_constants = mem.get_bg_push_constants(0, [0.5, 0.2]);
+        let obj_push_constants = mem.get_obj_push_constants([0.9, 0.7, 0.4, 0.1]);
 
-        // Draw
+        // Draw backgrounds
         let bg_3_y = mem.calc_y_line(2, y);
         let bg_3_vertices = mem.get_bg_vertex_buffer(2);
         let bg_3_indices = mem.get_bg_index_buffer(2, bg_3_y);
@@ -709,59 +632,8 @@ impl RenderData {
             bg_3_vertices.clone(),
             bg_3_indices.clone(),
             (bg_3_tiles.clone(), bg_palettes.clone()),
-            bg_3_push_constants.clone()
+            bg_3_push_constants
         ).unwrap();
-
-        if let Some(sprites_0) = mem.get_sprite_vertices_0(0, y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites_0,
-                (obj_0_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
-            ).unwrap();
-        }
-
-        if let Some(sprites_0) = mem.get_sprite_vertices_n(0, y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites_0,
-                (obj_n_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
-            ).unwrap();
-        }
-
-        if !mem.get_bg3_priority() {
-            command_buffer = command_buffer.draw_indexed(
-                self.bg_pipeline.clone(),
-                dynamic_state,
-                bg_3_vertices.clone(),
-                bg_3_indices.clone(),
-                (bg_3_tiles.clone(), bg_palettes.clone()),
-                bg_3_push_constants.set_priority()
-            ).unwrap();
-        }
-
-        if let Some(sprites_1) = mem.get_sprite_vertices_0(1, y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites_1,
-                (obj_0_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
-            ).unwrap();
-        }
-
-        if let Some(sprites_1) = mem.get_sprite_vertices_n(1, y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites_1,
-                (obj_n_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
-            ).unwrap();
-        }
 
         let bg_2_y = mem.calc_y_line(1, y);
         let bg_2_vertices = mem.get_bg_vertex_buffer(1);
@@ -772,7 +644,7 @@ impl RenderData {
             bg_2_vertices.clone(),
             bg_2_indices.clone(),
             (bg_2_tiles.clone(), bg_palettes.clone()),
-            bg_2_push_constants.clone()
+            bg_2_push_constants
         ).unwrap();
 
         let bg_1_y = mem.calc_y_line(0, y);
@@ -784,75 +656,27 @@ impl RenderData {
             bg_1_vertices.clone(),
             bg_1_indices.clone(),
             (bg_1_tiles.clone(), bg_palettes.clone()),
-            bg_1_push_constants.clone()
+            bg_1_push_constants
         ).unwrap();
 
-        if let Some(sprites_2) = mem.get_sprite_vertices_0(2, y) {
+        // Draw sprites.
+        if let Some(sprites) = mem.get_sprite_vertices_0(y) {
             command_buffer = command_buffer.draw(
                 self.obj_pipeline.clone(),
                 dynamic_state,
-                sprites_2,
+                sprites,
                 (obj_0_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
             ).unwrap();
         }
 
-        if let Some(sprites_2) = mem.get_sprite_vertices_n(2, y) {
+        if let Some(sprites) = mem.get_sprite_vertices_n(y) {
             command_buffer = command_buffer.draw(
                 self.obj_pipeline.clone(),
                 dynamic_state,
-                sprites_2,
+                sprites,
                 (obj_n_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
-            ).unwrap();
-        }
-
-        command_buffer = command_buffer.draw_indexed(
-            self.bg_pipeline.clone(),
-            dynamic_state,
-            bg_2_vertices,
-            bg_2_indices,
-            (bg_2_tiles.clone(), bg_palettes.clone()),
-            bg_2_push_constants.set_priority()
-        ).unwrap();
-
-        command_buffer = command_buffer.draw_indexed(
-            self.bg_pipeline.clone(),
-            dynamic_state,
-            bg_1_vertices,
-            bg_1_indices,
-            (bg_1_tiles.clone(), bg_palettes.clone()),
-            bg_1_push_constants.set_priority()
-        ).unwrap();
-
-        if let Some(sprites_3) = mem.get_sprite_vertices_0(3, y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites_3,
-                (obj_0_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
-            ).unwrap();
-        }
-
-        if let Some(sprites_3) = mem.get_sprite_vertices_n(3, y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites_3,
-                (obj_n_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
-            ).unwrap();
-        }
-
-        if mem.get_bg3_priority() {
-            command_buffer = command_buffer.draw_indexed(
-                self.bg_pipeline.clone(),
-                dynamic_state,
-                bg_3_vertices,
-                bg_3_indices,
-                (bg_3_tiles.clone(), bg_palettes.clone()),
-                bg_3_push_constants.set_priority()
+                obj_push_constants
             ).unwrap();
         }
 

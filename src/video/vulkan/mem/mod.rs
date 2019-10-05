@@ -68,12 +68,16 @@ impl MemoryCache {
             PatternMem::new(queue, PATTERN_WIDTH, 0, BitsPerPixel::_2)   // BG 4 can only be 2 BPP
         ];
 
-        let tile_maps = [
+        let mut tile_maps = [
             TileMap::new(device, queue, 0, false),
             TileMap::new(device, queue, 0, false),
             TileMap::new(device, queue, 0, false),
             TileMap::new(device, queue, 0, false)
         ];
+
+        for map in tile_maps.iter_mut() {
+            map.update(&vram.borrow());
+        }
 
         MemoryCache {
             native_mem:     vram,
@@ -191,28 +195,21 @@ impl MemoryCache {
     }
 
     // Retrieve structures.
-    // Get texture for a bg.
+    // Get texture for a BG.
     pub fn get_bg_image(&mut self, bg_num: usize) -> (ImageDescriptorSet, Option<PatternFuture>) {
         let mem = self.native_mem.borrow();
         self.pattern_mem[bg_num].get_image(&mem, &mut self.uniform_cache, true)
     }
 
+    // Get vertices for a BG.
     pub fn get_bg_vertex_buffer(&mut self, bg_num: usize) -> VertexBuffer {
         self.tile_maps[bg_num].get_vertex_buffer()
     }
 
+    // Get indices for a line of a BG.
     pub fn get_bg_index_buffer(&mut self, bg_num: usize, y: u16) -> Arc<ImmutableBuffer<[u32]>> {
         self.tile_maps[bg_num].get_index_buffer(y)
     }
-
-    // Get vertices for a line on a bg.
-    /*pub fn get_bg_lo_vertices(&mut self, bg_num: usize, y: u16) -> Option<VertexBuffer> {
-        self.tile_maps[bg_num].get_lo_vertex_buffer(y)
-    }
-
-    pub fn get_bg_hi_vertices(&mut self, bg_num: usize, y: u16) -> Option<VertexBuffer> {
-        self.tile_maps[bg_num].get_hi_vertex_buffer(y)
-    }*/
 
     // Get texture for sprites.
     pub fn get_sprite_image_0(&mut self) -> (ImageDescriptorSet, Option<PatternFuture>) {
@@ -226,16 +223,16 @@ impl MemoryCache {
     }
 
     // Get vertices for a line of sprites.
-    pub fn get_sprite_vertices_0(&mut self, priority: usize, y: u16) -> Option<VertexBuffer> {
+    pub fn get_sprite_vertices_0(&mut self, y: u16) -> Option<VertexBuffer> {
         let mut mem = self.native_mem.borrow_mut();
         let (oam_hi, oam_lo) = mem.get_oam();
-        self.obj_mem.get_vertex_buffer_0(priority, y as u8, oam_hi, oam_lo)
+        self.obj_mem.get_vertex_buffer_0(y as u8, oam_hi, oam_lo)
     }
 
-    pub fn get_sprite_vertices_n(&mut self, priority: usize, y: u16) -> Option<VertexBuffer> {
+    pub fn get_sprite_vertices_n(&mut self, y: u16) -> Option<VertexBuffer> {
         let mut mem = self.native_mem.borrow_mut();
         let (oam_hi, oam_lo) = mem.get_oam();
-        self.obj_mem.get_vertex_buffer_n(priority, y as u8, oam_hi, oam_lo)
+        self.obj_mem.get_vertex_buffer_n(y as u8, oam_hi, oam_lo)
     }
 
     // Get the palettes.
@@ -278,7 +275,7 @@ impl MemoryCache {
         y.wrapping_add(scroll_y) % height
     }
 
-    pub fn get_bg_push_constants(&self, bg_num: usize) -> super::BGPushConstants {
+    pub fn get_bg_push_constants(&self, bg_num: usize, depth: [f32; 2]) -> super::BGPushConstants {
         let atlas_size_pixels = self.pattern_mem[bg_num].get_size();
         let tile_height = self.tile_maps[bg_num].get_tile_height() as f32;
 
@@ -292,27 +289,24 @@ impl MemoryCache {
         let vertex_offset_x = (self.get_scroll_x(bg_num) as f32) * SCROLL_X_FRAC;
         let vertex_offset_y = (self.get_scroll_y(bg_num) as f32) * SCROLL_Y_FRAC;
 
-        let pc = super::BGPushConstants {
+        super::BGPushConstants {
             tex_size:           [tex_size_x, tex_size_y],     // X: 1/16 for 8x8 tile, 1/8 for 16x16 tile
             atlas_size:         atlas_size_tiles,
             tile_size:          [tile_height / 128.0, 1.0 / 112.0],
             map_size:           [map_size.0, map_size.1],
             vertex_offset:      [vertex_offset_x, vertex_offset_y],
-            palette_offset:     0,  // TODO: offset for each bg for mode 0? (32 per bg)
+            depth:              depth,
+            palette_offset:     if self.mode == VideoMode::_0 { (bg_num * 32) as u32 } else { 0 },
             palette_size:       1 << (self.pattern_mem[bg_num].get_bits_per_pixel() as u32),
-            priority:           0,
             tex_pixel_height:   tile_height,
-        };
-
-        //println!("PC for {}, {:?}", bg_num, pc);
-
-        pc
+        }
     }
 
-    pub fn get_obj_push_constants(&self) -> super::ObjPushConstants {
+    pub fn get_obj_push_constants(&self, depth: [f32; 4]) -> super::ObjPushConstants {
         super::ObjPushConstants {
+            depth:          depth,
             small_tex_size: self.obj_mem.get_small_tex_size(),
-            large_tex_size: self.obj_mem.get_large_tex_size()
+            large_tex_size: self.obj_mem.get_large_tex_size(),
         }
     }
 

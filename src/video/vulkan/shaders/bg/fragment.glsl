@@ -16,9 +16,9 @@ layout(push_constant) uniform PushConstants {
     vec2 tile_size;
     vec2 map_size;
     vec2 vertex_offset;
+    vec2 depth;
     uint palette_offset;
     uint palette_size;
-    uint priority;
     float tex_pixel_height;
 } push_constants;
 
@@ -28,7 +28,7 @@ void main() {
     uint texel = texture(atlas, texCoord).x;
 
     if (texel == 0) {
-        outColour = vec4(0.0);
+        discard;
     } else {
         // Colour is 0-255.
         uint colour_offset = push_constants.palette_offset + (push_constants.palette_size * paletteNum) + texel;

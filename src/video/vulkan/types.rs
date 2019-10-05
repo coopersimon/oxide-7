@@ -48,25 +48,40 @@ pub struct BGPushConstants {
     pub atlas_size:     [f32; 2],   // Size of texture atlas in tiles.
     pub tile_size:      [f32; 2],   // Width of tile relative to the viewport, height of line relative to the viewport.
     pub map_size:       [f32; 2],   // Size of tile map relative to the viewport.
-    pub vertex_offset:  [f32; 2],   // Offset to apply to vertices for scrolling.   // TODO: use a different shader for sprites.
+    pub vertex_offset:  [f32; 2],   // Offset to apply to vertices for scrolling.
+    pub depth:          [f32; 2],   // Depth of layer, lo and hi priority.
     pub palette_offset: u32,        // Offset for palette used by BG (in colours).
     pub palette_size:   u32,        // Size of palettes used.
-    pub priority:       u32,        // Either 0 or 1<<13
-    pub tex_pixel_height: f32       // Height of individual tile in pixels.
+    pub tex_pixel_height: f32,      // Height of individual tile in pixels.
 }
 
-impl BGPushConstants {
-    pub fn set_priority(mut self) -> BGPushConstants {
+/*impl BGPushConstants {
+    /*pub fn set_priority(mut self) -> BGPushConstants {
         self.priority = 1 << 13;
         self
+    }*/
+    pub fn set_depth(mut self, new_depth: f32) -> BGPushConstants {
+        self.depth = new_depth;
+        self
     }
-}
+}*/
 
 // Push constants used in Sprite shaders.
 #[derive(Copy, Clone, Debug)]
 pub struct ObjPushConstants {
+    pub depth:          [f32; 4],
     pub small_tex_size: [f32; 2],
     pub large_tex_size: [f32; 2],
 }
+
+/*impl ObjPushConstants {
+    /*pub fn set_priority(mut self) -> BGPushConstants {
+        self.priority = 1 << 13;
+        self
+    }*/
+    pub fn set_depth(&mut self, new_depth: f32) {
+        self.depth = new_depth;
+    }
+}*/
 
 pub type VertexBuffer = CpuBufferPoolChunk<Vertex, Arc<StdMemoryPool>>;

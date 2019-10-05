@@ -26,6 +26,7 @@ layout(location = 0) in vec2 position;
 layout(location = 1) in uint data;
 
 layout(push_constant) uniform PushConstants {
+    vec4 depth;
     vec2 small_tex_size;
     vec2 large_tex_size;
 } push_constants;
@@ -35,7 +36,8 @@ layout(location = 0) out vec2 texCoordOut;
 layout(location = 1) out uint paletteNumOut;
 
 void main() {
-    gl_Position = vec4(position, 0.0, 1.0);
+    uint priority = (data >> 12) & 3;
+    gl_Position = vec4(position, push_constants.depth[priority], 1.0);
 
     texCoordOut = calc_tex_coords(data);
 

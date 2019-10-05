@@ -6,9 +6,6 @@ const float VIEW_HEIGHT = 1.0;
 
 const uint TEX_ROW_SIZE = 16;
 
-// Priority bit
-const uint PRIORITY     = 1 << 13;
-
 // Tex side enum
 const uint TEX_LEFT     = 0 << 16;
 const uint TEX_RIGHT    = 1 << 16;
@@ -33,9 +30,9 @@ layout(push_constant) uniform PushConstants {
     vec2 tile_size;
     vec2 map_size;
     vec2 vertex_offset;
+    vec2 depth;
     uint palette_offset;
     uint palette_size;
-    uint priority;
     float tex_pixel_height;
 } push_constants;
 
@@ -44,23 +41,20 @@ layout(location = 0) out vec2 texCoordOut;
 layout(location = 1) out uint paletteNumOut;
 
 void main() {
-    if((data & PRIORITY) == push_constants.priority) {
-        // Vertex position offset with scroll / position
-        vec2 vertex_position = position + push_constants.vertex_offset;
+    // Vertex position offset with scroll / position
+    vec2 vertex_position = position + push_constants.vertex_offset;
 
-        // Calculate wraparound.
-        uint vertex_side = data & (1 << 21);
-        uint tex_y = (data >> 17) % 16;
-        vertex_position = calc_vertex_wraparound(vertex_position, vertex_side, tex_y);
+    // Calculate wraparound.
+    uint vertex_side = data & (1 << 21);
+    uint tex_y = (data >> 17) % 16;
+    vertex_position = calc_vertex_wraparound(vertex_position, vertex_side, tex_y);
 
-        gl_Position = vec4(vertex_position, 0.0, 1.0);
+    uint priority = (data >> 13) & 1;
+    gl_Position = vec4(vertex_position, push_constants.depth[priority], 1.0);
 
-        texCoordOut = calc_tex_coords(data);
+    texCoordOut = calc_tex_coords(data);
 
-        paletteNumOut = (data >> 10) & 7;
-    } else {
-        gl_Position = vec4(0.0, 0.0, 0.0, 0.0);
-    }
+    paletteNumOut = (data >> 10) & 7;
 }
 
 // Wraparound vertex if they overflow.
