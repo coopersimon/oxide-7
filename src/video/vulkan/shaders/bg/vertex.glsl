@@ -17,7 +17,7 @@ const uint VERTEX_RIGHT = 1 << 21;
 // Functions
 vec2 calc_vertex_wraparound(vec2, uint, uint);
 vec2 calc_vertex_compare(vec2, uint, uint);
-vec2 calc_tex_coords(uint);
+vec2 calc_tex_coords(uint, uint);
 vec2 get_tex_offset(uint, uint);
 
 // Input
@@ -45,14 +45,14 @@ void main() {
     vec2 vertex_position = position + push_constants.vertex_offset;
 
     // Calculate wraparound.
-    uint vertex_side = data & (1 << 21);
     uint tex_y = (data >> 17) % 16;
+    uint vertex_side = data & VERTEX_RIGHT;
     vertex_position = calc_vertex_wraparound(vertex_position, vertex_side, tex_y);
 
     uint priority = (data >> 13) & 1;
     gl_Position = vec4(vertex_position, push_constants.depth[priority], 1.0);
 
-    texCoordOut = calc_tex_coords(data);
+    texCoordOut = calc_tex_coords(data, tex_y);
 
     paletteNumOut = (data >> 10) & 7;
 }
@@ -87,18 +87,14 @@ vec2 calc_vertex_wraparound(vec2 vertex_coords, uint side, uint y) {
 // Get top-left position of tile.
 vec2 calc_vertex_compare(vec2 vertex_coords, uint side, uint y) {
     float y_offset = float(y) * push_constants.tile_size.y;  // Y = 0-15
-    switch(side) {
-        case VERTEX_LEFT:   return vertex_coords - vec2(0.0, y_offset);
-        default:            return vertex_coords - vec2(push_constants.tile_size.x, y_offset);
-    }
+    return vertex_coords - (side == VERTEX_LEFT ? vec2(0.0, y_offset) : vec2(push_constants.tile_size.x, y_offset));
 }
 
 // Get texture coordinates from tex number and x and y pos of tile.
-vec2 calc_tex_coords(uint tex_data) {
+vec2 calc_tex_coords(uint tex_data, uint tex_y) {
 // Unpack texture information
     uint tex_num = tex_data & 0x3FF;
-    uint tex_side = tex_data & 0x10000;
-    uint tex_y = (tex_data >> 17) % 16;
+    uint tex_side = tex_data & TEX_RIGHT;
 // Convert to 2D coords
     float x = float(tex_num % TEX_ROW_SIZE) / push_constants.atlas_size.x;
     float y = float(tex_num / TEX_ROW_SIZE) / push_constants.atlas_size.y;
@@ -109,8 +105,5 @@ vec2 calc_tex_coords(uint tex_data) {
 // Get texture position based on vertex position.
 vec2 get_tex_offset(uint side, uint y) {
     float y_offset = (float(y) / push_constants.tex_pixel_height) * push_constants.tex_size.y;
-    switch (side) {
-        case TEX_LEFT:  return vec2(0.0, y_offset);
-        default:        return vec2(push_constants.tex_size.x, y_offset);
-    }
+    return side == TEX_LEFT ? vec2(0.0, y_offset) : vec2(push_constants.tex_size.x, y_offset);
 }

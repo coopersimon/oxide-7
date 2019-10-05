@@ -50,13 +50,9 @@ vec2 calc_tex_coords(uint tex_data) {
     uint tex_num = tex_data & 0xFF;
     uint side = tex_data & 0x10000;
     uint tex_y = (tex_data >> 17) % 64;
-    uint large_tex = tex_data & (1 << 23);
+    uint large_tex = tex_data & LARGE;
 
-    vec2 tex_size;
-    switch(large_tex) {
-        case SMALL: tex_size = push_constants.small_tex_size;
-        default:    tex_size = push_constants.large_tex_size;
-    }
+    vec2 tex_size = large_tex == SMALL ? push_constants.small_tex_size : push_constants.large_tex_size;
 
 // Convert to 2D coords
     float x = float(tex_num % TEX_ROW_SIZE) / ATLAS_SIZE_X;
@@ -68,8 +64,5 @@ vec2 calc_tex_coords(uint tex_data) {
 // Get texture position based on vertex position.
 vec2 get_tex_offset(uint side, uint y, vec2 tex_size) {
     float y_offset = float(y) * LINE_HEIGHT;
-    switch (side) {
-        case LEFT:  return vec2(0.0, y_offset);
-        default:    return vec2(tex_size.x, y_offset);
-    }
+    return side == LEFT ? vec2(0.0, y_offset) : vec2(tex_size.x, y_offset);
 }
