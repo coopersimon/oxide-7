@@ -1,7 +1,7 @@
 // Converting native VRAM, CGRAM and OAM into Vulkan structures.
 
 pub mod palette;
-pub mod patternmem;
+pub mod texturecache;
 mod sprite;
 mod tilemap;
 
@@ -15,7 +15,10 @@ use vulkano::{
 
 use std::sync::Arc;
 
-use crate::video::VRamRef;
+use crate::video::{
+    VRamRef,
+    patternmem::BitsPerPixel
+};
 
 use super::{
     uniforms::UniformCache,
@@ -23,10 +26,10 @@ use super::{
     super::VideoMode
 };
 
-use patternmem::*;
 use tilemap::*;
 use sprite::*;
 use palette::*;
+use texturecache::*;
 
 const PATTERN_WIDTH: u32 = 16 * 8; // Pattern width in pixels (16 tiles)
 const PATTERN_HEIGHT: u32 = 64 * 8; // Pattern height in pixels (16 tiles)
@@ -44,12 +47,11 @@ pub struct MemoryCache {
     bg3_priority:   bool,
 
     // Internal mem
-    pattern_mem:    [PatternMem; 4],
+    pattern_mem:    [BGTexCache; 4],
     tile_maps:      [TileMap; 4],
 
     obj_mem:        SpriteMem,
-    obj0_pattern:   PatternMem,
-    objn_pattern:   PatternMem,
+    obj_pattern:    ObjTexCache,
 
     palette:        Palette,
 
@@ -62,10 +64,10 @@ pub struct MemoryCache {
 impl MemoryCache {
     pub fn new(vram: VRamRef, device: &Arc<Device>, queue: &Arc<Queue>, uniform_cache: UniformCache) -> Self {
         let pattern_mem = [
-            PatternMem::new(queue, PATTERN_WIDTH, 0, BitsPerPixel::_2),  // BG 1 can be 2, 4 or 8 BPP
-            PatternMem::new(queue, PATTERN_WIDTH, 0, BitsPerPixel::_2),  // BG 2 can be 2, 4 or 7 BPP
-            PatternMem::new(queue, PATTERN_WIDTH, 0, BitsPerPixel::_2),  // BG 3 can only be 2 BPP
-            PatternMem::new(queue, PATTERN_WIDTH, 0, BitsPerPixel::_2)   // BG 4 can only be 2 BPP
+            BGTexCache::new(queue, PATTERN_WIDTH, 0, BitsPerPixel::_2),  // BG 1 can be 2, 4 or 8 BPP
+            BGTexCache::new(queue, PATTERN_WIDTH, 0, BitsPerPixel::_2),  // BG 2 can be 2, 4 or 7 BPP
+            BGTexCache::new(queue, PATTERN_WIDTH, 0, BitsPerPixel::_2),  // BG 3 can only be 2 BPP
+            BGTexCache::new(queue, PATTERN_WIDTH, 0, BitsPerPixel::_2)   // BG 4 can only be 2 BPP
         ];
 
         let mut tile_maps = [
@@ -89,8 +91,7 @@ impl MemoryCache {
             tile_maps:      tile_maps,
 
             obj_mem:        SpriteMem::new(device),
-            obj0_pattern:   PatternMem::new(queue, PATTERN_WIDTH, PATTERN_WIDTH, BitsPerPixel::_4),
-            objn_pattern:   PatternMem::new(queue, PATTERN_WIDTH, PATTERN_WIDTH, BitsPerPixel::_4),
+            obj_pattern:    ObjTexCache::new(device, queue),
 
             palette:        Palette::new(device),
 
@@ -150,11 +151,11 @@ impl MemoryCache {
 
         // Check OAM dirtiness (always recreate for now TODO: caching of object vertices)
         self.obj_mem.check_and_set_obj_settings(regs.get_object_settings());
-        if self.obj0_pattern.get_start_addr() != regs.obj0_pattern_addr() {
-            self.obj0_pattern.set_addr(regs.obj0_pattern_addr(), PATTERN_WIDTH);
+        if self.obj_pattern.get_start_addr_0() != regs.obj0_pattern_addr() {
+            self.obj_pattern.set_addr_0(regs.obj0_pattern_addr());
         }
-        if self.objn_pattern.get_start_addr() != regs.objn_pattern_addr() {
-            self.objn_pattern.set_addr(regs.objn_pattern_addr(), PATTERN_WIDTH);
+        if self.obj_pattern.get_start_addr_n() != regs.objn_pattern_addr() {
+            self.obj_pattern.set_addr_n(regs.objn_pattern_addr());
         }
 
         self.bg3_priority = regs.get_bg3_priority();
@@ -166,8 +167,7 @@ impl MemoryCache {
             self.pattern_mem[2].clear_image(&mem);
             self.pattern_mem[3].clear_image(&mem);
 
-            self.obj0_pattern.clear_image(&mem);
-            self.objn_pattern.clear_image(&mem);
+            self.obj_pattern.clear_images(&mem);
 
             // Clear tile maps.
             self.tile_maps[0].update(&mem);
@@ -196,9 +196,9 @@ impl MemoryCache {
 
     // Retrieve structures.
     // Get texture for a BG.
-    pub fn get_bg_image(&mut self, bg_num: usize) -> (ImageDescriptorSet, Option<PatternFuture>) {
+    pub fn get_bg_image(&mut self, bg_num: usize) -> (BGImageDescriptorSet, Option<PatternFuture>) {
         let mem = self.native_mem.borrow();
-        self.pattern_mem[bg_num].get_image(&mem, &mut self.uniform_cache, true)
+        self.pattern_mem[bg_num].get_image(&mem, &mut self.uniform_cache)
     }
 
     // Get vertices for a BG.
@@ -212,27 +212,16 @@ impl MemoryCache {
     }
 
     // Get texture for sprites.
-    pub fn get_sprite_image_0(&mut self) -> (ImageDescriptorSet, Option<PatternFuture>) {
+    pub fn get_sprite_images(&mut self) -> (ObjImageDescriptorSet, Option<PatternFuture>) {
         let mem = self.native_mem.borrow();
-        self.obj0_pattern.get_image(&mem, &mut self.uniform_cache, false)
-    }
-
-    pub fn get_sprite_image_n(&mut self) -> (ImageDescriptorSet, Option<PatternFuture>) {
-        let mem = self.native_mem.borrow();
-        self.objn_pattern.get_image(&mem, &mut self.uniform_cache, false)
+        self.obj_pattern.get_images(&mem, &mut self.uniform_cache)
     }
 
     // Get vertices for a line of sprites.
-    pub fn get_sprite_vertices_0(&mut self, y: u16) -> Option<VertexBuffer> {
+    pub fn get_sprite_vertices(&mut self, y: u16) -> Option<VertexBuffer> {
         let mut mem = self.native_mem.borrow_mut();
         let (oam_hi, oam_lo) = mem.get_oam();
-        self.obj_mem.get_vertex_buffer_0(y as u8, oam_hi, oam_lo)
-    }
-
-    pub fn get_sprite_vertices_n(&mut self, y: u16) -> Option<VertexBuffer> {
-        let mut mem = self.native_mem.borrow_mut();
-        let (oam_hi, oam_lo) = mem.get_oam();
-        self.obj_mem.get_vertex_buffer_n(y as u8, oam_hi, oam_lo)
+        self.obj_mem.get_vertex_buffer(y as u8, oam_hi, oam_lo)
     }
 
     // Get the palettes.
@@ -328,54 +317,54 @@ impl MemoryCache {
         self.mode = mode;
         match mode {
             _0 => {
-                self.pattern_mem[0] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2);
+                self.pattern_mem[0] = BGTexCache::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2);
                 if self.pattern_mem[1].get_bits_per_pixel() != BitsPerPixel::_2 {
-                    self.pattern_mem[1] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2);
+                    self.pattern_mem[1] = BGTexCache::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2);
                 }
             },
             _1 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_4 {
-                    self.pattern_mem[0] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4);
+                    self.pattern_mem[0] = BGTexCache::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4);
                 }
                 if self.pattern_mem[1].get_bits_per_pixel() != BitsPerPixel::_4 {
-                    self.pattern_mem[1] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4);
+                    self.pattern_mem[1] = BGTexCache::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4);
                 }
             },
             _2 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_4 {
-                    self.pattern_mem[0] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4);
+                    self.pattern_mem[0] = BGTexCache::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4);
                 }
                 if self.pattern_mem[1].get_bits_per_pixel() != BitsPerPixel::_4 {
-                    self.pattern_mem[1] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4);
+                    self.pattern_mem[1] = BGTexCache::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4);
                 }
             },
             _3 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_8 {
-                    self.pattern_mem[0] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_8);
+                    self.pattern_mem[0] = BGTexCache::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_8);
                 }
                 if self.pattern_mem[1].get_bits_per_pixel() != BitsPerPixel::_4 {
-                    self.pattern_mem[1] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4);
+                    self.pattern_mem[1] = BGTexCache::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4);
                 }
             },
             _4 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_8 {
-                    self.pattern_mem[0] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_8);
+                    self.pattern_mem[0] = BGTexCache::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_8);
                 }
                 if self.pattern_mem[1].get_bits_per_pixel() != BitsPerPixel::_2 {
-                    self.pattern_mem[1] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2);
+                    self.pattern_mem[1] = BGTexCache::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2);
                 }
             },
             _5 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_4 {
-                    self.pattern_mem[0] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4);
+                    self.pattern_mem[0] = BGTexCache::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4);
                 }
                 if self.pattern_mem[1].get_bits_per_pixel() != BitsPerPixel::_2 {
-                    self.pattern_mem[1] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2);
+                    self.pattern_mem[1] = BGTexCache::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_2);
                 }
             },
             _6 => {
                 if self.pattern_mem[0].get_bits_per_pixel() != BitsPerPixel::_4 {
-                    self.pattern_mem[0] = PatternMem::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4);
+                    self.pattern_mem[0] = BGTexCache::new(&self.queue, PATTERN_WIDTH, PATTERN_HEIGHT, BitsPerPixel::_4);
                 }
             },
             _7 => {

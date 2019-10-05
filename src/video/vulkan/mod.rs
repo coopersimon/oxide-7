@@ -467,16 +467,8 @@ impl RenderData {
             image
         };
 
-        let obj_0_tiles = {
-            let (image, write_future) = mem.get_sprite_image_0();
-            if let Some(future) = write_future {
-                self.image_futures.push(future);
-            }
-            image
-        };
-
-        let obj_n_tiles = {
-            let (image, write_future) = mem.get_sprite_image_n();
+        let obj_tiles = {
+            let (image, write_future) = mem.get_sprite_images();
             if let Some(future) = write_future {
                 self.image_futures.push(future);
             }
@@ -539,23 +531,13 @@ impl RenderData {
             bg_1_push_constants
         ).unwrap();
 
-        if let Some(sprites) = mem.get_sprite_vertices_0(y) {
+        if let Some(sprites) = mem.get_sprite_vertices(y) {
             command_buffer = command_buffer.draw(
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites,
-                (obj_0_tiles.clone(), obj_palettes.clone()),
+                (obj_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
-            ).unwrap();
-        }
-
-        if let Some(sprites) = mem.get_sprite_vertices_n(y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites,
-                (obj_n_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants
             ).unwrap();
         }
 
@@ -600,16 +582,8 @@ impl RenderData {
             image
         };
 
-        let obj_0_tiles = {
-            let (image, write_future) = mem.get_sprite_image_0();
-            if let Some(future) = write_future {
-                self.image_futures.push(future);
-            }
-            image
-        };
-
-        let obj_n_tiles = {
-            let (image, write_future) = mem.get_sprite_image_n();
+        let obj_tiles = {
+            let (image, write_future) = mem.get_sprite_images();
             if let Some(future) = write_future {
                 self.image_futures.push(future);
             }
@@ -660,23 +634,13 @@ impl RenderData {
         ).unwrap();
 
         // Draw sprites.
-        if let Some(sprites) = mem.get_sprite_vertices_0(y) {
+        if let Some(sprites) = mem.get_sprite_vertices(y) {
             command_buffer = command_buffer.draw(
                 self.obj_pipeline.clone(),
                 dynamic_state,
                 sprites,
-                (obj_0_tiles.clone(), obj_palettes.clone()),
+                (obj_tiles.clone(), obj_palettes.clone()),
                 obj_push_constants.clone()
-            ).unwrap();
-        }
-
-        if let Some(sprites) = mem.get_sprite_vertices_n(y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites,
-                (obj_n_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants
             ).unwrap();
         }
 

@@ -15,8 +15,15 @@ use std::sync::Arc;
 
 use super::{
     mem::{
-        palette::PaletteDescriptorSet,
-        patternmem::ImageDescriptorSet
+        palette::{
+            PaletteBuffer,
+            PaletteDescriptorSet
+        },
+        texturecache::{
+            BGImageDescriptorSet,
+            ObjImageDescriptorSet,
+            PatternImage
+        }
     },
     RenderPipeline
 };
@@ -60,28 +67,29 @@ impl UniformCache {
     }
 
     // Get a descriptor set for a sampled image, for the background tiles.
-    pub fn bg_image(&mut self, image: super::mem::patternmem::PatternImage) -> ImageDescriptorSet {
+    pub fn bg_image(&mut self, image: PatternImage) -> BGImageDescriptorSet {
         Arc::new(self.bg_set_pools[0].next()
             .add_sampled_image(image, self.sampler.clone()).unwrap()
             .build().unwrap())
     }
 
-    // Get a descriptor set for a sampled image, for the sprites.
-    pub fn obj_image(&mut self, image: super::mem::patternmem::PatternImage) -> ImageDescriptorSet {
+    // Get a descriptor set for a sampled images, for the sprites.
+    pub fn obj_images(&mut self, image_0: PatternImage, image_n: PatternImage) -> ObjImageDescriptorSet {
         Arc::new(self.obj_set_pools[0].next()
-            .add_sampled_image(image, self.sampler.clone()).unwrap()
+            .add_sampled_image(image_0, self.sampler.clone()).unwrap()
+            .add_sampled_image(image_n, self.sampler.clone()).unwrap()
             .build().unwrap())
     }
 
     // Get a descriptor set for a palette, for the background.
-    pub fn bg_palette(&mut self, palette_buffer: super::mem::palette::PaletteBuffer) -> PaletteDescriptorSet {
+    pub fn bg_palette(&mut self, palette_buffer: PaletteBuffer) -> PaletteDescriptorSet {
         Arc::new(self.bg_set_pools[1].next()
             .add_buffer(palette_buffer).unwrap()
             .build().unwrap())
     }
 
     // Get a descriptor set for a palette, for the sprites.
-    pub fn obj_palette(&mut self, palette_buffer: super::mem::palette::PaletteBuffer) -> PaletteDescriptorSet {
+    pub fn obj_palette(&mut self, palette_buffer: PaletteBuffer) -> PaletteDescriptorSet {
         Arc::new(self.obj_set_pools[1].next()
             .add_buffer(palette_buffer).unwrap()
             .build().unwrap())

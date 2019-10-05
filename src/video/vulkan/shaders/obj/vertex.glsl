@@ -9,7 +9,7 @@ const float ATLAS_SIZE_Y = 16.0;
 const uint TEX_ROW_SIZE = 16;
 const float LINE_HEIGHT = 1.0 / (ATLAS_SIZE_Y * 8.0);
 
-// Corner enum
+// Side enum
 const uint LEFT     = 0 << 16;
 const uint RIGHT    = 1 << 16;
 
@@ -41,7 +41,7 @@ void main() {
 
     texCoordOut = calc_tex_coords(data);
 
-    paletteNumOut = (data >> 9) & 7;
+    paletteNumOut = (data >> 8) & 15;
 }
 
 // Get texture coordinates from tex number and x and y pos of tile.

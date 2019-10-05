@@ -79,12 +79,8 @@ impl SpriteMem {
         }
     }
 
-    pub fn get_vertex_buffer_0(&mut self, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
-        self.make_vertex_buffer(0, y, oam_hi, oam_lo)
-    }
-
-    pub fn get_vertex_buffer_n(&mut self, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
-        self.make_vertex_buffer(1, y, oam_hi, oam_lo)
+    pub fn get_vertex_buffer(&mut self, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
+        self.make_vertex_buffer(y, oam_hi, oam_lo)
     }
 
     pub fn get_small_tex_size(&self) -> [f32; 2] {
@@ -98,17 +94,14 @@ impl SpriteMem {
 
 // Internal
 impl SpriteMem {
-    fn make_vertex_buffer(&mut self, name_table_select: u8, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
+    fn make_vertex_buffer(&mut self, y: u8, oam_hi: &[u8], oam_lo: &[u8]) -> Option<VertexBuffer> {
         self.buffer.clear();
 
         for lo in (0..oam_lo.len()).step_by(4) {
-            let name_table = oam_lo[lo + 3] & 1;
-            if name_table == name_table_select {    // TODO: check the name table in GPU
-                let hi_addr = lo / 16;
-                let shift_amt = ((lo / 4) % 4) * 2;
-                let hi = (oam_hi[hi_addr] >> shift_amt) & bits![1, 0];
-                self.make_vertices(y, &oam_lo[lo..(lo + 4)], hi)
-            }
+            let hi_addr = lo / 16;
+            let shift_amt = ((lo / 4) % 4) * 2;
+            let hi = (oam_hi[hi_addr] >> shift_amt) & bits![1, 0];
+            self.make_vertices(y, &oam_lo[lo..(lo + 4)], hi)
         }
 
         if self.buffer.is_empty() {

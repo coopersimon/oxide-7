@@ -3,6 +3,7 @@
 
 mod ram;
 mod render;
+mod patternmem;
 
 mod vulkan;
 
