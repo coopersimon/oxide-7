@@ -18,6 +18,7 @@ layout(push_constant) uniform PushConstants {
     vec2 vertex_offset;
     uint palette_offset;
     uint palette_size;
+    uint priority;
     float tex_pixel_height;
 } push_constants;
 

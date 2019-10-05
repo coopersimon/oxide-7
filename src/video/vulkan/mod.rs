@@ -3,6 +3,7 @@
 mod mem;
 mod shaders;
 mod uniforms;
+mod types;
 
 use vulkano::{
     instance::{
@@ -17,7 +18,6 @@ use vulkano::{
     pipeline::{
         GraphicsPipeline,
         viewport::Viewport,
-        vertex::SingleBufferDefinition
     },
     command_buffer::{
         AutoCommandBufferBuilder,
@@ -30,12 +30,17 @@ use vulkano::{
     sync::{
         now, GpuFuture
     },
-    descriptor::pipeline_layout::PipelineLayoutAbstract,
-    memory::pool::StdMemoryPool,
-    buffer::cpu_pool::CpuBufferPoolChunk,
 };
 
 use vulkano_win::VkSurfaceBuild;
+
+use std::time::SystemTime;
+
+use chrono::{
+    DateTime,
+    Duration,
+    Utc
+};
 
 use winit::{
     Window,
@@ -54,58 +59,9 @@ use super::{
 };
 
 use mem::MemoryCache;
+use types::*;
 
-// TODO: move these types elsewhere
-// Types
-type RenderPipeline = GraphicsPipeline<
-    SingleBufferDefinition<Vertex>,
-    Box<dyn PipelineLayoutAbstract + Send + Sync>,
-    Arc<dyn RenderPassAbstract + Send + Sync>
->;
-
-// TODO: move this and other data elsewhere
-#[derive(Clone, Copy)]
-enum TexSide {
-    Left =  0 << 16,
-    Right = 1 << 16
-}
-
-#[derive(Clone, Copy)]
-enum VertexSide {
-    Left =  0 << 21,
-    Right = 1 << 21
-}
-
-// Individual Vertex.
-#[derive(Default, Copy, Clone)]
-pub struct Vertex {
-    pub position: [f32; 2],
-    pub data: u32
-}
-
-vulkano::impl_vertex!(Vertex, position, data);
-
-// Push constants used in BG shaders.
-#[derive(Copy, Clone, Debug)]
-pub struct BGPushConstants {
-    pub tex_size:       [f32; 2],   // Size of individual tile texture in map.
-    pub atlas_size:     [f32; 2],   // Size of texture atlas in tiles.
-    pub tile_size:      [f32; 2],   // Width of tile relative to the viewport, height of line relative to the viewport.
-    pub map_size:       [f32; 2],   // Size of tile map relative to the viewport.
-    pub vertex_offset:  [f32; 2],   // Offset to apply to vertices for scrolling.   // TODO: use a different shader for sprites.
-    pub palette_offset: u32,        // Offset for palette used by BG (in colours).
-    pub palette_size:   u32,        // Size of palettes used.
-    pub tex_pixel_height: f32       // Height of individual tile in pixels.
-}
-
-// Push constants used in Sprite shaders.
-#[derive(Copy, Clone, Debug)]
-pub struct ObjPushConstants {
-    pub small_tex_size: [f32; 2],
-    pub large_tex_size: [f32; 2],
-}
-
-type VertexBuffer = CpuBufferPoolChunk<Vertex, Arc<StdMemoryPool>>;
+const FRAME_TIME: i64 = 16_666;
 
 // Data for a single render
 struct RenderData {
@@ -136,7 +92,11 @@ pub struct Renderer {
     dynamic_state:  DynamicState,
     // Frame data
     previous_frame_future: Box<dyn GpuFuture>,
-    render_data: Option<RenderData>
+    render_data: Option<RenderData>,
+
+    time:           SystemTime,
+
+    frame_time:     DateTime<Utc>,
 }
 
 impl Renderer {
@@ -274,7 +234,11 @@ impl Renderer {
             dynamic_state:  dynamic_state,
 
             previous_frame_future: Box::new(now(device)),
-            render_data: None
+            render_data: None,
+
+            time:           SystemTime::now(),
+
+            frame_time:     Utc::now(),
         }
     }
 
@@ -313,6 +277,10 @@ impl Renderer {
 
 impl Renderable for Renderer {
     fn frame_start(&mut self) {
+        //println!("Frame time: {:?}", now.duration_since(self.time));
+        let now = SystemTime::now();
+        self.time = now;
+
         self.previous_frame_future.cleanup_finished();
 
         // Get current framebuffer index from the swapchain.
@@ -425,6 +393,9 @@ impl Renderable for Renderer {
                 Ok(future) => self.previous_frame_future = Box::new(future) as Box<_>,
                 Err(e) => println!("Err: {:?}", e),
             }
+
+            while (Utc::now() - self.frame_time) < Duration::microseconds(FRAME_TIME) {}
+            self.frame_time = Utc::now();
         }
     }
 }
@@ -502,26 +473,28 @@ impl RenderData {
 
         // Draw
         let bg_4_y = mem.calc_y_line(3, y);
-        if let Some(bg_4_vertices) = mem.get_bg_lo_vertices(3, bg_4_y) {
-            command_buffer = command_buffer.draw(
-                self.bg_pipeline.clone(),
-                dynamic_state,
-                bg_4_vertices,
-                (bg_4_tiles.clone(), bg_palettes.clone()),
-                bg_4_push_constants.clone()
-            ).unwrap();
-        }
+        let bg_4_vertices = mem.get_bg_vertex_buffer(3);
+        let bg_4_indices = mem.get_bg_index_buffer(3, bg_4_y);
+        command_buffer = command_buffer.draw_indexed(
+            self.bg_pipeline.clone(),
+            dynamic_state,
+            bg_4_vertices.clone(),
+            bg_4_indices.clone(),
+            (bg_4_tiles.clone(), bg_palettes.clone()),
+            bg_4_push_constants.clone()
+        ).unwrap();
 
         let bg_3_y = mem.calc_y_line(2, y);
-        if let Some(bg_3_vertices) = mem.get_bg_lo_vertices(2, bg_3_y) {
-            command_buffer = command_buffer.draw(
-                self.bg_pipeline.clone(),
-                dynamic_state,
-                bg_3_vertices,
-                (bg_3_tiles.clone(), bg_palettes.clone()),
-                bg_3_push_constants.clone()
-            ).unwrap();
-        }
+        let bg_3_vertices = mem.get_bg_vertex_buffer(2);
+        let bg_3_indices = mem.get_bg_index_buffer(2, bg_3_y);
+        command_buffer = command_buffer.draw_indexed(
+            self.bg_pipeline.clone(),
+            dynamic_state,
+            bg_3_vertices.clone(),
+            bg_3_indices.clone(),
+            (bg_3_tiles.clone(), bg_palettes.clone()),
+            bg_3_push_constants.clone()
+        ).unwrap();
 
         if let Some(sprites_0) = mem.get_sprite_vertices_0(0, y) {
             command_buffer = command_buffer.draw(
@@ -543,25 +516,23 @@ impl RenderData {
             ).unwrap();
         }
 
-        if let Some(bg_4_vertices) = mem.get_bg_hi_vertices(3, bg_4_y) {
-            command_buffer = command_buffer.draw(
-                self.bg_pipeline.clone(),
-                dynamic_state,
-                bg_4_vertices,
-                (bg_4_tiles, bg_palettes.clone()),
-                bg_4_push_constants
-            ).unwrap();
-        }
+        command_buffer = command_buffer.draw_indexed(
+            self.bg_pipeline.clone(),
+            dynamic_state,
+            bg_4_vertices,
+            bg_4_indices,
+            (bg_4_tiles.clone(), bg_palettes.clone()),
+            bg_4_push_constants.set_priority()
+        ).unwrap();
 
-        if let Some(bg_3_vertices) = mem.get_bg_hi_vertices(2, bg_3_y) {
-            command_buffer = command_buffer.draw(
-                self.bg_pipeline.clone(),
-                dynamic_state,
-                bg_3_vertices,
-                (bg_3_tiles, bg_palettes.clone()),
-                bg_3_push_constants
-            ).unwrap();
-        }
+        command_buffer = command_buffer.draw_indexed(
+            self.bg_pipeline.clone(),
+            dynamic_state,
+            bg_3_vertices,
+            bg_3_indices,
+            (bg_3_tiles.clone(), bg_palettes.clone()),
+            bg_3_push_constants.set_priority()
+        ).unwrap();
 
         if let Some(sprites_1) = mem.get_sprite_vertices_0(1, y) {
             command_buffer = command_buffer.draw(
@@ -584,26 +555,28 @@ impl RenderData {
         }
 
         let bg_2_y = mem.calc_y_line(1, y);
-        if let Some(bg_2_vertices) = mem.get_bg_lo_vertices(1, bg_2_y) {
-            command_buffer = command_buffer.draw(
-                self.bg_pipeline.clone(),
-                dynamic_state,
-                bg_2_vertices,
-                (bg_2_tiles.clone(), bg_palettes.clone()),
-                bg_2_push_constants.clone()
-            ).unwrap();
-        }
+        let bg_2_vertices = mem.get_bg_vertex_buffer(1);
+        let bg_2_indices = mem.get_bg_index_buffer(1, bg_2_y);
+        command_buffer = command_buffer.draw_indexed(
+            self.bg_pipeline.clone(),
+            dynamic_state,
+            bg_2_vertices.clone(),
+            bg_2_indices.clone(),
+            (bg_2_tiles.clone(), bg_palettes.clone()),
+            bg_2_push_constants.clone()
+        ).unwrap();
 
         let bg_1_y = mem.calc_y_line(0, y);
-        if let Some(bg_1_vertices) = mem.get_bg_lo_vertices(0, bg_1_y) {
-            command_buffer = command_buffer.draw(
-                self.bg_pipeline.clone(),
-                dynamic_state,
-                bg_1_vertices,
-                (bg_1_tiles.clone(), bg_palettes.clone()),
-                bg_1_push_constants.clone()
-            ).unwrap();
-        }
+        let bg_1_vertices = mem.get_bg_vertex_buffer(0);
+        let bg_1_indices = mem.get_bg_index_buffer(0, bg_1_y);
+        command_buffer = command_buffer.draw_indexed(
+            self.bg_pipeline.clone(),
+            dynamic_state,
+            bg_1_vertices.clone(),
+            bg_1_indices.clone(),
+            (bg_1_tiles.clone(), bg_palettes.clone()),
+            bg_1_push_constants.clone()
+        ).unwrap();
 
         if let Some(sprites_2) = mem.get_sprite_vertices_0(2, y) {
             command_buffer = command_buffer.draw(
@@ -625,25 +598,23 @@ impl RenderData {
             ).unwrap();
         }
 
-        if let Some(bg_2_vertices) = mem.get_bg_hi_vertices(1, bg_2_y) {
-            command_buffer = command_buffer.draw(
-                self.bg_pipeline.clone(),
-                dynamic_state,
-                bg_2_vertices,
-                (bg_2_tiles, bg_palettes.clone()),
-                bg_2_push_constants
-            ).unwrap();
-        }
+        command_buffer = command_buffer.draw_indexed(
+            self.bg_pipeline.clone(),
+            dynamic_state,
+            bg_2_vertices,
+            bg_2_indices,
+            (bg_2_tiles.clone(), bg_palettes.clone()),
+            bg_2_push_constants.set_priority()
+        ).unwrap();
 
-        if let Some(bg_1_vertices) = mem.get_bg_hi_vertices(0, bg_1_y) {
-            command_buffer = command_buffer.draw(
-                self.bg_pipeline.clone(),
-                dynamic_state,
-                bg_1_vertices,
-                (bg_1_tiles, bg_palettes.clone()),
-                bg_1_push_constants
-            ).unwrap();
-        }
+        command_buffer = command_buffer.draw_indexed(
+            self.bg_pipeline.clone(),
+            dynamic_state,
+            bg_1_vertices,
+            bg_1_indices,
+            (bg_1_tiles.clone(), bg_palettes.clone()),
+            bg_1_push_constants.set_priority()
+        ).unwrap();
 
         if let Some(sprites_3) = mem.get_sprite_vertices_0(3, y) {
             command_buffer = command_buffer.draw(
@@ -730,15 +701,16 @@ impl RenderData {
 
         // Draw
         let bg_3_y = mem.calc_y_line(2, y);
-        if let Some(bg_3_vertices) = mem.get_bg_lo_vertices(2, bg_3_y) {
-            command_buffer = command_buffer.draw(
-                self.bg_pipeline.clone(),
-                dynamic_state,
-                bg_3_vertices,
-                (bg_3_tiles.clone(), bg_palettes.clone()),
-                bg_3_push_constants.clone()
-            ).unwrap();
-        }
+        let bg_3_vertices = mem.get_bg_vertex_buffer(2);
+        let bg_3_indices = mem.get_bg_index_buffer(2, bg_3_y);
+        command_buffer = command_buffer.draw_indexed(
+            self.bg_pipeline.clone(),
+            dynamic_state,
+            bg_3_vertices.clone(),
+            bg_3_indices.clone(),
+            (bg_3_tiles.clone(), bg_palettes.clone()),
+            bg_3_push_constants.clone()
+        ).unwrap();
 
         if let Some(sprites_0) = mem.get_sprite_vertices_0(0, y) {
             command_buffer = command_buffer.draw(
@@ -761,15 +733,14 @@ impl RenderData {
         }
 
         if !mem.get_bg3_priority() {
-            if let Some(bg_3_vertices) = mem.get_bg_hi_vertices(2, bg_3_y) {
-                command_buffer = command_buffer.draw(
-                    self.bg_pipeline.clone(),
-                    dynamic_state,
-                    bg_3_vertices,
-                    (bg_3_tiles.clone(), bg_palettes.clone()),
-                    bg_3_push_constants.clone()
-                ).unwrap();
-            }
+            command_buffer = command_buffer.draw_indexed(
+                self.bg_pipeline.clone(),
+                dynamic_state,
+                bg_3_vertices.clone(),
+                bg_3_indices.clone(),
+                (bg_3_tiles.clone(), bg_palettes.clone()),
+                bg_3_push_constants.set_priority()
+            ).unwrap();
         }
 
         if let Some(sprites_1) = mem.get_sprite_vertices_0(1, y) {
@@ -793,26 +764,28 @@ impl RenderData {
         }
 
         let bg_2_y = mem.calc_y_line(1, y);
-        if let Some(bg_2_vertices) = mem.get_bg_lo_vertices(1, bg_2_y) {
-            command_buffer = command_buffer.draw(
-                self.bg_pipeline.clone(),
-                dynamic_state,
-                bg_2_vertices,
-                (bg_2_tiles.clone(), bg_palettes.clone()),
-                bg_2_push_constants.clone()
-            ).unwrap();
-        }
+        let bg_2_vertices = mem.get_bg_vertex_buffer(1);
+        let bg_2_indices = mem.get_bg_index_buffer(1, bg_2_y);
+        command_buffer = command_buffer.draw_indexed(
+            self.bg_pipeline.clone(),
+            dynamic_state,
+            bg_2_vertices.clone(),
+            bg_2_indices.clone(),
+            (bg_2_tiles.clone(), bg_palettes.clone()),
+            bg_2_push_constants.clone()
+        ).unwrap();
 
         let bg_1_y = mem.calc_y_line(0, y);
-        if let Some(bg_1_vertices) = mem.get_bg_lo_vertices(0, bg_1_y) {
-            command_buffer = command_buffer.draw(
-                self.bg_pipeline.clone(),
-                dynamic_state,
-                bg_1_vertices,
-                (bg_1_tiles.clone(), bg_palettes.clone()),
-                bg_1_push_constants.clone()
-            ).unwrap();
-        }
+        let bg_1_vertices = mem.get_bg_vertex_buffer(0);
+        let bg_1_indices = mem.get_bg_index_buffer(0, bg_1_y);
+        command_buffer = command_buffer.draw_indexed(
+            self.bg_pipeline.clone(),
+            dynamic_state,
+            bg_1_vertices.clone(),
+            bg_1_indices.clone(),
+            (bg_1_tiles.clone(), bg_palettes.clone()),
+            bg_1_push_constants.clone()
+        ).unwrap();
 
         if let Some(sprites_2) = mem.get_sprite_vertices_0(2, y) {
             command_buffer = command_buffer.draw(
@@ -834,25 +807,23 @@ impl RenderData {
             ).unwrap();
         }
 
-        if let Some(bg_2_vertices) = mem.get_bg_hi_vertices(1, bg_2_y) {
-            command_buffer = command_buffer.draw(
-                self.bg_pipeline.clone(),
-                dynamic_state,
-                bg_2_vertices,
-                (bg_2_tiles, bg_palettes.clone()),
-                bg_2_push_constants
-            ).unwrap();
-        }
+        command_buffer = command_buffer.draw_indexed(
+            self.bg_pipeline.clone(),
+            dynamic_state,
+            bg_2_vertices,
+            bg_2_indices,
+            (bg_2_tiles.clone(), bg_palettes.clone()),
+            bg_2_push_constants.set_priority()
+        ).unwrap();
 
-        if let Some(bg_1_vertices) = mem.get_bg_hi_vertices(0, bg_1_y) {
-            command_buffer = command_buffer.draw(
-                self.bg_pipeline.clone(),
-                dynamic_state,
-                bg_1_vertices,
-                (bg_1_tiles, bg_palettes.clone()),
-                bg_1_push_constants
-            ).unwrap();
-        }
+        command_buffer = command_buffer.draw_indexed(
+            self.bg_pipeline.clone(),
+            dynamic_state,
+            bg_1_vertices,
+            bg_1_indices,
+            (bg_1_tiles.clone(), bg_palettes.clone()),
+            bg_1_push_constants.set_priority()
+        ).unwrap();
 
         if let Some(sprites_3) = mem.get_sprite_vertices_0(3, y) {
             command_buffer = command_buffer.draw(
@@ -875,15 +846,14 @@ impl RenderData {
         }
 
         if mem.get_bg3_priority() {
-            if let Some(bg_3_vertices) = mem.get_bg_hi_vertices(2, bg_3_y) {
-                command_buffer = command_buffer.draw(
-                    self.bg_pipeline.clone(),
-                    dynamic_state,
-                    bg_3_vertices,
-                    (bg_3_tiles, bg_palettes.clone()),
-                    bg_3_push_constants
-                ).unwrap();
-            }
+            command_buffer = command_buffer.draw_indexed(
+                self.bg_pipeline.clone(),
+                dynamic_state,
+                bg_3_vertices,
+                bg_3_indices,
+                (bg_3_tiles.clone(), bg_palettes.clone()),
+                bg_3_push_constants.set_priority()
+            ).unwrap();
         }
 
         self.command_buffer = Some(command_buffer);

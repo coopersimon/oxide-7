@@ -26,5 +26,4 @@ fn main() {
             snes.step();
         }
     }
-
 }

@@ -6,6 +6,9 @@ const float VIEW_HEIGHT = 1.0;
 
 const uint TEX_ROW_SIZE = 16;
 
+// Priority bit
+const uint PRIORITY     = 1 << 13;
+
 // Tex side enum
 const uint TEX_LEFT     = 0 << 16;
 const uint TEX_RIGHT    = 1 << 16;
@@ -32,6 +35,7 @@ layout(push_constant) uniform PushConstants {
     vec2 vertex_offset;
     uint palette_offset;
     uint palette_size;
+    uint priority;
     float tex_pixel_height;
 } push_constants;
 
@@ -40,22 +44,26 @@ layout(location = 0) out vec2 texCoordOut;
 layout(location = 1) out uint paletteNumOut;
 
 void main() {
-    // Vertex position offset with scroll / position
-    vec2 vertex_position = position + push_constants.vertex_offset;
+    if((data & PRIORITY) == push_constants.priority) {
+        // Vertex position offset with scroll / position
+        vec2 vertex_position = position + push_constants.vertex_offset;
 
-    // Calculate wraparound.
-    uint vertex_side = data & (1 << 21);
-    uint tex_y = (data >> 17) % 16;
-    vertex_position = calc_vertex_wraparound(vertex_position, vertex_side, tex_y);
+        // Calculate wraparound.
+        uint vertex_side = data & (1 << 21);
+        uint tex_y = (data >> 17) % 16;
+        vertex_position = calc_vertex_wraparound(vertex_position, vertex_side, tex_y);
 
-    gl_Position = vec4(vertex_position, 0.0, 1.0);
+        gl_Position = vec4(vertex_position, 0.0, 1.0);
 
-    texCoordOut = calc_tex_coords(data);
+        texCoordOut = calc_tex_coords(data);
 
-    paletteNumOut = (data >> 10) & 7;
+        paletteNumOut = (data >> 10) & 7;
+    } else {
+        gl_Position = vec4(0.0, 0.0, 0.0, 0.0);
+    }
 }
 
-// Wraparound vertex if they overflow. // TODO: large overlaps of more than 2x.
+// Wraparound vertex if they overflow.
 vec2 calc_vertex_wraparound(vec2 vertex_coords, uint side, uint y) {
     vec2 compare = calc_vertex_compare(vertex_coords, side, y);
     vec2 result = vertex_coords;

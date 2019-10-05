@@ -136,6 +136,7 @@ impl SpriteMem {
         } else {
             Some(self.buffer_pool.chunk(self.buffer.drain(..)).unwrap())
         }
+        //None
     }
 
     // Make vertices for a sprite on a line.
