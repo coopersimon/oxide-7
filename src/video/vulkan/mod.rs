@@ -99,6 +99,7 @@ pub struct Renderer {
     //time:           SystemTime,
 
     //frame_time:     DateTime<Utc>,
+    frame:              bool
 }
 
 impl Renderer {
@@ -255,6 +256,7 @@ impl Renderer {
             //time:           SystemTime::now(),
 
             //frame_time:     Utc::now(),
+            frame:          false
         }
     }
 
@@ -296,6 +298,12 @@ impl Renderer {
 
 impl Renderable for Renderer {
     fn frame_start(&mut self) {
+        if self.frame {
+            self.frame = false;
+            return;
+        } else {
+            self.frame = true;
+        }
         //println!("Frame time: {:?}", now.duration_since(self.time));
         //let now = SystemTime::now();
         //self.time = now;
@@ -354,16 +362,9 @@ impl Renderable for Renderer {
             bg_pipeline:    self.bg_pipeline.clone(),
             obj_pipeline:   self.obj_pipeline.clone(),
 
-            //bg_set_pool_0:  self.bg_set_pools[0].clone(),
-            //bg_set_pool_1:  self.bg_set_pools[1].clone(),
-            //obj_set_pool_0: self.obj_set_pools[0].clone(),
-            //obj_set_pool_1: self.obj_set_pools[1].clone(),
-
             // Uncomment the below for debug:
             //image_futures:  vec![Box::new(debug_future) as Box<_>],
             //bg_pipeline:    debug_pipeline,
-            //bg_set_pool_0:  set_pools[0].clone(),
-            //bg_set_pool_1:  set_pools[1].clone(),
             //debug_buffer:   debug_buffer
         });
     }
@@ -432,114 +433,14 @@ impl RenderData {
 
         // Make descriptor sets for palettes.
         let bg_palettes = mem.get_bg_palette_buffer();
-        let obj_palettes = mem.get_obj_palette_buffer();
-
-        // Make descriptor set to bind texture atlases for patterns.
-        let bg_4_tiles = {
-            let (image, write_future) = mem.get_bg_image(3);
-            if let Some(future) = write_future {
-                self.image_futures.push(future);
-            }
-            image
-        };
-
-        let bg_3_tiles = {
-            let (image, write_future) = mem.get_bg_image(2);
-            if let Some(future) = write_future {
-                self.image_futures.push(future);
-            }
-            image
-        };
-
-        let bg_2_tiles = {
-            let (image, write_future) = mem.get_bg_image(1);
-            if let Some(future) = write_future {
-                self.image_futures.push(future);
-            }
-            image
-        };
-
-        let bg_1_tiles = {
-            let (image, write_future) = mem.get_bg_image(0);
-            if let Some(future) = write_future {
-                self.image_futures.push(future);
-            }
-            image
-        };
-
-        let obj_tiles = {
-            let (image, write_future) = mem.get_sprite_images();
-            if let Some(future) = write_future {
-                self.image_futures.push(future);
-            }
-            image
-        };
-
-        // Push constants
-        let bg_4_push_constants = mem.get_bg_push_constants(3, [1.0, 0.8]);
-        let bg_3_push_constants = mem.get_bg_push_constants(2, [0.9, 0.7]);
-        let bg_2_push_constants = mem.get_bg_push_constants(1, [0.5, 0.2]);
-        let bg_1_push_constants = mem.get_bg_push_constants(0, [0.4, 0.1]);
-        let obj_push_constants = mem.get_obj_push_constants([0.85, 0.6, 0.3, 0.0]);
 
         // Draw
-        let bg_4_y = mem.calc_y_line(3, y);
-        let bg_4_vertices = mem.get_bg_vertex_buffer(3);
-        let bg_4_indices = mem.get_bg_index_buffer(3, bg_4_y);
-        command_buffer = command_buffer.draw_indexed(
-            self.bg_pipeline.clone(),
-            dynamic_state,
-            bg_4_vertices.clone(),
-            bg_4_indices.clone(),
-            (bg_4_tiles.clone(), bg_palettes.clone()),
-            bg_4_push_constants
-        ).unwrap();
+        command_buffer = self.draw_bg(command_buffer, 3, mem, dynamic_state, y, &bg_palettes, [1.0, 0.8]);
+        command_buffer = self.draw_bg(command_buffer, 2, mem, dynamic_state, y, &bg_palettes, [0.9, 0.7]);
+        command_buffer = self.draw_bg(command_buffer, 1, mem, dynamic_state, y, &bg_palettes, [0.5, 0.2]);
+        command_buffer = self.draw_bg(command_buffer, 0, mem, dynamic_state, y, &bg_palettes, [0.4, 0.1]);
 
-        let bg_3_y = mem.calc_y_line(2, y);
-        let bg_3_vertices = mem.get_bg_vertex_buffer(2);
-        let bg_3_indices = mem.get_bg_index_buffer(2, bg_3_y);
-        command_buffer = command_buffer.draw_indexed(
-            self.bg_pipeline.clone(),
-            dynamic_state,
-            bg_3_vertices.clone(),
-            bg_3_indices.clone(),
-            (bg_3_tiles.clone(), bg_palettes.clone()),
-            bg_3_push_constants
-        ).unwrap();
-
-        let bg_2_y = mem.calc_y_line(1, y);
-        let bg_2_vertices = mem.get_bg_vertex_buffer(1);
-        let bg_2_indices = mem.get_bg_index_buffer(1, bg_2_y);
-        command_buffer = command_buffer.draw_indexed(
-            self.bg_pipeline.clone(),
-            dynamic_state,
-            bg_2_vertices.clone(),
-            bg_2_indices.clone(),
-            (bg_2_tiles.clone(), bg_palettes.clone()),
-            bg_2_push_constants
-        ).unwrap();
-
-        let bg_1_y = mem.calc_y_line(0, y);
-        let bg_1_vertices = mem.get_bg_vertex_buffer(0);
-        let bg_1_indices = mem.get_bg_index_buffer(0, bg_1_y);
-        command_buffer = command_buffer.draw_indexed(
-            self.bg_pipeline.clone(),
-            dynamic_state,
-            bg_1_vertices.clone(),
-            bg_1_indices.clone(),
-            (bg_1_tiles.clone(), bg_palettes.clone()),
-            bg_1_push_constants
-        ).unwrap();
-
-        if let Some(sprites) = mem.get_sprite_vertices(y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites,
-                (obj_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
-            ).unwrap();
-        }
+        command_buffer = self.draw_objects(command_buffer, mem, dynamic_state, y, [0.85, 0.6, 0.3, 0.0]);
 
         self.command_buffer = Some(command_buffer);
     }
@@ -555,94 +456,11 @@ impl RenderData {
 
         // Make descriptor sets for palettes.
         let bg_palettes = mem.get_bg_palette_buffer();
-        let obj_palettes = mem.get_obj_palette_buffer();
+        command_buffer = self.draw_bg(command_buffer, 2, mem, dynamic_state, y, &bg_palettes, [0.95, if mem.get_bg3_priority() {0.0} else {0.8}]);
+        command_buffer = self.draw_bg(command_buffer, 1, mem, dynamic_state, y, &bg_palettes, [0.6, 0.3]);
+        command_buffer = self.draw_bg(command_buffer, 0, mem, dynamic_state, y, &bg_palettes, [0.5, 0.2]);
 
-        // Make descriptor set to bind texture atlases for patterns.
-        let bg_3_tiles = {
-            let (image, write_future) = mem.get_bg_image(2);
-            if let Some(future) = write_future {
-                self.image_futures.push(future);
-            }
-            image
-        };
-
-        let bg_2_tiles = {
-            let (image, write_future) = mem.get_bg_image(1);
-            if let Some(future) = write_future {
-                self.image_futures.push(future);
-            }
-            image
-        };
-
-        let bg_1_tiles = {
-            let (image, write_future) = mem.get_bg_image(0);
-            if let Some(future) = write_future {
-                self.image_futures.push(future);
-            }
-            image
-        };
-
-        let obj_tiles = {
-            let (image, write_future) = mem.get_sprite_images();
-            if let Some(future) = write_future {
-                self.image_futures.push(future);
-            }
-            image
-        };
-
-        // Push constants
-        let bg_3_push_constants = mem.get_bg_push_constants(2, [0.95, if mem.get_bg3_priority() {0.0} else {0.8}]);
-        let bg_2_push_constants = mem.get_bg_push_constants(1, [0.6, 0.3]);
-        let bg_1_push_constants = mem.get_bg_push_constants(0, [0.5, 0.2]);
-        let obj_push_constants = mem.get_obj_push_constants([0.9, 0.7, 0.4, 0.1]);
-
-        // Draw backgrounds
-        let bg_3_y = mem.calc_y_line(2, y);
-        let bg_3_vertices = mem.get_bg_vertex_buffer(2);
-        let bg_3_indices = mem.get_bg_index_buffer(2, bg_3_y);
-        command_buffer = command_buffer.draw_indexed(
-            self.bg_pipeline.clone(),
-            dynamic_state,
-            bg_3_vertices.clone(),
-            bg_3_indices.clone(),
-            (bg_3_tiles.clone(), bg_palettes.clone()),
-            bg_3_push_constants
-        ).unwrap();
-
-        let bg_2_y = mem.calc_y_line(1, y);
-        let bg_2_vertices = mem.get_bg_vertex_buffer(1);
-        let bg_2_indices = mem.get_bg_index_buffer(1, bg_2_y);
-        command_buffer = command_buffer.draw_indexed(
-            self.bg_pipeline.clone(),
-            dynamic_state,
-            bg_2_vertices.clone(),
-            bg_2_indices.clone(),
-            (bg_2_tiles.clone(), bg_palettes.clone()),
-            bg_2_push_constants
-        ).unwrap();
-
-        let bg_1_y = mem.calc_y_line(0, y);
-        let bg_1_vertices = mem.get_bg_vertex_buffer(0);
-        let bg_1_indices = mem.get_bg_index_buffer(0, bg_1_y);
-        command_buffer = command_buffer.draw_indexed(
-            self.bg_pipeline.clone(),
-            dynamic_state,
-            bg_1_vertices.clone(),
-            bg_1_indices.clone(),
-            (bg_1_tiles.clone(), bg_palettes.clone()),
-            bg_1_push_constants
-        ).unwrap();
-
-        // Draw sprites.
-        if let Some(sprites) = mem.get_sprite_vertices(y) {
-            command_buffer = command_buffer.draw(
-                self.obj_pipeline.clone(),
-                dynamic_state,
-                sprites,
-                (obj_tiles.clone(), obj_palettes.clone()),
-                obj_push_constants.clone()
-            ).unwrap();
-        }
+        command_buffer = self.draw_objects(command_buffer, mem, dynamic_state, y, [0.9, 0.7, 0.4, 0.1]);
 
         self.command_buffer = Some(command_buffer);
     }
@@ -654,6 +472,75 @@ impl RenderData {
             self.image_futures,
             self.image_num
         )
+    }
+}
+
+// Individual draws
+impl RenderData {
+    fn draw_bg(&mut self,
+        command_buffer: AutoCommandBufferBuilder,
+        bg_num:         usize,
+        mem:            &mut MemoryCache,
+        dynamic_state:  &DynamicState,
+        y:              u16,
+        palettes:       &mem::palette::PaletteDescriptorSet,
+        priorities:     [f32; 2]
+    ) -> AutoCommandBufferBuilder {
+
+        let tiles = {
+            let (image, write_future) = mem.get_bg_image(bg_num);
+            if let Some(future) = write_future {
+                self.image_futures.push(future);
+            }
+            image
+        };
+
+        let push_constants = mem.get_bg_push_constants(bg_num, priorities);
+
+        let scrolled_y = mem.calc_y_line(bg_num, y);
+        let vertices = mem.get_bg_vertex_buffer(bg_num);
+        let indices = mem.get_bg_index_buffer(bg_num, scrolled_y);
+
+        command_buffer.draw_indexed(
+            self.bg_pipeline.clone(),
+            dynamic_state,
+            vertices,
+            indices,
+            (tiles, palettes.clone()),
+            push_constants
+        ).unwrap()
+    }
+
+    fn draw_objects(&mut self,
+        command_buffer: AutoCommandBufferBuilder,
+        mem:            &mut MemoryCache,
+        dynamic_state:  &DynamicState,
+        y:              u16,
+        priorities:     [f32; 4]
+    ) -> AutoCommandBufferBuilder {
+        if let Some(sprites) = mem.get_sprite_vertices(y) {
+            let palettes = mem.get_obj_palette_buffer();
+
+            let tiles = {
+                let (image, write_future) = mem.get_sprite_images();
+                if let Some(future) = write_future {
+                    self.image_futures.push(future);
+                }
+                image
+            };
+
+            let push_constants = mem.get_obj_push_constants(priorities);
+
+            command_buffer.draw(
+                self.obj_pipeline.clone(),
+                dynamic_state,
+                sprites,
+                (tiles, palettes),
+                push_constants
+            ).unwrap()
+        } else {
+            command_buffer
+        }
     }
 }
 

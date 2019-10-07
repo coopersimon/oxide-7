@@ -94,8 +94,7 @@ impl OAM {
     }
 
     pub fn reset(&mut self) {
-        // TODO: should this be called in f-blank?
-        self.set_addr();  // TODO: re-enable
+        self.set_addr();
     }
 
     // For use by renderer memory caches.

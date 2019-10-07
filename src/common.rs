@@ -1,7 +1,7 @@
 // Common utils
 
 // Interrupts that can be triggered from devices.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Interrupt {
     NMI,
     IRQ

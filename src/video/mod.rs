@@ -168,13 +168,13 @@ impl PPU {
                 self.change_state(DrawingBeforePause)
             },
             HBlankLeft if self.cycle_count >= timing::SCANLINE_OFFSET => {
-                if self.scanline < screen::V_RES {
+                if self.scanline <= screen::V_RES {
                     self.renderer.draw_line((self.scanline - 1) as u16);
+                    self.change_state(DrawingBeforePause)
                 } else {
-                    self.renderer.draw_line((screen::V_RES - 1) as u16);
                     self.renderer.frame_end();
+                    self.change_state(VBlank)
                 }
-                self.change_state(DrawingBeforePause)
             },
             DrawingBeforePause if self.cycle_count >= timing::PAUSE_START => {
                 self.change_state(DrawingAfterPause)
@@ -184,11 +184,7 @@ impl PPU {
                 self.change_state(HBlankRight)
             },
             HBlankRight if self.cycle_count >= timing::SCANLINE => {
-                if self.scanline < screen::V_RES {
-                    self.change_state(HBlankLeft)
-                } else {
-                    self.change_state(VBlank)
-                }
+                self.change_state(HBlankLeft)
             },
             VBlank if self.cycle_count >= timing::SCANLINE => {
                 self.cycle_count -= timing::SCANLINE;
@@ -272,8 +268,6 @@ impl PPU {
                 PPUSignal::Delay
             },
             PPUState::VBlank => {
-                let irq = self.inc_scanline();
-
                 self.toggle_vblank(true);
                 self.toggle_hblank(false);
 
@@ -295,7 +289,7 @@ impl PPU {
                 if self.int_enable.contains(IntEnable::ENABLE_NMI) {
                     self.trigger_interrupt(Interrupt::NMI)
                 } else {
-                    irq
+                    PPUSignal::None
                 }
             },
             PPUState::HBlankRight => {

@@ -32,16 +32,13 @@ void main() {
         uint vec_index = (colour_offset / 2) % 4;
         uint shift = (colour_offset % 2) * 16;
 
-        uint colour = (palette_table.colours[table_index][vec_index] >> shift) & 0x7FFF;
-        float red = float(colour & 0x1F) / MAX_COLOUR;
-        float green = float((colour >> 5) & 0x1F) / MAX_COLOUR;
-        float blue = float((colour >> 10) & 0x1F) / MAX_COLOUR;
-        /*vec3 colour_vec = vec3(
+        uint colour = palette_table.colours[table_index][vec_index] >> shift;
+        vec3 colour_vec = vec3(
             float(colour & 0x1F),
             float((colour >> 5) & 0x1F),
             float((colour >> 10) & 0x1F)
-        ) / MAX_COLOUR;*/
+        ) / MAX_COLOUR;
 
-        outColour = vec4(red, green, blue, 1.0);
+        outColour = vec4(colour_vec, 1.0);
     }
 }
