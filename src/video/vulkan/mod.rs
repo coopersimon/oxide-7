@@ -36,14 +36,6 @@ use vulkano::{
 
 use vulkano_win::VkSurfaceBuild;
 
-use std::time::SystemTime;
-
-use chrono::{
-    DateTime,
-    Duration,
-    Utc
-};
-
 use winit::{
     Window,
     WindowBuilder,
@@ -63,11 +55,13 @@ use super::{
 use mem::MemoryCache;
 use types::*;
 
-//const FRAME_TIME: i64 = 16_666;
-
 // Data for a single render
 struct RenderData {
     command_buffer: Option<AutoCommandBufferBuilder>,
+
+    bg_cb:          Option<AutoCommandBufferBuilder>,
+    obj_cb:         Option<AutoCommandBufferBuilder>,
+
     acquire_future: Box<dyn GpuFuture>,
     image_num:      usize,
     image_futures:  Vec<Box<dyn GpuFuture>>,
@@ -95,11 +89,6 @@ pub struct Renderer {
     // Frame data
     previous_frame_future: Box<dyn GpuFuture>,
     render_data: Option<RenderData>,
-
-    //time:           SystemTime,
-
-    //frame_time:     DateTime<Utc>,
-    frame:              bool
 }
 
 impl Renderer {
@@ -151,7 +140,7 @@ impl Renderer {
             let format = caps.supported_formats[0].0;
 
             (Swapchain::new(device.clone(), surface.clone(),
-                caps.min_image_count, format, dimensions, 1, caps.supported_usage_flags, &queue,
+                3, format, dimensions, 1, caps.supported_usage_flags, &queue,
                 SurfaceTransform::Identity, alpha, PresentMode::Fifo, true, None
             ).expect("Failed to create swapchain"),
             DynamicState {
@@ -252,11 +241,6 @@ impl Renderer {
 
             previous_frame_future:  Box::new(now(device)),
             render_data:            None,
-
-            //time:           SystemTime::now(),
-
-            //frame_time:     Utc::now(),
-            frame:          false
         }
     }
 
@@ -298,25 +282,16 @@ impl Renderer {
 
 impl Renderable for Renderer {
     fn frame_start(&mut self) {
-        if self.frame {
-            self.frame = false;
-            return;
-        } else {
-            self.frame = true;
-        }
-        //println!("Frame time: {:?}", now.duration_since(self.time));
-        //let now = SystemTime::now();
-        //self.time = now;
-
-        self.previous_frame_future.cleanup_finished();
-
         // Get current framebuffer index from the swapchain.
         let (image_num, acquire_future) = acquire_next_image(self.swapchain.clone(), None)
             .expect("Didn't get next image");
         
         // Start building command buffer using framebuffer.
         let command_buffer_builder = AutoCommandBufferBuilder::primary_one_time_submit(self.device.clone(), self.queue.family()).unwrap()
-            .begin_render_pass(self.framebuffers[image_num].clone(), false, vec![[0.0, 0.0, 0.0, 1.0].into(), 1.0.into()]).unwrap();
+            .begin_render_pass(self.framebuffers[image_num].clone(), true, vec![[0.0, 0.0, 0.0, 1.0].into(), 1.0.into()]).unwrap();
+
+        let bg_command_buf = AutoCommandBufferBuilder::secondary_graphics(self.device.clone(), self.queue.family(), Subpass::from(self.render_pass.clone(), 0).unwrap()).unwrap();
+        let obj_command_buf = AutoCommandBufferBuilder::secondary_graphics(self.device.clone(), self.queue.family(), Subpass::from(self.render_pass.clone(), 0).unwrap()).unwrap();
 
         /*let (debug_buffer, debug_future) = ImmutableBuffer::from_iter(
             vec![
@@ -355,6 +330,9 @@ impl Renderable for Renderer {
 
         self.render_data = Some(RenderData{
             command_buffer: Some(command_buffer_builder),
+            bg_cb:          Some(bg_command_buf),
+            obj_cb:         Some(obj_command_buf),
+
             acquire_future: Box::new(acquire_future),
             image_num:      image_num,
             image_futures:  Vec::new(),
@@ -389,12 +367,16 @@ impl Renderable for Renderer {
         }
     }
 
+    // TODO: move this into frame start.
     fn frame_end(&mut self) {
         let render_data = std::mem::replace(&mut self.render_data, None);
 
         if let Some(render_data) = render_data {
             // Finish command buffer.
             let (command_buffer, acquire_future, mut image_futures, image_num) = render_data.finish_drawing();
+
+            // Cleanup old frame.
+            self.previous_frame_future.cleanup_finished();
 
             // Wait until previous frame is done.
             let mut now_future = Box::new(now(self.device.clone())) as Box<dyn GpuFuture>;
@@ -410,12 +392,12 @@ impl Renderable for Renderer {
                 .then_signal_fence_and_flush();                                                 // Signal done and flush the pipeline.
 
             match future {
-                Ok(future) => self.previous_frame_future = Box::new(future) as Box<_>,
+                Ok(future) => {
+                    //future.wait(None).unwrap();
+                    self.previous_frame_future = Box::new(future) as Box<_>
+                },
                 Err(e) => println!("Err: {:?}", e),
             }
-
-            //while (Utc::now() - self.frame_time) < Duration::microseconds(FRAME_TIME) {}
-            //self.frame_time = Utc::now();
         }
     }
 }
@@ -429,20 +411,22 @@ impl RenderData {
         y:              u16
         ) {
 
-        let mut command_buffer = std::mem::replace(&mut self.command_buffer, None).unwrap();
+        let mut bg_command_buffer = std::mem::replace(&mut self.bg_cb, None).unwrap();
+        let mut obj_command_buffer = std::mem::replace(&mut self.obj_cb, None).unwrap();
 
         // Make descriptor sets for palettes.
         let bg_palettes = mem.get_bg_palette_buffer();
 
         // Draw
-        command_buffer = self.draw_bg(command_buffer, 3, mem, dynamic_state, y, &bg_palettes, [1.0, 0.8]);
-        command_buffer = self.draw_bg(command_buffer, 2, mem, dynamic_state, y, &bg_palettes, [0.9, 0.7]);
-        command_buffer = self.draw_bg(command_buffer, 1, mem, dynamic_state, y, &bg_palettes, [0.5, 0.2]);
-        command_buffer = self.draw_bg(command_buffer, 0, mem, dynamic_state, y, &bg_palettes, [0.4, 0.1]);
+        bg_command_buffer = self.draw_bg(bg_command_buffer, 3, mem, dynamic_state, y, &bg_palettes, [0.95, 0.8]);
+        bg_command_buffer = self.draw_bg(bg_command_buffer, 2, mem, dynamic_state, y, &bg_palettes, [0.9, 0.7]);
+        bg_command_buffer = self.draw_bg(bg_command_buffer, 1, mem, dynamic_state, y, &bg_palettes, [0.5, 0.2]);
+        bg_command_buffer = self.draw_bg(bg_command_buffer, 0, mem, dynamic_state, y, &bg_palettes, [0.4, 0.1]);
 
-        command_buffer = self.draw_objects(command_buffer, mem, dynamic_state, y, [0.85, 0.6, 0.3, 0.0]);
+        obj_command_buffer = self.draw_objects(obj_command_buffer, mem, dynamic_state, y, [0.85, 0.6, 0.3, 0.0]);
 
-        self.command_buffer = Some(command_buffer);
+        self.bg_cb = Some(bg_command_buffer);
+        self.obj_cb = Some(obj_command_buffer);
     }
 
     fn draw_mode_1(
@@ -452,26 +436,37 @@ impl RenderData {
         y:              u16
         ) {
 
-        let mut command_buffer = std::mem::replace(&mut self.command_buffer, None).unwrap();
+        let mut bg_command_buffer = std::mem::replace(&mut self.bg_cb, None).unwrap();
+        let mut obj_command_buffer = std::mem::replace(&mut self.obj_cb, None).unwrap();
 
         // Make descriptor sets for palettes.
         let bg_palettes = mem.get_bg_palette_buffer();
-        command_buffer = self.draw_bg(command_buffer, 2, mem, dynamic_state, y, &bg_palettes, [0.95, if mem.get_bg3_priority() {0.0} else {0.8}]);
-        command_buffer = self.draw_bg(command_buffer, 1, mem, dynamic_state, y, &bg_palettes, [0.6, 0.3]);
-        command_buffer = self.draw_bg(command_buffer, 0, mem, dynamic_state, y, &bg_palettes, [0.5, 0.2]);
 
-        command_buffer = self.draw_objects(command_buffer, mem, dynamic_state, y, [0.9, 0.7, 0.4, 0.1]);
+        // Draw
+        bg_command_buffer = self.draw_bg(bg_command_buffer, 2, mem, dynamic_state, y, &bg_palettes, [0.95, if mem.get_bg3_priority() {0.0} else {0.8}]);
+        bg_command_buffer = self.draw_bg(bg_command_buffer, 1, mem, dynamic_state, y, &bg_palettes, [0.6, 0.3]);
+        bg_command_buffer = self.draw_bg(bg_command_buffer, 0, mem, dynamic_state, y, &bg_palettes, [0.5, 0.2]);
 
-        self.command_buffer = Some(command_buffer);
+        obj_command_buffer = self.draw_objects(obj_command_buffer, mem, dynamic_state, y, [0.9, 0.7, 0.4, 0.1]);
+
+        self.bg_cb = Some(bg_command_buffer);
+        self.obj_cb = Some(obj_command_buffer);
     }
 
-    fn finish_drawing(self) -> (AutoCommandBuffer, Box<dyn GpuFuture>, Vec<Box<dyn GpuFuture>>, usize) {
-        (
-            self.command_buffer.unwrap().end_render_pass().unwrap().build().unwrap(),
-            self.acquire_future,
-            self.image_futures,
-            self.image_num
-        )
+    fn finish_drawing(mut self) -> (AutoCommandBuffer, Box<dyn GpuFuture>, Vec<Box<dyn GpuFuture>>, usize) {
+        let bg_command_buffer = std::mem::replace(&mut self.bg_cb, None).unwrap().build().unwrap();
+        let obj_command_buffer = std::mem::replace(&mut self.obj_cb, None).unwrap().build().unwrap();
+        unsafe {
+            (
+                self.command_buffer.unwrap()
+                    .execute_commands(bg_command_buffer).unwrap()
+                    .execute_commands(obj_command_buffer).unwrap()
+                    .end_render_pass().unwrap().build().unwrap(),
+                self.acquire_future,
+                self.image_futures,
+                self.image_num
+            )
+        }
     }
 }
 

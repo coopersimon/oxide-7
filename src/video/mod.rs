@@ -93,6 +93,7 @@ pub struct PPU {
     v_timer:        u16,    // $4209-a, for triggering IRQ.
 
     renderer:       vulkan::Renderer,
+    enable_render:  bool,
     events_loop:    EventsLoop
 }
 
@@ -120,8 +121,14 @@ impl PPU {
             v_timer:        0,
 
             renderer:       vulkan::Renderer::new(mem, &events_loop),
+            enable_render:  true,
             events_loop:    events_loop
         }
+    }
+
+    // Enable or disable rendering (from outside).
+    pub fn enable_rendering(&mut self, enable: bool) {
+        self.enable_render = enable;
     }
 
     // Memory access from CPU / B Bus
@@ -162,8 +169,10 @@ impl PPU {
 
         let signal = match self.state {
             VBlank if (self.scanline == 1) && (self.cycle_count >= timing::SCANLINE_OFFSET) => {
-                self.renderer.frame_start();
-                self.renderer.draw_line(0);
+                if self.enable_render {
+                    self.renderer.frame_start();
+                    self.renderer.draw_line(0);
+                }
 
                 self.change_state(DrawingBeforePause)
             },

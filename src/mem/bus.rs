@@ -172,6 +172,11 @@ impl MemBus {
             PPUSignal::None => None
         }
     }
+
+    // Enable or disable rendering video.
+    pub fn enable_rendering(&mut self, enable: bool) {
+        self.bus_b.ppu.enable_rendering(enable);
+    }
 }
 
 // Internal

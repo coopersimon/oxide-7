@@ -62,11 +62,17 @@ impl CPU {
 
     // A single step of the CPU.
     // Executes an instruction and clocks other components.
-    pub fn step(&mut self) {
-        // Check for interrupts.
+    // Returns true if an NMI interrupt was triggered (V-Blank).
+    pub fn step(&mut self) -> bool {
+        // Check for interrupts. TODO: allow multiple interrupts to trigger
         if let Some(int) = self.int {
             match int {
-                Interrupt::NMI => self.trigger_interrupt(if self.is_e_set() {int::NMI_VECTOR_EMU} else {int::NMI_VECTOR}),
+                Interrupt::NMI => {
+                    self.trigger_interrupt(if self.is_e_set() {int::NMI_VECTOR_EMU} else {int::NMI_VECTOR});
+                    self.int = None;
+                    self.halt = false;
+                    return true;
+                },
                 Interrupt::IRQ => if !self.p.contains(PFlags::I) {
                     self.trigger_interrupt(if self.is_e_set() {int::IRQ_VECTOR_EMU} else {int::IRQ_VECTOR})
                 }
@@ -79,6 +85,14 @@ impl CPU {
         } else {
             self.clock_inc(INTERNAL_OP);
         }
+
+        false
+    }
+
+    // Enable or disable outputting video.
+    // This is used to let the CPU process for a frame but not render anything.
+    pub fn enable_rendering(&mut self, enable: bool) {
+        self.mem.enable_rendering(enable);
     }
 }
 
