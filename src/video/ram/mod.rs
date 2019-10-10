@@ -86,10 +86,10 @@ impl VideoMem {
 
             0x05 => self.bgregs.set_bg_mode(data),
             0x06 => self.bgregs.set_mosaic(data),
-            0x07 => self.bgregs.bg1_settings = data,
-            0x08 => self.bgregs.bg2_settings = data,
-            0x09 => self.bgregs.bg3_settings = data,
-            0x0A => self.bgregs.bg4_settings = data,
+            0x07 => self.bgregs.set_bg1_settings(data),
+            0x08 => self.bgregs.set_bg2_settings(data),
+            0x09 => self.bgregs.set_bg3_settings(data),
+            0x0A => self.bgregs.set_bg4_settings(data),
             0x0B => self.bgregs.bg12_char_addr = data,
             0x0C => self.bgregs.bg34_char_addr = data,
             0x0D => self.bgregs.set_bg1_scroll_x(data),
@@ -178,15 +178,15 @@ impl VideoMem {
         self.cgram.reset_dirty()
     }
 
-    pub fn is_vram_dirty(&self) -> bool {
-        self.vram.is_dirty()
-    }
-
-    pub fn vram_dirty_range(&self, start: u16, end: u16) -> bool {
-        self.vram.dirty_range(start, end)
+    pub fn vram_is_dirty(&self, start_addr: u16) -> bool {
+        self.vram.dirty_range(start_addr)
     }
 
     pub fn vram_reset_dirty_range(&mut self) {
         self.vram.reset_dirty_range();
+    }
+
+    pub fn vram_set_borders(&mut self, borders: &[u16]) {
+        self.vram.set_borders(borders);
     }
 }

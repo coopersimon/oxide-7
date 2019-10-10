@@ -25,8 +25,7 @@ pub struct VRAM {
     port_control:   PortControl,
     byte_addr:      u16,
 
-    dirty_start:    u16,
-    dirty_end:      u16
+    borders:        Vec<(u16, bool)>
 }
 
 impl VRAM {
@@ -37,8 +36,7 @@ impl VRAM {
             port_control:   PortControl::default(),
             byte_addr:      0,
 
-            dirty_start:    MAX,
-            dirty_end:      0
+            borders:        Vec::new()
         }
     }
 
@@ -84,9 +82,7 @@ impl VRAM {
     pub fn write_lo(&mut self, data: u8) {
         self.data[self.byte_addr as usize] = data;
 
-        if self.dirty_start > self.byte_addr {
-            self.dirty_start = self.byte_addr;
-        }
+        self.set_dirty(self.byte_addr);
 
         if !self.port_control.contains(PortControl::INC) {
             self.inc_addr();
@@ -94,11 +90,10 @@ impl VRAM {
     }
 
     pub fn write_hi(&mut self, data: u8) {
-        self.data[self.byte_addr.wrapping_add(1) as usize] = data;
+        let addr = self.byte_addr.wrapping_add(1);
+        self.data[addr as usize] = data;
 
-        if self.dirty_end < self.byte_addr {
-            self.dirty_end = self.byte_addr;
-        }
+        self.set_dirty(addr);
 
         if self.port_control.contains(PortControl::INC) {
             self.inc_addr();
@@ -110,21 +105,26 @@ impl VRAM {
         &self.data
     }
 
-    // Check if any bytes have been altered.
-    pub fn is_dirty(&self) -> bool {
-        (self.dirty_start != MAX) || (self.dirty_end != 0)
-    }
-
-    // Check if a block of bytes overlaps with the dirty range.
-    // TODO: return the overlapped area.
-    pub fn dirty_range(&self, start: u16, end: u16) -> bool {
-        (start <= self.dirty_end) && (end >= self.dirty_start)
+    // Check if a region is dirty.
+    pub fn dirty_range(&self, start_addr: u16) -> bool {
+        if let Some((_, dirty)) = self.borders.iter().find(|(b, _)| *b == start_addr) {
+            *dirty
+        } else {
+            false
+        }
     }
 
     // Reset the dirty range once reading is finished.
     pub fn reset_dirty_range(&mut self) {
-        self.dirty_start = MAX;
-        self.dirty_end = 0;
+        for (_, dirty) in self.borders.iter_mut() {
+            *dirty = false;
+        }
+    }
+
+    // Set the borders of each region of VRAM.
+    // Incoming vec must be ordered!
+    pub fn set_borders(&mut self, borders: &[u16]) {
+        self.borders = borders.iter().map(|b| (*b, true)).collect::<Vec<_>>();
     }
 }
 
@@ -140,5 +140,13 @@ impl VRAM {
         };
 
         self.byte_addr = self.byte_addr.wrapping_add(inc_rate);
+    }
+
+    // Set a region to be dirty.
+    #[inline]
+    fn set_dirty(&mut self, addr: u16) {
+        if let Some((_, dirty)) = self.borders.iter_mut().rev().find(|(a, _)| addr >= *a) {
+            *dirty = true;
+        }
     }
 }

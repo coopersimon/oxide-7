@@ -72,7 +72,7 @@ impl BGTexCache {
 
     // Call if VRAM is known to be dirty.
     pub fn clear_image(&mut self, mem: &VideoMem) {
-        if mem.vram_dirty_range(self.pattern_mem.get_start_addr(), self.pattern_mem.get_end_addr()) {
+        if mem.vram_is_dirty(self.pattern_mem.get_start_addr()) {
             self.descriptor = None;
         }
     }
@@ -107,6 +107,7 @@ impl BGTexCache {
             let data = &mem.get_vram()[(self.pattern_mem.get_start_addr() as usize)..(self.pattern_mem.get_end_addr() as usize)];
             let texture_data = self.pattern_mem.make_image(data, self.width as usize, self.height as usize);
 
+            //println!("BG img");
             let (image, future) = ImmutableImage::from_iter(
                 texture_data.drain(..),
                 Dimensions::Dim2d { width: self.width, height: self.height },
@@ -155,11 +156,11 @@ impl ObjTexCache {
 
     // Call if VRAM is known to be dirty.
     pub fn clear_images(&mut self, mem: &VideoMem) {
-        if mem.vram_dirty_range(self.pattern_mem_0.get_start_addr(), self.pattern_mem_0.get_end_addr()) {
+        if mem.vram_is_dirty(self.pattern_mem_0.get_start_addr()) {
             self.descriptor = None;
             self.image_0 = None;
         }
-        if mem.vram_dirty_range(self.pattern_mem_n.get_start_addr(), self.pattern_mem_n.get_end_addr()) {
+        if mem.vram_is_dirty(self.pattern_mem_n.get_start_addr()) {
             self.descriptor = None;
             self.image_n = None;
         }
@@ -195,6 +196,7 @@ impl ObjTexCache {
                 let data = &mem.get_vram()[(self.pattern_mem_0.get_start_addr() as usize)..(self.pattern_mem_0.get_end_addr() as usize)];
                 let texture_data = self.pattern_mem_0.make_image(data, OBJ_PATTERN_SIZE, OBJ_PATTERN_SIZE);
 
+                //println!("Obj img 0");
                 let (image, future) = ImmutableImage::from_iter(
                     texture_data.drain(..),
                     Dimensions::Dim2d { width: OBJ_PATTERN_SIZE as u32, height: OBJ_PATTERN_SIZE as u32 },
@@ -210,6 +212,7 @@ impl ObjTexCache {
                 let data = &mem.get_vram()[(self.pattern_mem_n.get_start_addr() as usize)..(self.pattern_mem_n.get_end_addr() as usize)];
                 let texture_data = self.pattern_mem_n.make_image(data, OBJ_PATTERN_SIZE, OBJ_PATTERN_SIZE);
 
+                //println!("Obj img n");
                 let (image, future) = ImmutableImage::from_iter(
                     texture_data.drain(..),
                     Dimensions::Dim2d { width: OBJ_PATTERN_SIZE as u32, height: OBJ_PATTERN_SIZE as u32 },

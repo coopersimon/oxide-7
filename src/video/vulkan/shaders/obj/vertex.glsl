@@ -41,7 +41,7 @@ void main() {
 
     texCoordOut = calc_tex_coords(data);
 
-    paletteNumOut = (data >> 8) & 15;
+    paletteNumOut = (data >> 8) & 0xF;
 }
 
 // Get texture coordinates from tex number and x and y pos of tile.

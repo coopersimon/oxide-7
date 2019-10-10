@@ -23,7 +23,8 @@ use crate::video::{
 use super::{
     uniforms::UniformCache,
     VertexBuffer,
-    super::VideoMode
+    super::VideoMode,
+    super::ram::BGReg
 };
 
 use tilemap::*;
@@ -71,10 +72,10 @@ impl MemoryCache {
         ];
 
         let mut tile_maps = [
-            TileMap::new(device, queue, 0, false),
-            TileMap::new(device, queue, 0, false),
-            TileMap::new(device, queue, 0, false),
-            TileMap::new(device, queue, 0, false)
+            TileMap::new(device, queue, BGReg::default(), false),
+            TileMap::new(device, queue, BGReg::default(), false),
+            TileMap::new(device, queue, BGReg::default(), false),
+            TileMap::new(device, queue, BGReg::default(), false)
         ];
 
         for map in tile_maps.iter_mut() {
@@ -109,6 +110,7 @@ impl MemoryCache {
             self.switch_mode(stored_mode);
         }
 
+        let mut recreate_borders = false;
         let mut mem = self.native_mem.borrow_mut();
 
         // Check background mem locations
@@ -116,26 +118,32 @@ impl MemoryCache {
         if self.pattern_mem[0].get_start_addr() != regs.bg1_pattern_addr() {
             let height = regs.get_pattern_table_height(regs.bg1_pattern_addr(), self.pattern_mem[0].get_bits_per_pixel() as u32);
             self.pattern_mem[0].set_addr(regs.bg1_pattern_addr(), height);
+            recreate_borders = true;
         }
-        if !self.tile_maps[0].check_and_set_addr(regs.bg1_settings, regs.bg1_large_tiles()) {
-            self.tile_maps[0] = TileMap::new(&self.device, &self.queue, regs.bg1_settings, regs.bg1_large_tiles());
+        if !self.tile_maps[0].check_and_set_addr(regs.get_bg1_settings(), regs.bg1_large_tiles()) {
+            self.tile_maps[0] = TileMap::new(&self.device, &self.queue, regs.get_bg1_settings(), regs.bg1_large_tiles());
+            recreate_borders = true;
         }
 
         if self.pattern_mem[1].get_start_addr() != regs.bg2_pattern_addr() {
             let height = regs.get_pattern_table_height(regs.bg2_pattern_addr(), self.pattern_mem[1].get_bits_per_pixel() as u32);
             self.pattern_mem[1].set_addr(regs.bg2_pattern_addr(), height);
+            recreate_borders = true;
         }
-        if !self.tile_maps[1].check_and_set_addr(regs.bg2_settings, regs.bg2_large_tiles()) {
-            self.tile_maps[1] = TileMap::new(&self.device, &self.queue, regs.bg2_settings, regs.bg2_large_tiles());
+        if !self.tile_maps[1].check_and_set_addr(regs.get_bg2_settings(), regs.bg2_large_tiles()) {
+            self.tile_maps[1] = TileMap::new(&self.device, &self.queue, regs.get_bg2_settings(), regs.bg2_large_tiles());
+            recreate_borders = true;
         }
 
         if (stored_mode == VideoMode::_1) || (stored_mode == VideoMode::_0) {
             if self.pattern_mem[2].get_start_addr() != regs.bg3_pattern_addr() {
                 let height = regs.get_pattern_table_height(regs.bg3_pattern_addr(), self.pattern_mem[2].get_bits_per_pixel() as u32);
                 self.pattern_mem[2].set_addr(regs.bg3_pattern_addr(), height);
+                recreate_borders = true;
             }
-            if !self.tile_maps[2].check_and_set_addr(regs.bg3_settings, regs.bg3_large_tiles()) {
-                self.tile_maps[2] = TileMap::new(&self.device, &self.queue, regs.bg3_settings, regs.bg3_large_tiles());
+            if !self.tile_maps[2].check_and_set_addr(regs.get_bg3_settings(), regs.bg3_large_tiles()) {
+                self.tile_maps[2] = TileMap::new(&self.device, &self.queue, regs.get_bg3_settings(), regs.bg3_large_tiles());
+                recreate_borders = true;
             }
         }
 
@@ -143,9 +151,11 @@ impl MemoryCache {
             if self.pattern_mem[3].get_start_addr() != regs.bg4_pattern_addr() {
                 let height = regs.get_pattern_table_height(regs.bg4_pattern_addr(), self.pattern_mem[3].get_bits_per_pixel() as u32);
                 self.pattern_mem[3].set_addr(regs.bg4_pattern_addr(), height);
+                recreate_borders = true;
             }
-            if !self.tile_maps[3].check_and_set_addr(regs.bg4_settings, regs.bg4_large_tiles()) {
-                self.tile_maps[3] = TileMap::new(&self.device, &self.queue, regs.bg4_settings, regs.bg4_large_tiles());
+            if !self.tile_maps[3].check_and_set_addr(regs.get_bg4_settings(), regs.bg4_large_tiles()) {
+                self.tile_maps[3] = TileMap::new(&self.device, &self.queue, regs.get_bg4_settings(), regs.bg4_large_tiles());
+                recreate_borders = true;
             }
         }
 
@@ -153,30 +163,36 @@ impl MemoryCache {
         self.obj_mem.check_and_set_obj_settings(regs.get_object_settings());
         if self.obj_pattern.get_start_addr_0() != regs.obj0_pattern_addr() {
             self.obj_pattern.set_addr_0(regs.obj0_pattern_addr());
+            recreate_borders = true;
         }
         if self.obj_pattern.get_start_addr_n() != regs.objn_pattern_addr() {
             self.obj_pattern.set_addr_n(regs.objn_pattern_addr());
+            recreate_borders = true;
         }
 
         self.bg3_priority = regs.get_bg3_priority();
 
-        // Check data dirtiness
-        if mem.is_vram_dirty() {
-            self.pattern_mem[0].clear_image(&mem);
-            self.pattern_mem[1].clear_image(&mem);
-            self.pattern_mem[2].clear_image(&mem);
-            self.pattern_mem[3].clear_image(&mem);
-
-            self.obj_pattern.clear_images(&mem);
-
-            // Clear tile maps.
-            self.tile_maps[0].update(&mem);
-            self.tile_maps[1].update(&mem);
-            self.tile_maps[2].update(&mem);
-            self.tile_maps[3].update(&mem);
-
-            mem.vram_reset_dirty_range();
+        // If borders have changed, reset in vram.
+        if recreate_borders {
+            let borders = regs.get_vram_borders();
+            mem.vram_set_borders(&borders);
         }
+
+        // If vram is dirty:
+        self.pattern_mem[0].clear_image(&mem);
+        self.pattern_mem[1].clear_image(&mem);
+        self.pattern_mem[2].clear_image(&mem);
+        self.pattern_mem[3].clear_image(&mem);
+
+        self.obj_pattern.clear_images(&mem);
+
+        // Clear tile maps.
+        self.tile_maps[0].update(&mem);
+        self.tile_maps[1].update(&mem);
+        self.tile_maps[2].update(&mem);
+        self.tile_maps[3].update(&mem);
+
+        mem.vram_reset_dirty_range();
 
         // Check CGRAM dirtiness
         if mem.is_cgram_bg_dirty() {

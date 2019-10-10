@@ -27,7 +27,11 @@ use super::super::{
     VertexBuffer,
     VertexSide,
     TexSide,
-    super::VideoMem
+    super::VideoMem,
+    super::ram::{
+        MapMirror,
+        BGReg
+    }
 };
 
 // Tile data bits (that we care about here).
@@ -41,36 +45,6 @@ const SUB_MAP_SIZE: usize = SUB_MAP_LEN * SUB_MAP_LEN * 2;
 // Tile sizes TODO: alter based on mode
 const SMALL_TILE: usize = 8;
 const LARGE_TILE: usize = 16;
-
-// BG Register bits.
-bitflags! {
-    #[derive(Default)]
-    struct BGReg: u8 {
-        const ADDR      = bits![7, 6, 5, 4, 3, 2];
-        const MIRROR_Y  = bit!(1);
-        const MIRROR_X  = bit!(0);
-    }
-}
-
-// Combination of mirror X and Y.
-enum MapMirror {
-    None    = 0,
-    X       = 1,
-    Y       = 2,
-    Both    = 3
-}
-
-impl From<BGReg> for MapMirror {
-    fn from(val: BGReg) -> Self {
-        match (val & (BGReg::MIRROR_Y | BGReg::MIRROR_X)).bits() {
-            0 => MapMirror::None,
-            1 => MapMirror::X,
-            2 => MapMirror::Y,
-            3 => MapMirror::Both,
-            _ => unreachable!()
-        }
-    }
-}
 
 pub struct TileMap {
     vertices:       Vec<Vertex>,
@@ -95,10 +69,9 @@ impl TileMap {
     // Grid size is 32 or 64.
     // View size is (32 | 16, 28 | 14)
     // Tile size in pixels.
-    pub fn new(device: &Arc<Device>, queue: &Arc<Queue>, bg_reg: u8, large_tiles: bool) -> Self {
-        let reg_bits = BGReg::from_bits_truncate(bg_reg);
-        let grid_size_x = if reg_bits.contains(BGReg::MIRROR_X) {64} else {32};
-        let grid_size_y = if reg_bits.contains(BGReg::MIRROR_Y) {64} else {32};
+    pub fn new(device: &Arc<Device>, queue: &Arc<Queue>, bg_reg: BGReg, large_tiles: bool) -> Self {
+        let grid_size_x = if bg_reg.contains(BGReg::MIRROR_X) {64} else {32};
+        let grid_size_y = if bg_reg.contains(BGReg::MIRROR_Y) {64} else {32};
 
         let view_size = (if large_tiles {16} else {32}, if large_tiles {14} else {28});
         let tile_height = if large_tiles {LARGE_TILE} else {SMALL_TILE};
@@ -150,12 +123,14 @@ impl TileMap {
         let init_future = Box::new(now(device.clone())) as Box<dyn GpuFuture>;
         index_futures.drain(..).fold(init_future, |all, f| Box::new(all.join(f)) as Box<dyn GpuFuture>).flush().unwrap();
 
-        let start_addr = ((reg_bits & BGReg::ADDR).bits() as u16) << 9;
+        let start_addr = ((bg_reg & BGReg::ADDR).bits() as u16) << 9;
+
+        println!("Making new");
 
         TileMap {
             vertices:       vertices,
 
-            bg_reg:         reg_bits,
+            bg_reg:         bg_reg,
 
             start_addr:     start_addr,
             //size:           (grid_size_x * grid_size_y * 2) as u16,
@@ -172,8 +147,7 @@ impl TileMap {
     }
 
     // Check if size is the same. If it is, set the new start address. If not, return false.
-    pub fn check_and_set_addr(&mut self, settings: u8, large_tiles: bool) -> bool {
-        let new_bg_reg = BGReg::from_bits_truncate(settings);
+    pub fn check_and_set_addr(&mut self, settings: BGReg, large_tiles: bool) -> bool {
         /*if (new_bg_reg != self.bg_reg) || (large_tiles != self.large_tiles) {
             if ((new_bg_reg & (BGReg::MIRROR_X | BGReg::MIRROR_Y)) != (self.bg_reg & (BGReg::MIRROR_X | BGReg::MIRROR_Y))) || (large_tiles != self.large_tiles) {
                 return false;   // This map needs to be recreated.
@@ -184,46 +158,55 @@ impl TileMap {
             }
         }*/
         
-        !((new_bg_reg != self.bg_reg) || (large_tiles != self.large_tiles))
+        !((settings != self.bg_reg) || (large_tiles != self.large_tiles))
     }
 
     // Update the tiles if the memory region is dirty.
     pub fn update(&mut self, mem: &VideoMem) {
         use MapMirror::*;
+        let mut changed = false;
         // First A:
-        if mem.vram_dirty_range(self.start_addr, self.start_addr + (SUB_MAP_SIZE - 1) as u16) {
+        if mem.vram_is_dirty(self.start_addr) {
+            changed = true;
             self.create_submap_vertex_data(mem, 0, 0, 0);
         }
         match self.map_mirror() {
             None => {},
             X => {
                 // B
-                if mem.vram_dirty_range(self.start_addr + SUB_MAP_SIZE as u16, self.start_addr + ((SUB_MAP_SIZE * 2) - 1) as u16) {
+                if mem.vram_is_dirty(self.start_addr + SUB_MAP_SIZE as u16) {
+                    changed = true;
                     self.create_submap_vertex_data(mem, SUB_MAP_SIZE, SUB_MAP_LEN, 0);
                 }
             },
             Y => {
                 // B
-                if mem.vram_dirty_range(self.start_addr + SUB_MAP_SIZE as u16, self.start_addr + ((SUB_MAP_SIZE * 2) - 1) as u16) {
+                if mem.vram_is_dirty(self.start_addr + SUB_MAP_SIZE as u16) {
+                    changed = true;
                     self.create_submap_vertex_data(mem, SUB_MAP_SIZE, 0, SUB_MAP_LEN);
                 }
             },
             Both => {
-                if mem.vram_dirty_range(self.start_addr + SUB_MAP_SIZE as u16, self.start_addr + ((SUB_MAP_SIZE * 2) - 1) as u16) {
+                if mem.vram_is_dirty(self.start_addr + SUB_MAP_SIZE as u16) {
+                    changed = true;
                     self.create_submap_vertex_data(mem, SUB_MAP_SIZE, SUB_MAP_LEN, 0);  // B
                 }
-                if mem.vram_dirty_range(self.start_addr + (SUB_MAP_SIZE * 2) as u16, self.start_addr + ((SUB_MAP_SIZE * 3) - 1) as u16) {
+                if mem.vram_is_dirty(self.start_addr + (SUB_MAP_SIZE * 2) as u16) {
+                    changed = true;
                     self.create_submap_vertex_data(mem, SUB_MAP_SIZE * 2, 0, SUB_MAP_LEN);  // C
                 }
-                if mem.vram_dirty_range(self.start_addr + (SUB_MAP_SIZE * 3) as u16, self.start_addr + ((SUB_MAP_SIZE * 4) - 1) as u16) {
+                if mem.vram_is_dirty(self.start_addr + (SUB_MAP_SIZE * 3) as u16) {
+                    changed = true;
                     self.create_submap_vertex_data(mem, SUB_MAP_SIZE * 3, SUB_MAP_LEN, SUB_MAP_LEN);    // D
                 }
             }
         }
 
-        self.current_buffer = Some(self.buffer_pool.chunk(
-            self.vertices.iter().cloned()
-        ).unwrap())
+        if changed || self.current_buffer.is_none() {
+            self.current_buffer = Some(self.buffer_pool.chunk(
+                self.vertices.iter().cloned()
+            ).unwrap());
+        }
     }
 
     pub fn get_vertex_buffer(&self) -> VertexBuffer {

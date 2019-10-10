@@ -48,7 +48,7 @@ fn main() {
             }
 
             // Wait for a frame to pass...
-            //println!("Frame time: {:?}", Utc::now().signed_duration_since(now).num_milliseconds());
+            println!("Frame time: {}ms", Utc::now().signed_duration_since(now).num_milliseconds());
             while Utc::now().signed_duration_since(now) < frame_duration {}
 
             snes.enable_rendering();

@@ -25,6 +25,36 @@ bitflags! {
     }
 }
 
+// BG Register bits.
+bitflags! {
+    #[derive(Default)]
+    pub struct BGReg: u8 {
+        const ADDR      = bits![7, 6, 5, 4, 3, 2];
+        const MIRROR_Y  = bit!(1);
+        const MIRROR_X  = bit!(0);
+    }
+}
+
+// Combination of mirror X and Y.
+pub enum MapMirror {
+    None    = 0,
+    X       = 1,
+    Y       = 2,
+    Both    = 3
+}
+
+impl From<BGReg> for MapMirror {
+    fn from(val: BGReg) -> Self {
+        match (val & (BGReg::MIRROR_Y | BGReg::MIRROR_X)).bits() {
+            0 => MapMirror::None,
+            1 => MapMirror::X,
+            2 => MapMirror::Y,
+            3 => MapMirror::Both,
+            _ => unreachable!()
+        }
+    }
+}
+
 bitflags! {
     #[derive(Default)]
     pub struct Mosaic: u8 {
@@ -40,6 +70,10 @@ const VRAM_END_ADDR: u32 = 64 * 1024;
 const PATTERN_MAX_HEIGHT: u32 = 64;
 const BG_SCROLL_MASK: u16 = 0x3FF;
 
+// Sub-map size (32x32 tiles)
+const SUB_MAP_LEN: u16 = 32;
+const SUB_MAP_SIZE: u16 = SUB_MAP_LEN * SUB_MAP_LEN * 2;
+
 pub struct Registers {
 
         screen_display:     u8,
@@ -47,10 +81,10 @@ pub struct Registers {
         bg_mode:            BGMode,
         mosaic_settings:    Mosaic,
 
-    pub bg1_settings:       u8,
-    pub bg2_settings:       u8,
-    pub bg3_settings:       u8,
-    pub bg4_settings:       u8,
+        bg1_settings:       BGReg,
+        bg2_settings:       BGReg,
+        bg3_settings:       BGReg,
+        bg4_settings:       BGReg,
 
     pub bg12_char_addr:     u8,
     pub bg34_char_addr:     u8,
@@ -73,10 +107,10 @@ impl Registers {
             bg_mode:            BGMode::default(),
             mosaic_settings:    Mosaic::default(),
 
-            bg1_settings:       0,
-            bg2_settings:       0,
-            bg3_settings:       0,
-            bg4_settings:       0,
+            bg1_settings:       BGReg::default(),
+            bg2_settings:       BGReg::default(),
+            bg3_settings:       BGReg::default(),
+            bg4_settings:       BGReg::default(),
 
             bg12_char_addr:     0,
             bg34_char_addr:     0,
@@ -141,6 +175,38 @@ impl Registers {
         self.bg4_scroll_y = make16!(data, hi!(self.bg4_scroll_y));
     }
 
+    pub fn set_bg1_settings(&mut self, data: u8) {
+        self.bg1_settings = BGReg::from_bits_truncate(data);
+    }
+
+    pub fn set_bg2_settings(&mut self, data: u8) {
+        self.bg2_settings = BGReg::from_bits_truncate(data);
+    }
+
+    pub fn set_bg3_settings(&mut self, data: u8) {
+        self.bg3_settings = BGReg::from_bits_truncate(data);
+    }
+
+    pub fn set_bg4_settings(&mut self, data: u8) {
+        self.bg4_settings = BGReg::from_bits_truncate(data);
+    }
+
+    pub fn get_bg1_settings(&self) -> BGReg {
+        self.bg1_settings
+    }
+
+    pub fn get_bg2_settings(&self) -> BGReg {
+        self.bg2_settings
+    }
+
+    pub fn get_bg3_settings(&self) -> BGReg {
+        self.bg3_settings
+    }
+
+    pub fn get_bg4_settings(&self) -> BGReg {
+        self.bg4_settings
+    }
+
     // Getters for the renderer.
     pub fn get_screen_display(&self) -> u8 {
         self.screen_display
@@ -187,19 +253,19 @@ impl Registers {
     }
 
     pub fn bg1_map_addr(&self) -> u16 {
-        ((self.bg1_settings & 0xFC) as u16) << 9
+        ((self.bg1_settings & BGReg::ADDR).bits() as u16) << 9
     }
 
     pub fn bg2_map_addr(&self) -> u16 {
-        ((self.bg2_settings & 0xFC) as u16) << 9
+        ((self.bg2_settings & BGReg::ADDR).bits() as u16) << 9
     }
 
     pub fn bg3_map_addr(&self) -> u16 {
-        ((self.bg3_settings & 0xFC) as u16) << 9
+        ((self.bg3_settings & BGReg::ADDR).bits() as u16) << 9
     }
 
     pub fn bg4_map_addr(&self) -> u16 {
-        ((self.bg4_settings & 0xFC) as u16) << 9
+        ((self.bg4_settings & BGReg::ADDR).bits() as u16) << 9
     }
 
     pub fn bg1_large_tiles(&self) -> bool {
@@ -258,33 +324,6 @@ impl Registers {
 
 // More complex methods called from renderer.
 impl Registers {
-    // Get starting locations for each block of memory, in order.
-    fn get_vram_borders(&self) -> Vec<u16> {
-        let mode = self.get_mode();
-        let mut borders = BTreeSet::new();
-
-        // Always push sprite pattern mem
-        borders.insert(self.obj0_pattern_addr());
-        borders.insert(self.objn_pattern_addr());
-
-        borders.insert(self.bg1_map_addr());
-        borders.insert(self.bg1_pattern_addr());
-
-        borders.insert(self.bg2_map_addr());
-        borders.insert(self.bg2_pattern_addr());
-
-        if (mode == 0) || (mode == 1) {
-            borders.insert(self.bg3_map_addr());
-            borders.insert(self.bg3_pattern_addr());
-        }
-        if mode == 0 {
-            borders.insert(self.bg4_map_addr());
-            borders.insert(self.bg4_pattern_addr());
-        }
-
-        borders.iter().cloned().collect::<Vec<_>>()
-    }
-
     // Get height of pattern table from start address, in pixels.
     pub fn get_pattern_table_height(&self, pattern_addr: u16, bits_per_pixel: u32) -> u32 {
         let borders = self.get_vram_borders();  // TODO: call this from outside.
@@ -306,6 +345,55 @@ impl Registers {
             height * 8
         } else {
             PATTERN_MAX_HEIGHT * 8
+        }
+    }
+
+    // Get starting locations for each block of memory, in order.
+    pub fn get_vram_borders(&self) -> Vec<u16> {
+        let mode = self.get_mode();
+        let mut borders = BTreeSet::new();
+
+        // Always push sprite pattern mem
+        borders.insert(self.obj0_pattern_addr());
+        borders.insert(self.objn_pattern_addr());
+
+        self.set_bg_borders(&mut borders, self.bg1_map_addr(), self.bg1_settings);
+        borders.insert(self.bg1_pattern_addr());
+
+        self.set_bg_borders(&mut borders, self.bg2_map_addr(), self.bg2_settings);
+        borders.insert(self.bg2_pattern_addr());
+
+        if (mode == 0) || (mode == 1) {
+            self.set_bg_borders(&mut borders, self.bg3_map_addr(), self.bg3_settings);
+            borders.insert(self.bg3_pattern_addr());
+        }
+        if mode == 0 {
+            self.set_bg_borders(&mut borders, self.bg4_map_addr(), self.bg4_settings);
+            borders.insert(self.bg4_pattern_addr());
+        }
+
+        let v = borders.iter().cloned().collect::<Vec<_>>();
+        println!("bords: {:?}", v);
+        v
+    }
+
+    // Set borders for a background.
+    fn set_bg_borders(&self, borders: &mut BTreeSet<u16>, start_addr: u16, settings: BGReg) {
+        use MapMirror::*;
+        let bg1_map_mirror = MapMirror::from(settings);
+
+        borders.insert(start_addr);
+
+        match bg1_map_mirror {
+            None =>     {},
+            X | Y =>    {
+                borders.insert(start_addr + SUB_MAP_SIZE);
+            },
+            Both => {
+                borders.insert(start_addr + SUB_MAP_SIZE);
+                borders.insert(start_addr + (SUB_MAP_SIZE * 2));
+                borders.insert(start_addr + (SUB_MAP_SIZE * 3));
+            },
         }
     }
 }
