@@ -11,6 +11,7 @@ mod audio;
 mod snes;
 
 mod debug;
+mod avg;
 
 use chrono::{
     Duration,
@@ -18,7 +19,7 @@ use chrono::{
 };
 
 // Target output frame rate.
-const TARGET_FRAME_RATE: usize = 15;
+const TARGET_FRAME_RATE: usize = 60;
 const FRAME_INTERVAL: f32 = 1.0 / TARGET_FRAME_RATE as f32;
 
 // Emulated frames per second.
@@ -37,6 +38,8 @@ fn main() {
     let frame_duration = Duration::microseconds((FRAME_INTERVAL * 1_000_000.0) as i64);
     let mut nmi_count = NMI_PER_FRAME;
 
+    let mut averager = avg::Averager::new(100);
+
     if debug_mode {
         debug::debug_mode(&mut snes.cpu);
     } else {
@@ -48,7 +51,10 @@ fn main() {
             }
 
             // Wait for a frame to pass...
-            //println!("Frame time: {}ms", Utc::now().signed_duration_since(now).num_milliseconds());
+            let frame_time = Utc::now().signed_duration_since(now).num_milliseconds();
+            //println!("Frame time: {}ms", frame_time);
+            averager.add(frame_time as usize);
+            println!("Frame average: {}ms", averager.get_avg());
             while Utc::now().signed_duration_since(now) < frame_duration {}
 
             snes.enable_rendering();

@@ -214,6 +214,10 @@ impl TileMap {
                 let y_tile = ((i / 2) / SUB_MAP_LEN) + y_offset;
 
                 let tile_data = make16!(*data, lo) as u32;
+                let old_tile_data = self.vertices[y_tile * tile_height][x_tile * 6].data & 0xFFFF;
+                if tile_data == old_tile_data {
+                    continue;
+                }
 
                 let (left, right) = if test_bit!(tile_data, X_FLIP_BIT, u32) {
                     (TexSide::Right as u32 | VertexSide::Left as u32, TexSide::Left as u32 | VertexSide::Right as u32)
