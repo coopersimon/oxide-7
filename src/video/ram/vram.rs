@@ -17,7 +17,6 @@ const INC_RATE_32: u8 = 1;
 
 // Size of VRAM (64kB, or 2^16)
 const VRAM_SIZE: usize = 64 * 1024;
-const MAX: u16 = (VRAM_SIZE - 1) as u16;
 
 pub struct VRAM {
     data:           Vec<u8>,

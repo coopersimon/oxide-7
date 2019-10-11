@@ -167,7 +167,18 @@ impl MemBus {
                 None
             },
             PPUSignal::Delay => {
-                self.clock(PAUSE_LEN)
+                self.bus_b.clock_apu(PAUSE_LEN);
+                match self.bus_b.ppu.clock(PAUSE_LEN) {
+                    PPUSignal::NMI => Some(Interrupt::NMI),
+                    PPUSignal::IRQ => Some(Interrupt::IRQ), // This is the only one that should happen here.
+                    PPUSignal::HBlank => {
+                        if self.hdma_active != 0 {
+                            self.hdma_transfer();
+                        }
+                        None
+                    },
+                    _ => None
+                }
             },
             PPUSignal::None => None
         }
@@ -411,7 +422,7 @@ impl MemBus {
 }
 
 // Amount of cycles to wait before telling the APU to clock.
-const APU_CYCLE_BATCH: usize = 20;
+const APU_CYCLE_BATCH: usize = 100;
 
 // Address Bus B, used for hardware registers.
 struct AddrBusB {

@@ -6,7 +6,6 @@ mod sprite;
 mod tilemap;
 
 use vulkano::{
-    buffer::ImmutableBuffer,
     device::{
         Device,
         Queue
@@ -72,10 +71,10 @@ impl MemoryCache {
         ];
 
         let mut tile_maps = [
-            TileMap::new(device, queue, BGReg::default(), false),
-            TileMap::new(device, queue, BGReg::default(), false),
-            TileMap::new(device, queue, BGReg::default(), false),
-            TileMap::new(device, queue, BGReg::default(), false)
+            TileMap::new(device, BGReg::default(), false),
+            TileMap::new(device, BGReg::default(), false),
+            TileMap::new(device, BGReg::default(), false),
+            TileMap::new(device, BGReg::default(), false)
         ];
 
         for map in tile_maps.iter_mut() {
@@ -121,7 +120,7 @@ impl MemoryCache {
             recreate_borders = true;
         }
         if !self.tile_maps[0].check_and_set_addr(regs.get_bg1_settings(), regs.bg1_large_tiles()) {
-            self.tile_maps[0] = TileMap::new(&self.device, &self.queue, regs.get_bg1_settings(), regs.bg1_large_tiles());
+            self.tile_maps[0] = TileMap::new(&self.device, regs.get_bg1_settings(), regs.bg1_large_tiles());
             recreate_borders = true;
         }
 
@@ -131,7 +130,7 @@ impl MemoryCache {
             recreate_borders = true;
         }
         if !self.tile_maps[1].check_and_set_addr(regs.get_bg2_settings(), regs.bg2_large_tiles()) {
-            self.tile_maps[1] = TileMap::new(&self.device, &self.queue, regs.get_bg2_settings(), regs.bg2_large_tiles());
+            self.tile_maps[1] = TileMap::new(&self.device, regs.get_bg2_settings(), regs.bg2_large_tiles());
             recreate_borders = true;
         }
 
@@ -142,7 +141,7 @@ impl MemoryCache {
                 recreate_borders = true;
             }
             if !self.tile_maps[2].check_and_set_addr(regs.get_bg3_settings(), regs.bg3_large_tiles()) {
-                self.tile_maps[2] = TileMap::new(&self.device, &self.queue, regs.get_bg3_settings(), regs.bg3_large_tiles());
+                self.tile_maps[2] = TileMap::new(&self.device, regs.get_bg3_settings(), regs.bg3_large_tiles());
                 recreate_borders = true;
             }
         }
@@ -154,7 +153,7 @@ impl MemoryCache {
                 recreate_borders = true;
             }
             if !self.tile_maps[3].check_and_set_addr(regs.get_bg4_settings(), regs.bg4_large_tiles()) {
-                self.tile_maps[3] = TileMap::new(&self.device, &self.queue, regs.get_bg4_settings(), regs.bg4_large_tiles());
+                self.tile_maps[3] = TileMap::new(&self.device, regs.get_bg4_settings(), regs.bg4_large_tiles());
                 recreate_borders = true;
             }
         }
@@ -218,13 +217,8 @@ impl MemoryCache {
     }
 
     // Get vertices for a BG.
-    pub fn get_bg_vertex_buffer(&mut self, bg_num: usize) -> VertexBuffer {
-        self.tile_maps[bg_num].get_vertex_buffer()
-    }
-
-    // Get indices for a line of a BG.
-    pub fn get_bg_index_buffer(&mut self, bg_num: usize, y: u16) -> Arc<ImmutableBuffer<[u32]>> {
-        self.tile_maps[bg_num].get_index_buffer(y)
+    pub fn get_bg_vertex_buffer(&mut self, bg_num: usize, y: u16) -> VertexBuffer {
+        self.tile_maps[bg_num].get_vertex_buffer(y)
     }
 
     // Get texture for sprites.

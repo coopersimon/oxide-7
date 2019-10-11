@@ -493,14 +493,12 @@ impl RenderData {
         let push_constants = mem.get_bg_push_constants(bg_num, priorities);
 
         let scrolled_y = mem.calc_y_line(bg_num, y);
-        let vertices = mem.get_bg_vertex_buffer(bg_num);
-        let indices = mem.get_bg_index_buffer(bg_num, scrolled_y);
+        let vertices = mem.get_bg_vertex_buffer(bg_num, scrolled_y);
 
-        command_buffer.draw_indexed(
+        command_buffer.draw(
             self.bg_pipeline.clone(),
             dynamic_state,
             vertices,
-            indices,
             (tiles, palettes.clone()),
             push_constants
         ).unwrap()

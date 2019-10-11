@@ -18,7 +18,7 @@ use chrono::{
 };
 
 // Target output frame rate.
-const TARGET_FRAME_RATE: usize = 30;
+const TARGET_FRAME_RATE: usize = 15;
 const FRAME_INTERVAL: f32 = 1.0 / TARGET_FRAME_RATE as f32;
 
 // Emulated frames per second.
@@ -48,7 +48,7 @@ fn main() {
             }
 
             // Wait for a frame to pass...
-            println!("Frame time: {}ms", Utc::now().signed_duration_since(now).num_milliseconds());
+            //println!("Frame time: {}ms", Utc::now().signed_duration_since(now).num_milliseconds());
             while Utc::now().signed_duration_since(now) < frame_duration {}
 
             snes.enable_rendering();
