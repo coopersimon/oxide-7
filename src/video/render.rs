@@ -1,4 +1,4 @@
-// Tools for communicating with the renderer (and its thread on certain platforms9.
+// Tools for communicating with the renderer (and its thread on certain platforms).
 
 // Renderer trait.
 pub trait Renderable {

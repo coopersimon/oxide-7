@@ -149,7 +149,7 @@ impl VideoMem {
         self.oam.ref_data()
     }
 
-    pub fn get_cgram<'a>(&'a mut self) -> &'a [u8] {
+    pub fn get_cgram<'a>(&'a self) -> &'a [u8] {
         self.cgram.ref_data()
     }
 

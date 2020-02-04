@@ -415,7 +415,13 @@ impl RenderData {
         let mut obj_command_buffer = std::mem::replace(&mut self.obj_cb, None).unwrap();
 
         // Make descriptor sets for palettes.
-        let bg_palettes = mem.get_bg_palette_buffer();
+        let bg_palettes = {
+            let (buffer, write_future) = mem.get_bg_palette_buffer();
+            if let Some(future) = write_future {
+                self.image_futures.push(future);
+            }
+            buffer
+        };
 
         // Draw
         bg_command_buffer = self.draw_bg(bg_command_buffer, 3, mem, dynamic_state, y, &bg_palettes, [0.95, 0.8]);
@@ -440,7 +446,13 @@ impl RenderData {
         let mut obj_command_buffer = std::mem::replace(&mut self.obj_cb, None).unwrap();
 
         // Make descriptor sets for palettes.
-        let bg_palettes = mem.get_bg_palette_buffer();
+        let bg_palettes = {
+            let (buffer, write_future) = mem.get_bg_palette_buffer();
+            if let Some(future) = write_future {
+                self.image_futures.push(future);
+            }
+            buffer
+        };
 
         // Draw
         bg_command_buffer = self.draw_bg(bg_command_buffer, 2, mem, dynamic_state, y, &bg_palettes, [0.95, if mem.get_bg3_priority() {0.0} else {0.8}]);
@@ -512,7 +524,13 @@ impl RenderData {
         priorities:     [f32; 4]
     ) -> AutoCommandBufferBuilder {
         if let Some(sprites) = mem.get_sprite_vertices(y) {
-            let palettes = mem.get_obj_palette_buffer();
+            let palettes = {
+                let (buffer, write_future) = mem.get_obj_palette_buffer();
+                if let Some(future) = write_future {
+                    self.image_futures.push(future);
+                }
+                buffer
+            };
 
             let tiles = {
                 let (image, write_future) = mem.get_sprite_images();

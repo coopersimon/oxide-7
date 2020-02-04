@@ -2,15 +2,15 @@
 
 use vulkano::{
     buffer::{
-        CpuBufferPool,
-        cpu_pool::CpuBufferPoolChunk
+        ImmutableBuffer,
+        BufferUsage
     },
-    memory::pool::StdMemoryPool,
-    device::Device,
+    device::Queue,
     descriptor::descriptor_set::{
         FixedSizeDescriptorSet,
         PersistentDescriptorSetBuf,
     },
+    sync::GpuFuture
 };
 
 use std::sync::Arc;
@@ -21,7 +21,8 @@ use super::super::{
     uniforms::UniformCache
 };
 
-pub type PaletteBuffer = CpuBufferPoolChunk<u32, Arc<StdMemoryPool>>;
+pub type PaletteBuffer = Arc<ImmutableBuffer<[u32]>>;
+pub type PaletteFuture = Box<dyn GpuFuture>;
 
 pub type PaletteDescriptorSet = Arc<FixedSizeDescriptorSet<
     Arc<RenderPipeline>,
@@ -29,44 +30,67 @@ pub type PaletteDescriptorSet = Arc<FixedSizeDescriptorSet<
 >>;
 
 pub struct Palette {
-    buffer_pool:        CpuBufferPool<u32>,
+    queue:              Arc<Queue>,
+
     current_bg_buffer:  Option<PaletteDescriptorSet>,
     current_obj_buffer: Option<PaletteDescriptorSet>
 }
 
 impl Palette {
-    pub fn new(device: &Arc<Device>) -> Self {
+    pub fn new(queue: &Arc<Queue>) -> Self {
         Palette {
-            buffer_pool:        CpuBufferPool::uniform_buffer(device.clone()),
+            queue:              queue.clone(),
+
             current_bg_buffer:  None,
             current_obj_buffer: None
         }
     }
 
-    // Makes a new buffer and replaces the old one.
-    pub fn create_bg_buffer(&mut self, mem: &mut VideoMem, uniform_cache: &mut UniformCache) {
-        let cgram = mem.get_cgram();
-        let buf = self.buffer_pool.chunk(
-            cgram.chunks(4).map(|c| make32!(c[3], c[2], c[1], c[0]))
-        ).unwrap();
-
-        self.current_bg_buffer = Some(uniform_cache.bg_palette(buf));
+    // Call if BG CGRAM is known to be dirty.
+    pub fn clear_bg_buffer(&mut self) {
+        self.current_bg_buffer = None;
     }
 
-    pub fn create_obj_buffer(&mut self, mem: &mut VideoMem, uniform_cache: &mut UniformCache) {
-        let cgram = mem.get_cgram();
-        let buf = self.buffer_pool.chunk(
-            cgram.chunks(4).skip(64).map(|c| make32!(c[3], c[2], c[1], c[0]))
-        ).unwrap();
-
-        self.current_obj_buffer = Some(uniform_cache.obj_palette(buf));
+    // Call if OBJ CGRAM is known to be dirty.
+    pub fn clear_obj_buffer(&mut self) {
+        self.current_obj_buffer = None;
     }
 
-    pub fn get_bg_palette_buffer(&self) -> PaletteDescriptorSet {
-        self.current_bg_buffer.as_ref().unwrap().clone()
+    // Return cached palette buffer or create one if none is cached.
+    pub fn get_bg_buffer(&mut self, mem: &VideoMem, uniform_cache: &mut UniformCache) -> (PaletteDescriptorSet, Option<PaletteFuture>) {
+        if let Some(descriptor_set) = &self.current_bg_buffer {
+            (descriptor_set.clone(), None)
+        } else {
+            let cgram = mem.get_cgram();
+            let (buf, future) = ImmutableBuffer::from_iter(
+                cgram.chunks(4).map(|c| make32!(c[3], c[2], c[1], c[0])),
+                BufferUsage::uniform_buffer(),
+                self.queue.clone()
+            ).unwrap();
+
+            let bg_buffer = uniform_cache.bg_palette(buf);
+
+            self.current_bg_buffer = Some(bg_buffer.clone());
+            (bg_buffer, Some(Box::new(future)))
+        }
     }
 
-    pub fn get_obj_palette_buffer(&self) -> PaletteDescriptorSet {
-        self.current_obj_buffer.as_ref().unwrap().clone()
+    // Return cached palette buffer or create one if none is cached.
+    pub fn get_obj_buffer(&mut self, mem: &VideoMem, uniform_cache: &mut UniformCache) -> (PaletteDescriptorSet, Option<PaletteFuture>) {
+        if let Some(descriptor_set) = &self.current_obj_buffer {
+            (descriptor_set.clone(), None)
+        } else {
+            let cgram = mem.get_cgram();
+            let (buf, future) = ImmutableBuffer::from_iter(
+                cgram.chunks(4).skip(64).map(|c| make32!(c[3], c[2], c[1], c[0])),
+                BufferUsage::uniform_buffer(),
+                self.queue.clone()
+            ).unwrap();
+
+            let obj_buffer = uniform_cache.obj_palette(buf);
+
+            self.current_obj_buffer = Some(obj_buffer.clone());
+            (obj_buffer, Some(Box::new(future)))
+        }
     }
 }

@@ -380,11 +380,11 @@ impl Registers {
     // Set borders for a background.
     fn set_bg_borders(&self, borders: &mut BTreeSet<u16>, start_addr: u16, settings: BGReg) {
         use MapMirror::*;
-        let bg1_map_mirror = MapMirror::from(settings);
+        let bg_map_mirror = MapMirror::from(settings);
 
         borders.insert(start_addr);
 
-        match bg1_map_mirror {
+        match bg_map_mirror {
             None =>     {},
             X | Y =>    {
                 borders.insert(start_addr + SUB_MAP_SIZE);

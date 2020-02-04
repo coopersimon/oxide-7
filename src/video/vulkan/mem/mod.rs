@@ -93,7 +93,7 @@ impl MemoryCache {
             obj_mem:        SpriteMem::new(device),
             obj_pattern:    ObjTexCache::new(device, queue),
 
-            palette:        Palette::new(device),
+            palette:        Palette::new(queue),
 
             device:         device.clone(),
             queue:          queue.clone(),
@@ -195,10 +195,10 @@ impl MemoryCache {
 
         // Check CGRAM dirtiness
         if mem.is_cgram_bg_dirty() {
-            self.palette.create_bg_buffer(&mut mem, &mut self.uniform_cache);
+            self.palette.clear_bg_buffer();
 
             if mem.is_cgram_obj_dirty() {
-                self.palette.create_obj_buffer(&mut mem, &mut self.uniform_cache);
+                self.palette.clear_obj_buffer();
             }
 
             mem.cgram_reset_dirty();
@@ -236,12 +236,14 @@ impl MemoryCache {
 
     // Get the palettes.
     // A buffer wrapped in a descriptor set.
-    pub fn get_bg_palette_buffer(&self) -> PaletteDescriptorSet {
-        self.palette.get_bg_palette_buffer()
+    pub fn get_bg_palette_buffer(&mut self) -> (PaletteDescriptorSet, Option<PaletteFuture>) {
+        let mem = self.native_mem.borrow();
+        self.palette.get_bg_buffer(&mem, &mut self.uniform_cache)
     }
 
-    pub fn get_obj_palette_buffer(&self) -> PaletteDescriptorSet {
-        self.palette.get_obj_palette_buffer()
+    pub fn get_obj_palette_buffer(&mut self) -> (PaletteDescriptorSet, Option<PaletteFuture>) {
+        let mem = self.native_mem.borrow();
+        self.palette.get_obj_buffer(&mem, &mut self.uniform_cache)
     }
 
     // Get registers

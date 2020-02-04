@@ -64,7 +64,7 @@ impl CGRAM {
     }
 
     // For use by renderer memory caches.
-    pub fn ref_data<'a>(&'a mut self) -> &'a [u8] {
+    pub fn ref_data<'a>(&'a self) -> &'a [u8] {
         &self.data
     }
 
