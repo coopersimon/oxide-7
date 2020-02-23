@@ -9,7 +9,8 @@ use crate::{
     constants::{
         timing::INTERNAL_OP,
         int
-    }
+    },
+    joypad::Button
 };
 
 // 65816
@@ -93,6 +94,11 @@ impl CPU {
     // This is used to let the CPU process for a frame but not render anything.
     pub fn enable_rendering(&mut self, enable: bool) {
         self.mem.enable_rendering(enable);
+    }
+
+    // Set buttons on the specified joypad.
+    pub fn set_buttons(&mut self, button: Button, joypad: usize) {
+        self.mem.set_buttons(button, joypad);
     }
 }
 
@@ -1639,6 +1645,7 @@ impl CPU {
 }
 
 // Debug functions.
+#[cfg(feature = "debug")]
 impl CPU {
     // Capture the state of the internal registers.
     pub fn get_state(&self) -> crate::debug::CPUState {

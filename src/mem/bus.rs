@@ -14,7 +14,8 @@ use crate::{
     common::Interrupt,
     constants::timing::*,
     video::{PPU, PPUSignal},
-    audio::APU
+    audio::APU,
+    joypad::{JoypadMem, Button}
 };
 
 use super::{
@@ -34,6 +35,7 @@ use super::{
 pub struct MemBus {
     // Devices
     bus_b:      AddrBusB,
+    joypads:    JoypadMem,
 
     // Memory
     cart:       Box<dyn Cart>,
@@ -64,7 +66,7 @@ impl MemBus {
 
         MemBus {
             bus_b:      AddrBusB::new(),
-            //joypads:    JoypadMem::new(),
+            joypads:    JoypadMem::new(),
             
             cart:       cart,
             wram:       RAM::new(0x20000),
@@ -94,7 +96,7 @@ impl MemBus {
                 0x3000..=0x3FFF => (0, FAST_MEM_ACCESS),                                // Extensions
 
                 0x4000..=0x4015 |
-                0x4000..=0x41FF => (self.bus_b.ppu.read_joypad(offset), XSLOW_MEM_ACCESS),
+                0x4000..=0x41FF => (self.joypads.read(offset), XSLOW_MEM_ACCESS),
                 0x4210..=0x421F => (self.read_reg(offset), FAST_MEM_ACCESS),
 
                 0x4300..=0x430A => (self.dma_channels[0].read((addr as u8) & 0xF), FAST_MEM_ACCESS),
@@ -132,7 +134,7 @@ impl MemBus {
 
                 0x4000..=0x4015 |
                 0x4017..=0x41FF => XSLOW_MEM_ACCESS,
-                0x4016          => {self.bus_b.ppu.joypad_latch(); XSLOW_MEM_ACCESS},
+                0x4016          => {self.joypads.latch_all(); XSLOW_MEM_ACCESS},
 
                 0x4200..=0x420d => {self.write_reg(offset, data); FAST_MEM_ACCESS},
 
@@ -158,8 +160,19 @@ impl MemBus {
         self.bus_b.clock_apu(cycles);
 
         match self.bus_b.ppu.clock(cycles) {
-            PPUSignal::NMI => Some(Interrupt::NMI),
+            PPUSignal::NMI => {
+                self.joypads.prepare_read();
+                Some(Interrupt::NMI)
+            },
             PPUSignal::IRQ => Some(Interrupt::IRQ),
+            PPUSignal::VBlank => {
+                //let j = read_events(&mut self.events_loop, &mut self.renderer);
+
+                //self.joypads.set_buttons(j, 0);
+
+                self.joypads.prepare_read();
+                None
+            },
             PPUSignal::HBlank => {
                 if self.hdma_active != 0 {
                     self.hdma_transfer();
@@ -169,15 +182,9 @@ impl MemBus {
             PPUSignal::Delay => {
                 self.bus_b.clock_apu(PAUSE_LEN);
                 match self.bus_b.ppu.clock(PAUSE_LEN) {
-                    PPUSignal::NMI => Some(Interrupt::NMI),
                     PPUSignal::IRQ => Some(Interrupt::IRQ), // This is the only one that should happen here.
-                    PPUSignal::HBlank => {
-                        if self.hdma_active != 0 {
-                            self.hdma_transfer();
-                        }
-                        None
-                    },
-                    _ => None
+                    PPUSignal::None => None,
+                    _ => unreachable!(),
                 }
             },
             PPUSignal::None => None
@@ -187,6 +194,11 @@ impl MemBus {
     // Enable or disable rendering video.
     pub fn enable_rendering(&mut self, enable: bool) {
         self.bus_b.ppu.enable_rendering(enable);
+    }
+
+    // Set buttons on the specified joypad.
+    pub fn set_buttons(&mut self, button: Button, joypad: usize) {
+        self.joypads.set_buttons(button, joypad);
     }
 }
 
@@ -232,20 +244,23 @@ impl MemBus {
         match addr {
             0x4210 => self.bus_b.ppu.get_nmi_flag(),
             0x4211 => self.bus_b.ppu.get_irq_flag(),
-            0x4212 => self.bus_b.ppu.get_status(), // PPU status
+            0x4212 => self.bus_b.ppu.get_status() | self.joypads.is_ready(), // PPU status
             0x4213 => 0, // IO port read
             0x4214 => lo!(self.div_result),
             0x4215 => hi!(self.div_result),
             0x4216 => lo!(self.mult_result),
             0x4217 => hi!(self.mult_result),
-            0x4218..=0x421F => self.bus_b.ppu.read_joypad(addr),
+            0x4218..=0x421F => self.joypads.read(addr),
             _ => 0,
         }
     }
 
     fn write_reg(&mut self, addr: u16, data: u8) {
         match addr {
-            0x4200 => self.bus_b.ppu.set_int_enable(data),   // Enable IRQ
+            0x4200 => { // Interrupt enable flags.
+                self.bus_b.ppu.set_int_enable(data);
+                self.joypads.enable_counter(data);
+            },
             0x4201 => {}, // IO port write
             0x4202 => self.mult_operand = data,
             0x4203 => self.mult_result = (self.mult_operand as u16) * (data as u16),

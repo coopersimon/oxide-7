@@ -57,11 +57,12 @@ bitflags! {
 // Signal from the PPU.
 #[derive(PartialEq)]
 pub enum PPUSignal {
-    None,       // No signal
+    None,       // No signal.
     NMI,        // NMI triggered by entering V-blank period.
     IRQ,        // IRQ triggered by X or Y coord.
-    HBlank,     // H-Blank period entered
-    Delay,      // Delay CPU by 40 cycles in middle of scanline
+    VBlank,     // V-blank period entered without NMI.
+    HBlank,     // H-Blank period entered.
+    Delay,      // Delay CPU by 40 cycles in middle of scanline.
 }
 
 // PPU internal state
@@ -78,8 +79,6 @@ pub struct PPU {
     state:          PPUState,
 
     mem:            VRamRef,
-
-    joypads:        JoypadMem,
 
     cycle_count:    usize,  // Current cycle count, into the scanline (0-1364)
     scanline:       usize,  // Current scanline
@@ -107,7 +106,6 @@ impl PPU {
         PPU {
             state:          PPUState::VBlank,
             mem:            mem.clone(),
-            joypads:        JoypadMem::new(),
 
             cycle_count:    0,
             scanline:       0,
@@ -142,7 +140,7 @@ impl PPU {
 
     // Misc
     pub fn get_status(&mut self) -> u8 {
-        self.status.bits() | self.joypads.is_ready()
+        self.status.bits()
     }
 
     pub fn latch_hv(&mut self) -> u8 {
@@ -151,15 +149,6 @@ impl PPU {
             self.scanline as u16                            // V
         );
         0
-    }
-
-    // Joypad access
-    pub fn read_joypad(&mut self, addr: u16) -> u8 {
-        self.joypads.read(addr)
-    }
-
-    pub fn joypad_latch(&mut self) {
-        self.joypads.latch_all()
     }
 
     // Timing
@@ -226,7 +215,6 @@ impl PPU {
     // Interrupts
     pub fn set_int_enable(&mut self, data: u8) {
         self.int_enable = IntEnable::from_bits_truncate(data);
-        self.joypads.enable_counter(data);
     }
 
     pub fn set_h_timer_lo(&mut self, data: u8) {
@@ -287,18 +275,10 @@ impl PPU {
                     }
                 }
 
-                let j = read_events(&mut self.events_loop, &mut self.renderer);
-
-                self.joypads.set_buttons(j, 0);
-
-                if self.int_enable.contains(IntEnable::AUTO_JOYPAD) {
-                    self.joypads.prepare_read();
-                }
-
                 if self.int_enable.contains(IntEnable::ENABLE_NMI) {
                     self.trigger_interrupt(Interrupt::NMI)
                 } else {
-                    PPUSignal::None
+                    PPUSignal::VBlank
                 }
             },
             PPUState::HBlankRight => {

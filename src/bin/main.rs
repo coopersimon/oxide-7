@@ -1,22 +1,12 @@
-#[macro_use]
-mod common;
-mod constants;
-
-mod cpu;
-mod joypad;
-mod mem;
-mod video;
-mod audio;
-
-mod snes;
-
-mod debug;
 mod avg;
+mod debug;
 
 use chrono::{
     Duration,
     Utc
 };
+
+use oxide7::*;
 
 // Target output frame rate.
 const TARGET_FRAME_RATE: usize = 60;
@@ -32,7 +22,7 @@ fn main() {
 
     let debug_mode = std::env::args().nth(2).is_some();
 
-    let mut snes = snes::SNES::new(&cart_path, "");
+    let mut snes = SNES::new(&cart_path, "");
 
     let mut now = Utc::now();
     let frame_duration = Duration::microseconds((FRAME_INTERVAL * 1_000_000.0) as i64);
@@ -41,7 +31,7 @@ fn main() {
     let mut averager = avg::Averager::new(100);
 
     if debug_mode {
-        debug::debug_mode(&mut snes.cpu);
+        debug::debug_mode(&mut snes);
     } else {
         loop {
             while nmi_count > 0.0 {
