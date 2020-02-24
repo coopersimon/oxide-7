@@ -56,7 +56,7 @@ pub struct MemBus {
 }
 
 impl MemBus {
-    pub fn new(cart_path: &str) -> Self {
+    pub fn new(cart_path: &str, events_loop: &winit::EventsLoop) -> Self {
         // Open ROM file.
         let f = File::open(cart_path).expect(&format!("Couldn't open file {}", cart_path));
 
@@ -65,7 +65,7 @@ impl MemBus {
         let cart = MemBus::make_cart(reader);
 
         MemBus {
-            bus_b:      AddrBusB::new(),
+            bus_b:      AddrBusB::new(events_loop),
             joypads:    JoypadMem::new(),
             
             cart:       cart,
@@ -197,8 +197,8 @@ impl MemBus {
     }
 
     // Set buttons on the specified joypad.
-    pub fn set_buttons(&mut self, button: Button, joypad: usize) {
-        self.joypads.set_buttons(button, joypad);
+    pub fn set_buttons(&mut self, button: Button, val: bool, joypad: usize) {
+        self.joypads.set_buttons(button, val, joypad);
     }
 }
 
@@ -448,9 +448,9 @@ struct AddrBusB {
 }
 
 impl AddrBusB {
-    fn new() -> Self {
+    fn new(events_loop: &winit::EventsLoop) -> Self {
         AddrBusB {
-            ppu: PPU::new(),
+            ppu: PPU::new(events_loop),
             apu: APU::new(),
 
             apu_cycle_count:    0

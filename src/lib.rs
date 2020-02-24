@@ -14,7 +14,21 @@ pub mod debug;
 use cpu::CPU;
 use mem::MemBus;
 
-pub use joypad::Button;
+// Joypad buttons.
+pub enum Button {
+    Up,
+    Down,
+    Left,
+    Right,
+    A,
+    B,
+    X,
+    Y,
+    Start,
+    Select,
+    L,
+    R
+}
 
 pub struct SNES {
     cpu:    CPU,    // CPU, along with mem bus and devices
@@ -22,8 +36,8 @@ pub struct SNES {
 
 impl SNES {
     // Construct a new SNES with a cartridge inserted.
-    pub fn new(cart_path: &str, _save_path: &str) -> Self {
-        let bus = MemBus::new(cart_path);
+    pub fn new(cart_path: &str, _save_path: &str, events_loop: &winit::EventsLoop) -> Self {
+        let bus = MemBus::new(cart_path, events_loop);
         let cpu = CPU::new(bus);
 
         SNES {
@@ -47,9 +61,23 @@ impl SNES {
         self.cpu.enable_rendering(true);
     }
 
-    // Set buttons on the specified joypad.
-    pub fn set_buttons(&mut self, button: Button, joypad: usize) {
-        self.cpu.set_buttons(button, joypad);
+    // Sets a button on the specified joypad.
+    pub fn set_button(&mut self, button: Button, val: bool, joypad: usize) {
+        use joypad::Button as JB;
+        self.cpu.set_buttons(match button {
+            Button::Up      => JB::UP,
+            Button::Down    => JB::DOWN,
+            Button::Left    => JB::LEFT,
+            Button::Right   => JB::RIGHT,
+            Button::A       => JB::A,
+            Button::B       => JB::B,
+            Button::X       => JB::X,
+            Button::Y       => JB::Y,
+            Button::Start   => JB::START,
+            Button::Select  => JB::SELECT,
+            Button::L       => JB::L,
+            Button::R       => JB::R
+        }, val, joypad);
     }
 }
 

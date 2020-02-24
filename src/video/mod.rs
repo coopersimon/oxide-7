@@ -12,14 +12,6 @@ use std::{
     cell::RefCell
 };
 
-use winit::{
-    EventsLoop,
-    Event,
-    WindowEvent,
-    ElementState,
-    VirtualKeyCode
-};
-
 use bitflags::bitflags;
 
 use crate::{
@@ -28,7 +20,6 @@ use crate::{
         timing,
         screen
     },
-    joypad::{Button, JoypadMem}
 };
 
 use ram::VideoMem;
@@ -93,15 +84,11 @@ pub struct PPU {
 
     renderer:       vulkan::Renderer,
     enable_render:  bool,
-    events_loop:    EventsLoop
 }
 
 impl PPU {
-    pub fn new() -> Self {
+    pub fn new(events_loop: &winit::EventsLoop) -> Self {
         let mem = Rc::new(RefCell::new(VideoMem::new()));
-
-        // Make instance with window extensions.
-        let events_loop = EventsLoop::new();
 
         PPU {
             state:          PPUState::VBlank,
@@ -118,9 +105,8 @@ impl PPU {
             h_cycle:        0,
             v_timer:        0,
 
-            renderer:       vulkan::Renderer::new(mem, &events_loop),
+            renderer:       vulkan::Renderer::new(mem, events_loop),
             enable_render:  true,
-            events_loop:    events_loop
         }
     }
 
@@ -323,49 +309,4 @@ impl PPU {
     fn toggle_hblank(&mut self, hblank: bool) {
         self.status.set(PPUStatus::H_BLANK, hblank);
     }
-}
-
-// Internal on video thread.
-fn read_events(events_loop: &mut EventsLoop, renderer: &mut vulkan::Renderer) -> Button {
-    let mut buttons = Button::default();
-
-    events_loop.poll_events(|e| {
-        match e {
-            Event::WindowEvent {
-                window_id: _,
-                event: w,
-            } => match w {
-                WindowEvent::CloseRequested => {
-                    ::std::process::exit(0);
-                },
-                WindowEvent::KeyboardInput {
-                    device_id: _,
-                    input: k,
-                } => {
-                    let pressed = match k.state {
-                        ElementState::Pressed => true,
-                        ElementState::Released => false,
-                    };
-                    match k.virtual_keycode {
-                        Some(VirtualKeyCode::X)         => buttons.set(Button::A, pressed),
-                        Some(VirtualKeyCode::Z)         => buttons.set(Button::B, pressed),
-                        Some(VirtualKeyCode::Space)     => buttons.set(Button::SELECT, pressed),
-                        Some(VirtualKeyCode::Return)    => buttons.set(Button::START, pressed),
-                        Some(VirtualKeyCode::Up)        => buttons.set(Button::UP, pressed),
-                        Some(VirtualKeyCode::Down)      => buttons.set(Button::DOWN, pressed),
-                        Some(VirtualKeyCode::Left)      => buttons.set(Button::LEFT, pressed),
-                        Some(VirtualKeyCode::Right)     => buttons.set(Button::RIGHT, pressed),
-                        _ => {},
-                    }
-                },
-                WindowEvent::Resized(_) => {
-                    renderer.create_swapchain();
-                },
-                _ => {}
-            },
-            _ => {},
-        }
-    });
-
-    buttons
 }

@@ -97,8 +97,8 @@ impl CPU {
     }
 
     // Set buttons on the specified joypad.
-    pub fn set_buttons(&mut self, button: Button, joypad: usize) {
-        self.mem.set_buttons(button, joypad);
+    pub fn set_buttons(&mut self, button: Button, val: bool, joypad: usize) {
+        self.mem.set_buttons(button, val, joypad);
     }
 }
 

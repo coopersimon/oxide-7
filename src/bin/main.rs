@@ -8,6 +8,14 @@ use chrono::{
 
 use oxide7::*;
 
+use winit::{
+    EventsLoop,
+    Event,
+    WindowEvent,
+    VirtualKeyCode,
+    ElementState
+};
+
 // Target output frame rate.
 const TARGET_FRAME_RATE: usize = 60;
 const FRAME_INTERVAL: f32 = 1.0 / TARGET_FRAME_RATE as f32;
@@ -22,7 +30,8 @@ fn main() {
 
     let debug_mode = std::env::args().nth(2).is_some();
 
-    let mut snes = SNES::new(&cart_path, "");
+    let mut events_loop = EventsLoop::new();
+    let mut snes = SNES::new(&cart_path, "", &events_loop);
 
     let mut now = Utc::now();
     let frame_duration = Duration::microseconds((FRAME_INTERVAL * 1_000_000.0) as i64);
@@ -52,4 +61,42 @@ fn main() {
             now = Utc::now();
         }
     }
+}
+
+// Internal on video thread.
+fn read_events(events_loop: &mut EventsLoop, snes: &mut SNES) {
+    events_loop.poll_events(|e| {
+        match e {
+            Event::WindowEvent {
+                window_id: _,
+                event: w,
+            } => match w {
+                WindowEvent::CloseRequested => {
+                    ::std::process::exit(0);
+                },
+                WindowEvent::KeyboardInput {
+                    device_id: _,
+                    input: k,
+                } => {
+                    let pressed = match k.state {
+                        ElementState::Pressed => true,
+                        ElementState::Released => false,
+                    };
+                    match k.virtual_keycode {
+                        Some(VirtualKeyCode::X)         => snes.set_button(Button::A, pressed, 0),
+                        Some(VirtualKeyCode::Z)         => snes.set_button(Button::B, pressed, 0),
+                        Some(VirtualKeyCode::Space)     => snes.set_button(Button::Select, pressed, 0),
+                        Some(VirtualKeyCode::Return)    => snes.set_button(Button::Start, pressed, 0),
+                        Some(VirtualKeyCode::Up)        => snes.set_button(Button::Up, pressed, 0),
+                        Some(VirtualKeyCode::Down)      => snes.set_button(Button::Down, pressed, 0),
+                        Some(VirtualKeyCode::Left)      => snes.set_button(Button::Left, pressed, 0),
+                        Some(VirtualKeyCode::Right)     => snes.set_button(Button::Right, pressed, 0),
+                        _ => {},
+                    }
+                },
+                _ => {}
+            },
+            _ => {},
+        }
+    });
 }
