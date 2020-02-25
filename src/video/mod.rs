@@ -3,13 +3,12 @@
 
 mod ram;
 mod render;
-mod patternmem;
 
 mod vulkan;
 
-use std::{
-    rc::Rc,
-    cell::RefCell
+use std::sync::{
+    Arc,
+    Mutex
 };
 
 use bitflags::bitflags;
@@ -25,7 +24,7 @@ use crate::{
 use ram::VideoMem;
 use render::*;
 
-type VRamRef = Rc<RefCell<VideoMem>>;
+type VRamRef = Arc<Mutex<VideoMem>>;
 
 bitflags! {
     #[derive(Default)]
@@ -88,7 +87,7 @@ pub struct PPU {
 
 impl PPU {
     pub fn new(events_loop: &winit::EventsLoop) -> Self {
-        let mem = Rc::new(RefCell::new(VideoMem::new()));
+        let mem = Arc::new(Mutex::new(VideoMem::new()));
 
         PPU {
             state:          PPUState::VBlank,
@@ -117,11 +116,11 @@ impl PPU {
 
     // Memory access from CPU / B Bus
     pub fn read_mem(&mut self, addr: u8) -> u8 {
-        self.mem.borrow_mut().read(addr)
+        self.mem.lock().unwrap().read(addr)
     }
 
     pub fn write_mem(&mut self, addr: u8, data: u8) {
-        self.mem.borrow_mut().write(addr, data);
+        self.mem.lock().unwrap().write(addr, data);
     }
 
     // Misc
@@ -130,7 +129,7 @@ impl PPU {
     }
 
     pub fn latch_hv(&mut self) -> u8 {
-        self.mem.borrow_mut().set_latched_hv(
+        self.mem.lock().unwrap().set_latched_hv(
             (self.cycle_count / timing::DOT_TIME) as u16,   // H
             self.scanline as u16                            // V
         );
@@ -255,7 +254,7 @@ impl PPU {
                 self.toggle_hblank(false);
 
                 {
-                    let mut mem = self.mem.borrow_mut();
+                    let mut mem = self.mem.lock().unwrap();
                     if mem.get_registers().in_fblank() {
                         mem.oam_reset();
                     }

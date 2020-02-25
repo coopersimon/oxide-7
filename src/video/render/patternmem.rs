@@ -7,6 +7,24 @@ pub enum BitsPerPixel {
     _8 = 8
 }
 
+#[derive(Clone)]
+pub struct Tile {
+    data:   Vec<Vec<u8>> // Raw data. One byte for each pixel.
+}
+
+impl Tile {
+    pub fn new() -> Self {
+        Tile {
+            data: vec![vec![0; 8]; 8]
+        }
+    }
+
+    #[inline]
+    pub fn get_texel(&self, x: usize, y: usize) -> u8 {
+        self.data[y][x]
+    }
+}
+
 pub struct PatternMem {
     // Parameters
     bits_per_pixel: BitsPerPixel,
@@ -14,7 +32,7 @@ pub struct PatternMem {
     start_addr:     u16,
     end_addr:       u16,
 
-    tex_data:       Vec<u8> // Raw data. One byte for each pixel.
+    tiles:          Vec<Tile>
 }
 
 impl PatternMem {
@@ -25,7 +43,7 @@ impl PatternMem {
             start_addr:     std::u16::MAX,
             end_addr:       std::u16::MAX,
 
-            tex_data:       Vec::new()
+            tiles:          Vec::new()
         }
     }
 
@@ -40,7 +58,7 @@ impl PatternMem {
         self.start_addr = start_addr;
         self.end_addr = start_addr + (size as u16);
 
-        self.tex_data.clear();
+        self.tiles.clear();
     }
 
     // Return the BPP.
@@ -58,28 +76,30 @@ impl PatternMem {
         self.end_addr
     }
 
-    // Make the image. Input raw data, width and height in PIXELS/TEXELS, and bits per pixel.
-    // Rows are always 16 tiles. (16 x 8 = 128 pixels.)
-    pub fn make_image<'a>(&'a mut self, data: &[u8], width: usize, height: usize) -> &'a mut Vec<u8> {
-        //let mut texture_data = vec![0; (self.width * self.height) as usize];
-        self.tex_data.resize(width * height, 0);
+    // Make the tiles. Input raw data, width and height in TILES, and bits per pixel.
+    // Rows are always 16 tiles.
+    pub fn make_tiles(&mut self, data: &[u8], width: usize, height: usize) {
+        self.tiles.resize_with(width * height, || Tile::new());
 
         match self.bits_per_pixel {
             // 16 bytes per tile.
-            BitsPerPixel::_2 => self.make_image_2bpp(data),
+            BitsPerPixel::_2 => self.make_tiles_2bpp(data),
             // 32 bytes per tile.
-            BitsPerPixel::_4 => self.make_image_4bpp(data),
+            BitsPerPixel::_4 => self.make_tiles_4bpp(data),
             // 64 bytes per tile.
-            BitsPerPixel::_8 => self.make_image_8bpp(data),
+            BitsPerPixel::_8 => self.make_tiles_8bpp(data),
         }
+    }
 
-        &mut self.tex_data
+    // Ref a tile.
+    pub fn ref_tile<'a>(&'a self, num: usize) -> &'a Tile {
+        &self.tiles[num]
     }
 }
 
 // Internal
 impl PatternMem {
-    fn make_image_2bpp(&mut self, data: &[u8]) {
+    /*fn make_image_2bpp(&mut self, data: &[u8]) {
         let row_size = 16 * 8;      // Row length in pixels.
         let mut col = 0;            // Current col of tile in pixels.
         let mut row = 0;            // Current row of tile in pixels.
@@ -110,9 +130,22 @@ impl PatternMem {
                 }
             }
         }
+    }*/
+
+    fn make_tiles_2bpp(&mut self, data: &[u8]) {
+        for (i, d) in data.iter().enumerate() {
+            let y = (i / 2) % 8;
+            let bitplane = i % 2;
+            let tile_num = i / 16;
+            
+            for x in 0..8 {
+                let bit = (*d >> (7 - x)) & 1;
+                self.tiles[tile_num].data[y][x] |= bit << bitplane;
+            }
+        }
     }
 
-    fn make_image_4bpp(&mut self, data: &[u8]) {
+    /*fn make_image_4bpp(&mut self, data: &[u8]) {
         let row_size = 16 * 8;      // Row length in pixels.
         let mut col = 0;            // Current col of tile in pixels.
         let mut row = 0;            // Current row of tile in pixels.
@@ -151,9 +184,26 @@ impl PatternMem {
             }
         }
 
+    }*/
+
+    fn make_tiles_4bpp(&mut self, data: &[u8]) {
+        for (i, d) in data.iter().enumerate() {
+            let y = (i / 2) % 8;
+
+            let sub_bitplane = i % 2;
+            let bitplane_offset = (i / 16) % 2;
+            let bitplane = sub_bitplane + (bitplane_offset << 1);
+
+            let tile_num = i / 32;
+            
+            for x in 0..8 {
+                let bit = (*d >> (7 - x)) & 1;
+                self.tiles[tile_num].data[y][x] |= bit << bitplane;
+            }
+        }
     }
 
-    fn make_image_8bpp(&mut self, data: &[u8]) {
+    /*fn make_image_8bpp(&mut self, data: &[u8]) {
         let row_size = 16 * 8;      // Row length in pixels.
         let mut col = 0;            // Current col of tile in pixels.
         let mut row = 0;            // Current row of tile in pixels.
@@ -183,5 +233,15 @@ impl PatternMem {
             }
         }
 
+    }*/
+
+    fn make_tiles_8bpp(&mut self, data: &[u8]) {
+        for (i, d) in data.iter().enumerate() {
+            let x = i % 8;
+            let y = (i / 8) % 8;
+            let tile_num = i / 64;
+
+            self.tiles[tile_num].data[y][x] = *d;
+        }
     }
 }
