@@ -39,6 +39,9 @@ pub struct BGCache {
     large_tiles:    bool,
     start_addr:     u16,
 
+    size_x:         usize,
+    size_y:         usize,
+
     // dirty?
 }
 
@@ -56,6 +59,9 @@ impl BGCache {
             bg_reg:         bg_reg,
             large_tiles:    large_tiles,
             start_addr:     ((bg_reg & BGReg::ADDR).bits() as u16) << 9,    // TODO: do this elsewhere
+
+            size_x:         size_x,
+            size_y:         size_y,
         }
     }
 
@@ -64,38 +70,58 @@ impl BGCache {
         ((settings != self.bg_reg) || (large_tiles != self.large_tiles))
     }
 
-    pub fn construct(&mut self, tiles: &PatternMem, mem: &VideoMem) {
+    #[inline]
+    pub fn width(&self) -> usize {
+        self.size_x
+    }
+
+    #[inline]
+    pub fn height(&self) -> usize {
+        self.size_y
+    }
+
+    pub fn construct(&mut self, tiles: &PatternMem, mem: &VideoMem, tiles_changed: bool) {
         use MapMirror::*;
         // First A:
-        if mem.vram_is_dirty(self.start_addr) {
+        if tiles_changed || mem.vram_is_dirty(self.start_addr) {
             self.construct_submap(tiles, mem, 0, 0, 0);
         }
         match self.map_mirror() {
             None => {},
             X => {
                 // B
-                if mem.vram_is_dirty(self.start_addr + SUB_MAP_SIZE as u16) {
+                if tiles_changed || mem.vram_is_dirty(self.start_addr + SUB_MAP_SIZE as u16) {
                     self.construct_submap(tiles, mem, SUB_MAP_SIZE, SUB_MAP_LEN, 0);
                 }
             },
             Y => {
                 // B
-                if mem.vram_is_dirty(self.start_addr + SUB_MAP_SIZE as u16) {
+                if tiles_changed || mem.vram_is_dirty(self.start_addr + SUB_MAP_SIZE as u16) {
                     self.construct_submap(tiles, mem, SUB_MAP_SIZE, 0, SUB_MAP_LEN);
                 }
             },
             Both => {
-                if mem.vram_is_dirty(self.start_addr + SUB_MAP_SIZE as u16) {
+                if tiles_changed || mem.vram_is_dirty(self.start_addr + SUB_MAP_SIZE as u16) {
                     self.construct_submap(tiles, mem, SUB_MAP_SIZE, SUB_MAP_LEN, 0);  // B
                 }
-                if mem.vram_is_dirty(self.start_addr + (SUB_MAP_SIZE * 2) as u16) {
+                if tiles_changed || mem.vram_is_dirty(self.start_addr + (SUB_MAP_SIZE * 2) as u16) {
                     self.construct_submap(tiles, mem, SUB_MAP_SIZE * 2, 0, SUB_MAP_LEN);  // C
                 }
-                if mem.vram_is_dirty(self.start_addr + (SUB_MAP_SIZE * 3) as u16) {
+                if tiles_changed || mem.vram_is_dirty(self.start_addr + (SUB_MAP_SIZE * 3) as u16) {
                     self.construct_submap(tiles, mem, SUB_MAP_SIZE * 3, SUB_MAP_LEN, SUB_MAP_LEN);    // D
                 }
             }
         }
+    }
+
+    #[inline]
+    pub fn get_texel(&self, x: usize, y: usize) -> u8 {
+        self.texels[y][x]
+    }
+
+    #[inline]
+    pub fn get_attrs(&self, x: usize, y: usize) -> TileAttributes {
+        self.attrs[y][x]
     }
 }
 
@@ -110,8 +136,8 @@ impl BGCache {
             let attr_flags = TileAttributes::from_bits_truncate(data[1]);
             let tile_num = make16!((attr_flags & TileAttributes::TILE_NUM).bits(), data[0]) as usize;
             
-            let base_y = (i / SUB_MAP_LEN) * tile_size;
-            let base_x = (i % SUB_MAP_LEN) * tile_size;
+            let base_y = ((i / SUB_MAP_LEN) * tile_size) + y_offset;
+            let base_x = ((i % SUB_MAP_LEN) * tile_size) + x_offset;
 
             for (y, (texel_row, attrs_row)) in self.texels.iter_mut().zip(self.attrs.iter_mut()).skip(base_y).take(tile_size).enumerate() {
                 for (x, (texel, attrs)) in texel_row.iter_mut().zip(attrs_row.iter_mut()).skip(base_x).take(tile_size).enumerate() {

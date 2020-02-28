@@ -7,7 +7,10 @@ use std::{
         Seek,
         SeekFrom
     },
-    fs::File
+    fs::File,
+    sync::{
+        Arc, Mutex
+    }
 };
 
 use crate::{
@@ -199,6 +202,10 @@ impl MemBus {
     // Set buttons on the specified joypad.
     pub fn set_buttons(&mut self, button: Button, val: bool, joypad: usize) {
         self.joypads.set_buttons(button, val, joypad);
+    }
+
+    pub fn start_frame(&mut self, frame: Arc<Mutex<[u8]>>) {
+        self.bus_b.ppu.start_frame(frame);
     }
 }
 

@@ -14,6 +14,10 @@ pub mod debug;
 use cpu::CPU;
 use mem::MemBus;
 
+use std::sync::{
+    Arc, Mutex
+};
+
 // Joypad buttons.
 pub enum Button {
     Up,
@@ -32,6 +36,8 @@ pub enum Button {
 
 pub struct SNES {
     cpu:    CPU,    // CPU, along with mem bus and devices
+
+    frame:  Arc<Mutex<[u8; 256 * 224 * 4]>>
 }
 
 impl SNES {
@@ -42,7 +48,22 @@ impl SNES {
 
         SNES {
             cpu: cpu,
+
+            frame: Arc::new(Mutex::new([0; 256 * 224 * 4]))
         }
+    }
+
+    // Call at 60fps
+    pub fn frame(&mut self, frame: &mut [u8]) {
+        // frame update?
+        self.cpu.start_frame(self.frame.clone());
+
+        // When NMI is triggered, disable rendering of new frames.
+        while !self.cpu.step() {}
+        //self.cpu.enable_rendering(false);
+
+        let frame_in = self.frame.lock().unwrap();
+        frame.copy_from_slice(&(*frame_in));
     }
 
     // Step the device by one CPU cycle.

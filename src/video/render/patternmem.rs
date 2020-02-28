@@ -1,5 +1,8 @@
 // Pattern mem for a single background. Reads VRAM, outputs Texture data.
 
+const PATTERN_MEM_WIDTH_TILES: u16 = 16;
+const OBJ_PATTERN_MEM_HEIGHT_TILES: u16 = 16;
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum BitsPerPixel {
     _2 = 2,
@@ -47,18 +50,30 @@ impl PatternMem {
         }
     }
 
-    // Set the address.
-    pub fn set_addr(&mut self, start_addr: u16, width: usize, height: usize) {
-        let size = (width / 8) * (height / 8) * match self.bits_per_pixel {
+    // Set the address, plus height in TILES.
+    pub fn set_addr(&mut self, start_addr: u16, height: u16) {
+        let num_tiles = PATTERN_MEM_WIDTH_TILES * height;
+        let size = num_tiles * match self.bits_per_pixel {
             BitsPerPixel::_2 => 16,
             BitsPerPixel::_4 => 32,
             BitsPerPixel::_8 => 64,
         } - 1;
 
         self.start_addr = start_addr;
-        self.end_addr = start_addr + (size as u16);
+        self.end_addr = start_addr + size;
 
-        self.tiles.clear();
+        self.tiles.resize_with(num_tiles as usize, || Tile::new());
+    }
+
+    // Set the address for sprite memory. (Always 4BPP, height=16)
+    pub fn set_addr_obj(&mut self, start_addr: u16) {
+        let num_tiles = PATTERN_MEM_WIDTH_TILES * OBJ_PATTERN_MEM_HEIGHT_TILES;
+        let size = (num_tiles * 32) - 1;
+
+        self.start_addr = start_addr;
+        self.end_addr = start_addr + size;
+
+        self.tiles.resize_with(num_tiles as usize, || Tile::new());
     }
 
     // Return the BPP.
@@ -76,24 +91,24 @@ impl PatternMem {
         self.end_addr
     }
 
-    // Make the tiles. Input raw data, width and height in TILES, and bits per pixel.
+    // Make the tiles. Input raw data and size in TILES.
     // Rows are always 16 tiles.
-    pub fn make_tiles(&mut self, data: &[u8], width: usize, height: usize) {
-        self.tiles.resize_with(width * height, || Tile::new());
-
+    pub fn make_tiles(&mut self, data: &[u8]) {
+        let start = self.start_addr as usize;
+        let end = self.end_addr as usize;
         match self.bits_per_pixel {
             // 16 bytes per tile.
-            BitsPerPixel::_2 => self.make_tiles_2bpp(data),
+            BitsPerPixel::_2 => self.make_tiles_2bpp(&data[start..=end]),
             // 32 bytes per tile.
-            BitsPerPixel::_4 => self.make_tiles_4bpp(data),
+            BitsPerPixel::_4 => self.make_tiles_4bpp(&data[start..=end]),
             // 64 bytes per tile.
-            BitsPerPixel::_8 => self.make_tiles_8bpp(data),
+            BitsPerPixel::_8 => self.make_tiles_8bpp(&data[start..=end]),
         }
     }
 
     // Ref a tile.
     pub fn ref_tile<'a>(&'a self, num: usize) -> &'a Tile {
-        &self.tiles[num]
+        &self.tiles[num % self.tiles.len()]
     }
 }
 

@@ -4,7 +4,7 @@
 mod ram;
 mod render;
 
-mod vulkan;
+//mod vulkan;
 
 use std::sync::{
     Arc,
@@ -81,7 +81,8 @@ pub struct PPU {
     h_cycle:        usize,  // Cycle into line to fire IRQ on.
     v_timer:        u16,    // $4209-a, for triggering IRQ.
 
-    renderer:       vulkan::Renderer,
+    //renderer:       vulkan::Renderer,
+    renderer:       render::RenderThread,
     enable_render:  bool,
 }
 
@@ -104,7 +105,8 @@ impl PPU {
             h_cycle:        0,
             v_timer:        0,
 
-            renderer:       vulkan::Renderer::new(mem, events_loop),
+            //renderer:       vulkan::Renderer::new(mem, events_loop),
+            renderer:       render::RenderThread::new(mem),
             enable_render:  true,
         }
     }
@@ -112,6 +114,10 @@ impl PPU {
     // Enable or disable rendering (from outside).
     pub fn enable_rendering(&mut self, enable: bool) {
         self.enable_render = enable;
+    }
+
+    pub fn start_frame(&mut self, frame: Arc<Mutex<[u8]>>) {
+        self.renderer.start_frame(frame);
     }
 
     // Memory access from CPU / B Bus
@@ -143,19 +149,16 @@ impl PPU {
 
         let signal = match self.state {
             VBlank if (self.scanline == 1) && (self.cycle_count >= timing::SCANLINE_OFFSET) => {
-                if self.enable_render {
-                    self.renderer.frame_start();
-                    self.renderer.draw_line(0);
-                }
+                self.renderer.draw_line(0);
 
                 self.change_state(DrawingBeforePause)
             },
             HBlankLeft if self.cycle_count >= timing::SCANLINE_OFFSET => {
                 if self.scanline <= screen::V_RES {
-                    self.renderer.draw_line((self.scanline - 1) as u16);
+                    self.renderer.draw_line((self.scanline - 1) as usize);
                     self.change_state(DrawingBeforePause)
                 } else {
-                    self.renderer.frame_end();
+                    //self.renderer.frame_end();
                     self.change_state(VBlank)
                 }
             },

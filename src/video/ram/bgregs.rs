@@ -284,36 +284,24 @@ impl Registers {
         self.bg_mode.contains(BGMode::BG4_TILE_SIZE)
     }
 
-    pub fn get_bg1_scroll_x(&self) -> u16 {
-        self.bg1_scroll_x & BG_SCROLL_MASK
+    pub fn get_bg_scroll_x(&self, bg: usize) -> u16 {
+        match bg {
+            0 => self.bg1_scroll_x & BG_SCROLL_MASK,
+            1 => self.bg2_scroll_x & BG_SCROLL_MASK,
+            2 => self.bg3_scroll_x & BG_SCROLL_MASK,
+            3 => self.bg4_scroll_x & BG_SCROLL_MASK,
+            _ => unreachable!()
+        }
     }
 
-    pub fn get_bg1_scroll_y(&self) -> u16 {
-        self.bg1_scroll_y & BG_SCROLL_MASK
-    }
-
-    pub fn get_bg2_scroll_x(&self) -> u16 {
-        self.bg2_scroll_x & BG_SCROLL_MASK
-    }
-
-    pub fn get_bg2_scroll_y(&self) -> u16 {
-        self.bg2_scroll_y & BG_SCROLL_MASK
-    }
-
-    pub fn get_bg3_scroll_x(&self) -> u16 {
-        self.bg3_scroll_x & BG_SCROLL_MASK
-    }
-
-    pub fn get_bg3_scroll_y(&self) -> u16 {
-        self.bg3_scroll_y & BG_SCROLL_MASK
-    }
-
-    pub fn get_bg4_scroll_x(&self) -> u16 {
-        self.bg4_scroll_x & BG_SCROLL_MASK
-    }
-
-    pub fn get_bg4_scroll_y(&self) -> u16 {
-        self.bg4_scroll_y & BG_SCROLL_MASK
+    pub fn get_bg_scroll_y(&self, bg: usize) -> u16 {
+        match bg {
+            0 => self.bg1_scroll_y & BG_SCROLL_MASK,
+            1 => self.bg2_scroll_y & BG_SCROLL_MASK,
+            2 => self.bg3_scroll_y & BG_SCROLL_MASK,
+            3 => self.bg4_scroll_y & BG_SCROLL_MASK,
+            _ => unreachable!()
+        }
     }
 
     // Other checks
@@ -324,7 +312,7 @@ impl Registers {
 
 // More complex methods called from renderer.
 impl Registers {
-    // Get height of pattern table from start address, in pixels.
+    // Get height of pattern table from start address, in tiles.
     pub fn get_pattern_table_height(&self, pattern_addr: u16, bits_per_pixel: u32) -> u32 {
         let borders = self.get_vram_borders();  // TODO: call this from outside.
 
@@ -342,9 +330,9 @@ impl Registers {
         let height = (end_addr - pattern_addr as u32) / (16 * 8 * bits_per_pixel);
 
         if height < PATTERN_MAX_HEIGHT {
-            height * 8
+            height
         } else {
-            PATTERN_MAX_HEIGHT * 8
+            PATTERN_MAX_HEIGHT
         }
     }
 

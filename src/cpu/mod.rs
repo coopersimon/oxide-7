@@ -13,6 +13,10 @@ use crate::{
     joypad::Button
 };
 
+use std::sync::{
+    Arc, Mutex
+};
+
 // 65816
 pub struct CPU {
     // Registers
@@ -99,6 +103,11 @@ impl CPU {
     // Set buttons on the specified joypad.
     pub fn set_buttons(&mut self, button: Button, val: bool, joypad: usize) {
         self.mem.set_buttons(button, val, joypad);
+    }
+
+    // TODO: combine this with enable_rendering
+    pub fn start_frame(&mut self, frame: Arc<Mutex<[u8]>>) {
+        self.mem.start_frame(frame);
     }
 }
 

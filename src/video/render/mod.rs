@@ -2,6 +2,8 @@
 
 mod bgcache;
 mod patternmem;
+mod drawing;
+mod palette;
 
 use std::sync::{
     Arc,
@@ -51,19 +53,44 @@ impl From<u8> for VideoMode {
 
 pub type RenderTarget = Arc<Mutex<[u8]>>;
 
+#[derive(Clone, Copy, Debug)]
+struct Colour {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8
+}
+
+impl Colour {
+    const fn new(r: u8, g: u8, b: u8) -> Self {
+        Colour {
+            r: r,
+            g: g,
+            b: b
+        }
+    }
+
+    const fn zero() -> Colour {
+        Colour {
+            r: 0,
+            g: 0,
+            b: 0
+        }
+    }
+}
+
 // Messages to send to the render thread.
 enum RendererMessage {
     StartFrame(RenderTarget),   // Begin frame, and target the provided byte array.
-    DrawLine(),
+    DrawLine(usize),
 }
 
 // Renderer for video that spawns a thread to render on.
-pub struct Renderer {
+pub struct RenderThread {
     sender:     Sender<RendererMessage>,
     receiver:   Receiver<()>,
 }
 
-impl Renderer {
+impl RenderThread {
     pub fn new(mem: super::VRamRef) -> Self {
         let (send_msg, recv_msg) = channel::<RendererMessage>();
         let (send_reply, recv_reply) = channel::<()>();
@@ -71,23 +98,24 @@ impl Renderer {
         std::thread::spawn(move || {
             use RendererMessage::*;
             let mut target = None;
+            let mut renderer = drawing::Renderer::new();
 
             while let Ok(msg) = recv_msg.recv() {
                 match msg {
                     StartFrame(data) => {
                         target = Some(data);
                     },
-                    DrawLine() => {
+                    DrawLine(y) => {
                         let mut mem = mem.lock().unwrap();
                         let mut t = target.as_ref().unwrap().lock().unwrap();
                         send_reply.send(()).unwrap();
-                        // DRAW LINE
+                        renderer.draw_line(&mut mem, &mut t, y);
                     }
                 }
             }
         });
 
-        Renderer {
+        RenderThread {
             sender:     send_msg,
             receiver:   recv_reply,
         }
@@ -99,9 +127,9 @@ impl Renderer {
             .expect("Couldn't send start frame message!");
     }
 
-    pub fn draw_line(&mut self) {
+    pub fn draw_line(&mut self, y: usize) {
         self.sender
-            .send(RendererMessage::DrawLine())
+            .send(RendererMessage::DrawLine(y))
             .expect("Couldn't send draw line message!");
 
         self.receiver
