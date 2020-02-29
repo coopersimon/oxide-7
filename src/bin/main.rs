@@ -1,4 +1,5 @@
 mod shaders;
+mod debug;
 
 use chrono::{
     Duration, Utc
@@ -87,8 +88,8 @@ fn main() {
     let mut frame_tex = [0_u8; 256 * 224 * 4];
 
     if debug_mode {
-        //#[cfg(feature = "debug")]
-        //debug::debug_mode(&mut rustboy);
+        #[cfg(feature = "debug")]
+        debug::debug_mode(&mut snes);
     } else {
         // Make instance with window extensions.
         let instance = {

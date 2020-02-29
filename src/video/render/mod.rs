@@ -61,7 +61,7 @@ pub struct Colour {
 }
 
 impl Colour {
-    const fn new(r: u8, g: u8, b: u8) -> Self {
+    pub const fn new(r: u8, g: u8, b: u8) -> Self {
         Colour {
             r: r,
             g: g,
@@ -69,7 +69,7 @@ impl Colour {
         }
     }
 
-    const fn zero() -> Colour {
+    pub const fn zero() -> Colour {
         Colour {
             r: 0,
             g: 0,

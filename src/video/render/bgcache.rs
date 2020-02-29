@@ -52,8 +52,6 @@ impl BGCache {
         let size_x = if bg_reg.contains(BGReg::MIRROR_X) {SUB_MAP_LEN * 2} else {SUB_MAP_LEN} * tile_size;
         let size_y = if bg_reg.contains(BGReg::MIRROR_Y) {SUB_MAP_LEN * 2} else {SUB_MAP_LEN} * tile_size;
 
-        println!("Making BG with size {} x {}", size_x, size_y);
-
         BGCache {
             texels:         vec![vec![0; size_x]; size_y],
             attrs:          vec![vec![TileAttributes::default(); size_x]; size_y],

@@ -253,7 +253,7 @@ impl PPU {
 
                 {
                     let mut mem = self.mem.lock().unwrap();
-                    if mem.get_registers().in_fblank() {
+                    if mem.get_bg_registers().in_fblank() {
                         mem.oam_reset();
                     }
                 }

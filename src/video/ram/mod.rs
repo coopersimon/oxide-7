@@ -158,8 +158,12 @@ impl VideoMem {
         self.vram.ref_data()
     }
 
-    pub fn get_registers<'a>(&'a self) -> &'a Registers {
+    pub fn get_bg_registers<'a>(&'a self) -> &'a Registers {
         &self.bgregs
+    }
+
+    pub fn get_window_registers<'a>(&'a self) -> &'a WindowRegisters {
+        &self.windowregs
     }
 
     // Renderer methods to check dirtiness of data.

@@ -336,9 +336,7 @@ impl Registers {
             borders.insert(self.bg_pattern_addr(3));
         }
 
-        let v = borders.iter().cloned().collect::<Vec<_>>();
-        println!("bords: {:?}", v);
-        v
+        borders.iter().cloned().collect::<Vec<_>>()
     }
 
     // Set borders for a background.

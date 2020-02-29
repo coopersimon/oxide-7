@@ -1,4 +1,5 @@
 // Video registers for colour math and window settings.
+use crate::video::render::Colour;
 
 use bitflags::bitflags;
 
@@ -68,9 +69,7 @@ pub struct WindowRegisters {
     colour_add_select:  u8,
     colour_math_desg:   ColourMathDesignation,
 
-    colour_r:           u8,
-    colour_g:           u8,
-    colour_b:           u8,
+    fixed_colour:       Colour,
 }
 
 impl WindowRegisters {
@@ -97,9 +96,7 @@ impl WindowRegisters {
             colour_add_select:  0,
             colour_math_desg:   ColourMathDesignation::default(),
 
-            colour_r:           0,
-            colour_g:           0,
-            colour_b:           0,
+            fixed_colour:       Colour::zero(),
         }
     }
 
@@ -150,13 +147,21 @@ impl WindowRegisters {
 
     pub fn set_fixed_colour(&mut self, data: u8) {
         if test_bit!(data, FIXED_COLOUR_B_BIT, u8) {
-            self.colour_b = data & MAX_COLOUR;
+            let b = data & MAX_COLOUR;
+            self.fixed_colour.b = (b << 3) + (b >> 2);
         }
         if test_bit!(data, FIXED_COLOUR_G_BIT, u8) {
-            self.colour_g = data & MAX_COLOUR;
+            let g = data & MAX_COLOUR;
+            self.fixed_colour.g = (g << 3) + (g >> 2);
         }
         if test_bit!(data, FIXED_COLOUR_R_BIT, u8) {
-            self.colour_r = data & MAX_COLOUR;
+            let r = data & MAX_COLOUR;
+            self.fixed_colour.r = (r << 3) + (r >> 2);
         }
+    }
+
+    // Getters - renderer side
+    pub fn get_fixed_colour(&self) -> Colour {
+        self.fixed_colour
     }
 }

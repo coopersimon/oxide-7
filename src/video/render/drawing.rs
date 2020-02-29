@@ -64,7 +64,7 @@ impl Renderer {
     }
 
     pub fn draw_line(&mut self, mem: &mut VideoMem, target: &mut [u8], y: usize) {
-        if !mem.get_registers().in_fblank() {
+        if !mem.get_bg_registers().in_fblank() {
             // Refresh caches
             self.setup_caches(mem);
 
@@ -86,7 +86,7 @@ impl Renderer {
 impl Renderer {
     fn setup_caches(&mut self, mem: &mut VideoMem) {
         // Check mode and alter backgrounds.
-        let stored_mode = VideoMode::from(mem.get_registers().get_mode());
+        let stored_mode = VideoMode::from(mem.get_bg_registers().get_mode());
         if stored_mode != self.mode {
             self.switch_mode(stored_mode);
         }
@@ -95,7 +95,7 @@ impl Renderer {
         let num_bgs = self.num_bgs();
 
         // Check background mem locations
-        let regs = mem.get_registers();
+        let regs = mem.get_bg_registers();
         for (bg, (bg_pattern, cache)) in self.bg_pattern_mem.iter_mut().zip(self.bg_cache.iter_mut()).take(num_bgs).enumerate() {
             if bg_pattern.get_start_addr() != regs.bg_pattern_addr(bg) {
                 let height = regs.get_pattern_table_height(regs.bg_pattern_addr(bg), bg_pattern.get_bits_per_pixel() as u32);
@@ -281,12 +281,10 @@ fn write_pixel(output: &mut [u8], colour: Colour) {
 
 // Generic drawing
 impl Renderer {
-    // TODO: sprites should be stored in their weird format on the VRAM side.
-        // They can then be re-encoded when read out of the CPU side.
     // TODO: lots of cleanup here
     fn draw_sprites_to_line(&self, mem: &VideoMem, line: &mut [SpritePixel], y: u8) {
         // TODO: get this elsewhere..?
-        let obj_regs = ObjectSettings::from_bits_truncate(mem.get_registers().get_object_settings());
+        let obj_regs = ObjectSettings::from_bits_truncate(mem.get_bg_registers().get_object_settings());
         let (small, large) = match (obj_regs & ObjectSettings::SIZE).bits() >> 5 {
             0 => ((8, 8), (16, 16)),
             1 => ((8, 8), (32, 32)),
@@ -341,8 +339,8 @@ impl Renderer {
     }
 
     fn bg_pixel(&self, mem: &VideoMem, x: usize, y: usize, bg: usize, bpp: BitsPerPixel) -> BGPixel {
-        let bg_x = (x + (mem.get_registers().get_bg_scroll_x(bg) as usize)) % self.bg_cache[bg].width();
-        let bg_y = (y + (mem.get_registers().get_bg_scroll_y(bg) as usize)) % self.bg_cache[bg].height();
+        let bg_x = (x + (mem.get_bg_registers().get_bg_scroll_x(bg) as usize)) % self.bg_cache[bg].width();
+        let bg_y = (y + (mem.get_bg_registers().get_bg_scroll_y(bg) as usize)) % self.bg_cache[bg].height();
 
         let texel = self.bg_cache[bg].get_texel(bg_x, bg_y) as usize;
 
@@ -363,8 +361,8 @@ impl Renderer {
 
     fn mode_1_bg_3(&self, mem: &VideoMem, x: usize, y: usize) -> BG3Pixel {
         const BG_3: usize = 2;
-        let bg_x = (x + (mem.get_registers().get_bg_scroll_x(BG_3) as usize)) % self.bg_cache[BG_3].width();
-        let bg_y = (y + (mem.get_registers().get_bg_scroll_y(BG_3) as usize)) % self.bg_cache[BG_3].height();
+        let bg_x = (x + (mem.get_bg_registers().get_bg_scroll_x(BG_3) as usize)) % self.bg_cache[BG_3].width();
+        let bg_y = (y + (mem.get_bg_registers().get_bg_scroll_y(BG_3) as usize)) % self.bg_cache[BG_3].height();
 
         let texel = self.bg_cache[BG_3].get_texel(bg_x, bg_y) as usize;
 
@@ -375,7 +373,7 @@ impl Renderer {
             let palette_num = (attrs & TileAttributes::PALETTE).bits() as usize;
             let colour = self.palettes.get_bg_colour(palette_num + texel);
             if attrs.contains(TileAttributes::PRIORITY) {
-                if mem.get_registers().get_bg3_priority() {
+                if mem.get_bg_registers().get_bg3_priority() {
                     BG3Pixel::XHi(colour)
                 } else {
                     BG3Pixel::Hi(colour)
@@ -450,7 +448,7 @@ impl Renderer {
                             },
                             BGPixel::None => match self.bg_pixel(mem, x, y, 3, BitsPerPixel::_2).any() {
                                 Some(b4) => write_pixel(i, b4),
-                                _ => write_pixel(i, Colour::zero())
+                                _ => write_pixel(i, mem.get_window_registers().get_fixed_colour())
                             }
                         }
                     }
@@ -530,7 +528,7 @@ impl Renderer {
                                 Some(b2) => write_pixel(i, b2),
                                 None => match bg3_pixel.any() {
                                     Some(b3) => write_pixel(i, b3),
-                                    _ => write_pixel(i, Colour::zero())
+                                    _ => write_pixel(i, mem.get_window_registers().get_fixed_colour())
                                 }
                             }
                         }
