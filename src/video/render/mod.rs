@@ -54,7 +54,7 @@ impl From<u8> for VideoMode {
 pub type RenderTarget = Arc<Mutex<[u8]>>;
 
 #[derive(Clone, Copy, Debug)]
-struct Colour {
+pub struct Colour {
     pub r: u8,
     pub g: u8,
     pub b: u8
@@ -77,14 +77,13 @@ impl Colour {
         }
     }
 
-    const fn red() -> Colour {
+    /*const fn red() -> Colour {
         Colour {
             r: 255,
             g: 0,
             b: 0
         }
     }
-
     const fn blue() -> Colour {
         Colour {
             r: 0,
@@ -92,7 +91,6 @@ impl Colour {
             b: 255
         }
     }
-
     const fn green() -> Colour {
         Colour {
             r: 0,
@@ -100,14 +98,13 @@ impl Colour {
             b: 0
         }
     }
-
     const fn yellow() -> Colour {
         Colour {
             r: 255,
             g: 255,
             b: 0
         }
-    }
+    }*/
 }
 
 // Messages to send to the render thread.

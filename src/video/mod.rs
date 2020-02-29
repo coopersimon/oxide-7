@@ -4,8 +4,6 @@
 mod ram;
 mod render;
 
-//mod vulkan;
-
 use std::sync::{
     Arc,
     Mutex
@@ -22,7 +20,6 @@ use crate::{
 };
 
 use ram::VideoMem;
-use render::*;
 
 type VRamRef = Arc<Mutex<VideoMem>>;
 
@@ -81,13 +78,12 @@ pub struct PPU {
     h_cycle:        usize,  // Cycle into line to fire IRQ on.
     v_timer:        u16,    // $4209-a, for triggering IRQ.
 
-    //renderer:       vulkan::Renderer,
     renderer:       render::RenderThread,
     enable_render:  bool,
 }
 
 impl PPU {
-    pub fn new(events_loop: &winit::EventsLoop) -> Self {
+    pub fn new() -> Self {
         let mem = Arc::new(Mutex::new(VideoMem::new()));
 
         PPU {
@@ -105,7 +101,6 @@ impl PPU {
             h_cycle:        0,
             v_timer:        0,
 
-            //renderer:       vulkan::Renderer::new(mem, events_loop),
             renderer:       render::RenderThread::new(mem),
             enable_render:  true,
         }

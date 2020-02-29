@@ -3,7 +3,6 @@
 use bitflags::bitflags;
 
 const LO_TABLE_SIZE: usize = 512;
-const HI_TABLE_SIZE: usize = 32;
 const NUM_OBJECTS: usize = 128;
 
 bitflags!{
@@ -103,8 +102,8 @@ impl Object {
         palette_num << 3
     }
 
-    pub fn is_name_table_0(&self) -> bool {
-        !self.attrs.contains(ObjectAttributes::NAME_TABLE)
+    pub fn name_table(&self) -> usize {
+        (self.attrs & ObjectAttributes::NAME_TABLE).bits() as usize
     }
 
     // Calculate the tile number based on pixel values.
@@ -120,8 +119,6 @@ impl Object {
 }
 
 pub struct OAM {
-    lo_table:   Vec<u8>,
-    hi_table:   Vec<u8>,
     objects:    Vec<Object>,
 
     addr_lo:    u8, // Cached internal address values
@@ -137,8 +134,6 @@ pub struct OAM {
 impl OAM {
     pub fn new() -> Self {
         OAM {
-            lo_table:   vec![0; LO_TABLE_SIZE],
-            hi_table:   vec![0; HI_TABLE_SIZE],
             objects:    vec![Object::default(); NUM_OBJECTS],
 
             addr_lo:    0,

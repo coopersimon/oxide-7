@@ -59,7 +59,7 @@ pub struct MemBus {
 }
 
 impl MemBus {
-    pub fn new(cart_path: &str, events_loop: &winit::EventsLoop) -> Self {
+    pub fn new(cart_path: &str) -> Self {
         // Open ROM file.
         let f = File::open(cart_path).expect(&format!("Couldn't open file {}", cart_path));
 
@@ -68,7 +68,7 @@ impl MemBus {
         let cart = MemBus::make_cart(reader);
 
         MemBus {
-            bus_b:      AddrBusB::new(events_loop),
+            bus_b:      AddrBusB::new(),
             joypads:    JoypadMem::new(),
             
             cart:       cart,
@@ -455,9 +455,9 @@ struct AddrBusB {
 }
 
 impl AddrBusB {
-    fn new(events_loop: &winit::EventsLoop) -> Self {
+    fn new() -> Self {
         AddrBusB {
-            ppu: PPU::new(events_loop),
+            ppu: PPU::new(),
             apu: APU::new(),
 
             apu_cycle_count:    0

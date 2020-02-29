@@ -26,6 +26,15 @@ impl Tile {
     pub fn get_texel(&self, x: usize, y: usize) -> u8 {
         self.data[y][x]
     }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        for row in self.data.iter_mut() {
+            for tex in row.iter_mut() {
+                *tex = 0;
+            }
+        }
+    }
 }
 
 pub struct PatternMem {
@@ -86,17 +95,16 @@ impl PatternMem {
         self.start_addr
     }
 
-    // Return the end address.
-    pub fn get_end_addr(&self) -> u16 {
-        self.end_addr
-    }
-
     // Make the tiles. Input raw data and size in TILES.
     // Rows are always 16 tiles.
     pub fn make_tiles(&mut self, data: &[u8]) {
         let start = self.start_addr as usize;
         let end = self.end_addr as usize;
-        //println!("Making tiles from {} to {}", start, end);
+
+        for tile in self.tiles.iter_mut() {
+            tile.clear();
+        }
+
         match self.bits_per_pixel {
             // 16 bytes per tile.
             BitsPerPixel::_2 => self.make_tiles_2bpp(&data[start..=end]),
@@ -115,39 +123,6 @@ impl PatternMem {
 
 // Internal
 impl PatternMem {
-    /*fn make_image_2bpp(&mut self, data: &[u8]) {
-        let row_size = 16 * 8;      // Row length in pixels.
-        let mut col = 0;            // Current col of tile in pixels.
-        let mut row = 0;            // Current row of tile in pixels.
-        let mut y = 0;              // Current Y coord in pixels. (To the nearest tile.)
-
-        for (i, d) in data.iter().enumerate() {
-            let bitplane = i % 2;
-            let base_index = ((y + row) * row_size) + col;
-
-            for x in 0..8 {
-                let bit = (*d >> (7 - x)) & 1;
-                self.tex_data[base_index + x] |= bit << bitplane;
-            }
-
-            if bitplane != 0 {
-                // Next row in tile.
-                row += 1;
-
-                // Next tile.
-                if row >= 8 {
-                    row = 0;
-
-                    col += 8;
-                    if col >= row_size {
-                        col = 0;
-                        y += 8;
-                    }
-                }
-            }
-        }
-    }*/
-
     fn make_tiles_2bpp(&mut self, data: &[u8]) {
         for (i, d) in data.iter().enumerate() {
             let y = (i / 2) % 8;
@@ -160,47 +135,6 @@ impl PatternMem {
             }
         }
     }
-
-    /*fn make_image_4bpp(&mut self, data: &[u8]) {
-        let row_size = 16 * 8;      // Row length in pixels.
-        let mut col = 0;            // Current col of tile in pixels.
-        let mut row = 0;            // Current row of tile in pixels.
-        let mut y = 0;              // Current Y coord in pixels. (To the nearest tile.)
-
-        let mut bitplane_offset = 0;    // As bitplanes are stored in pairs.
-
-        for (i, d) in data.iter().enumerate() {
-            let sub_bitplane = i % 2;
-            let bitplane = sub_bitplane + bitplane_offset;
-            let base_index = ((y + row) * row_size) + col;
-
-            for x in 0..8 {
-                let bit = (*d >> (7 - x)) & 1;
-                self.tex_data[base_index + x] |= bit << bitplane;
-            }
-
-            if sub_bitplane != 0 {
-                // Next row in tile.
-                row += 1;
-                if row >= 8 {
-                    row = 0;
-
-                    bitplane_offset += 2;
-                    // Next tile.
-                    if bitplane_offset >= 4 {
-                        bitplane_offset = 0;
-
-                        col += 8;
-                        if col >= row_size {
-                            col = 0;
-                            y += 8;
-                        }
-                    }
-                }
-            }
-        }
-
-    }*/
 
     fn make_tiles_4bpp(&mut self, data: &[u8]) {
         for (i, d) in data.iter().enumerate() {
@@ -218,38 +152,6 @@ impl PatternMem {
             }
         }
     }
-
-    /*fn make_image_8bpp(&mut self, data: &[u8]) {
-        let row_size = 16 * 8;      // Row length in pixels.
-        let mut col = 0;            // Current col of tile in pixels.
-        let mut row = 0;            // Current row of tile in pixels.
-        let mut y = 0;              // Current Y coord in pixels. (To the nearest tile.)
-
-        let mut x = 0;
-
-        for d in data.iter() {
-            let base_index = ((y + row) * row_size) + col;
-
-            self.tex_data[base_index + x] = *d;
-
-            x += 1;
-            if x >= 8 {
-                // Next row in tile.
-                row += 1;
-                if row >= 8 {
-                    row = 0;
-
-                    // Next tile.
-                    col += 8;
-                    if col >= row_size {
-                        col = 0;
-                        y += 8;
-                    }
-                }
-            }
-        }
-
-    }*/
 
     fn make_tiles_8bpp(&mut self, data: &[u8]) {
         for (i, d) in data.iter().enumerate() {
