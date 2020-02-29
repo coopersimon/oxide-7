@@ -191,22 +191,6 @@ impl Registers {
         self.bg4_settings = BGReg::from_bits_truncate(data);
     }
 
-    pub fn get_bg1_settings(&self) -> BGReg {
-        self.bg1_settings
-    }
-
-    pub fn get_bg2_settings(&self) -> BGReg {
-        self.bg2_settings
-    }
-
-    pub fn get_bg3_settings(&self) -> BGReg {
-        self.bg3_settings
-    }
-
-    pub fn get_bg4_settings(&self) -> BGReg {
-        self.bg4_settings
-    }
-
     // Getters for the renderer.
     pub fn get_screen_display(&self) -> u8 {
         self.screen_display
@@ -235,53 +219,45 @@ impl Registers {
         (base << 14) + (table << 13)
     }
 
+    pub fn get_bg_settings(&self, bg: usize) -> BGReg {
+        match bg {
+            0 => self.bg1_settings,
+            1 => self.bg2_settings,
+            2 => self.bg3_settings,
+            3 => self.bg4_settings,
+            _ => unreachable!()
+        }
+    }
+
     // TODO: use less magic numbers in the following.
-    pub fn bg1_pattern_addr(&self) -> u16 {
-        ((self.bg12_char_addr & 0xF) as u16) << 13
+    pub fn bg_pattern_addr(&self, bg: usize) -> u16 {
+        match bg {
+            0 => ((self.bg12_char_addr & 0xF) as u16) << 13,
+            1 => ((self.bg12_char_addr & 0xF0) as u16) << 9,
+            2 => ((self.bg34_char_addr & 0xF) as u16) << 13,
+            3 => ((self.bg34_char_addr & 0xF0) as u16) << 9,
+            _ => unreachable!()
+        }
     }
 
-    pub fn bg2_pattern_addr(&self) -> u16 {
-        ((self.bg12_char_addr & 0xF0) as u16) << 9
+    pub fn bg_map_addr(&self, bg: usize) -> u16 {
+        match bg {
+            0 => ((self.bg1_settings & BGReg::ADDR).bits() as u16) << 9,
+            1 => ((self.bg2_settings & BGReg::ADDR).bits() as u16) << 9,
+            2 => ((self.bg3_settings & BGReg::ADDR).bits() as u16) << 9,
+            3 => ((self.bg4_settings & BGReg::ADDR).bits() as u16) << 9,
+            _ => unreachable!()
+        }
     }
 
-    pub fn bg3_pattern_addr(&self) -> u16 {
-        ((self.bg34_char_addr & 0xF) as u16) << 13
-    }
-
-    pub fn bg4_pattern_addr(&self) -> u16 {
-        ((self.bg34_char_addr & 0xF0) as u16) << 9
-    }
-
-    pub fn bg1_map_addr(&self) -> u16 {
-        ((self.bg1_settings & BGReg::ADDR).bits() as u16) << 9
-    }
-
-    pub fn bg2_map_addr(&self) -> u16 {
-        ((self.bg2_settings & BGReg::ADDR).bits() as u16) << 9
-    }
-
-    pub fn bg3_map_addr(&self) -> u16 {
-        ((self.bg3_settings & BGReg::ADDR).bits() as u16) << 9
-    }
-
-    pub fn bg4_map_addr(&self) -> u16 {
-        ((self.bg4_settings & BGReg::ADDR).bits() as u16) << 9
-    }
-
-    pub fn bg1_large_tiles(&self) -> bool {
-        self.bg_mode.contains(BGMode::BG1_TILE_SIZE)
-    }
-
-    pub fn bg2_large_tiles(&self) -> bool {
-        self.bg_mode.contains(BGMode::BG2_TILE_SIZE)
-    }
-
-    pub fn bg3_large_tiles(&self) -> bool {
-        self.bg_mode.contains(BGMode::BG3_TILE_SIZE)
-    }
-
-    pub fn bg4_large_tiles(&self) -> bool {
-        self.bg_mode.contains(BGMode::BG4_TILE_SIZE)
+    pub fn bg_large_tiles(&self, bg: usize) -> bool {
+        match bg {
+            0 => self.bg_mode.contains(BGMode::BG1_TILE_SIZE),
+            1 => self.bg_mode.contains(BGMode::BG2_TILE_SIZE),
+            2 => self.bg_mode.contains(BGMode::BG3_TILE_SIZE),
+            3 => self.bg_mode.contains(BGMode::BG4_TILE_SIZE),
+            _ => unreachable!()
+        }
     }
 
     pub fn get_bg_scroll_x(&self, bg: usize) -> u16 {
@@ -345,19 +321,19 @@ impl Registers {
         borders.insert(self.obj0_pattern_addr());
         borders.insert(self.objn_pattern_addr());
 
-        self.set_bg_borders(&mut borders, self.bg1_map_addr(), self.bg1_settings);
-        borders.insert(self.bg1_pattern_addr());
+        self.set_bg_borders(&mut borders, self.bg_map_addr(0), self.bg1_settings);
+        borders.insert(self.bg_pattern_addr(0));
 
-        self.set_bg_borders(&mut borders, self.bg2_map_addr(), self.bg2_settings);
-        borders.insert(self.bg2_pattern_addr());
+        self.set_bg_borders(&mut borders, self.bg_map_addr(1), self.bg2_settings);
+        borders.insert(self.bg_pattern_addr(1));
 
         if (mode == 0) || (mode == 1) {
-            self.set_bg_borders(&mut borders, self.bg3_map_addr(), self.bg3_settings);
-            borders.insert(self.bg3_pattern_addr());
+            self.set_bg_borders(&mut borders, self.bg_map_addr(2), self.bg3_settings);
+            borders.insert(self.bg_pattern_addr(2));
         }
         if mode == 0 {
-            self.set_bg_borders(&mut borders, self.bg4_map_addr(), self.bg4_settings);
-            borders.insert(self.bg4_pattern_addr());
+            self.set_bg_borders(&mut borders, self.bg_map_addr(3), self.bg4_settings);
+            borders.insert(self.bg_pattern_addr(3));
         }
 
         let v = borders.iter().cloned().collect::<Vec<_>>();

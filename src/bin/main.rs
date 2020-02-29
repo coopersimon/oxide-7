@@ -192,7 +192,7 @@ fn main() {
 
         // Make a surface.
         let surface = WindowBuilder::new()
-            .with_dimensions((320, 288).into())
+            .with_dimensions((512, 448).into())
             .with_title("Super Rust Boy")
             .build_vk_surface(&events_loop, instance.clone())
             .expect("Couldn't create surface");
@@ -214,7 +214,7 @@ fn main() {
 
             let caps = surface.capabilities(physical)
                     .expect("Failed to get surface capabilities");
-            let dimensions = caps.current_extent.unwrap_or([160, 144]);
+            let dimensions = caps.current_extent.unwrap_or([512, 448]);
 
             //let alpha = caps.supported_composite_alpha.iter().next().unwrap();
             //println!("{:?}", caps.supported_formats);

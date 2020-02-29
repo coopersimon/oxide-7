@@ -52,6 +52,8 @@ impl BGCache {
         let size_x = if bg_reg.contains(BGReg::MIRROR_X) {SUB_MAP_LEN * 2} else {SUB_MAP_LEN} * tile_size;
         let size_y = if bg_reg.contains(BGReg::MIRROR_Y) {SUB_MAP_LEN * 2} else {SUB_MAP_LEN} * tile_size;
 
+        println!("Making BG with size {} x {}", size_x, size_y);
+
         BGCache {
             texels:         vec![vec![0; size_x]; size_y],
             attrs:          vec![vec![TileAttributes::default(); size_x]; size_y],
@@ -81,6 +83,7 @@ impl BGCache {
     }
 
     pub fn construct(&mut self, tiles: &PatternMem, mem: &VideoMem, tiles_changed: bool) {
+        //println!("Making bg cache from {} to {}", self.start_addr, self.start_addr + SUB_MAP_SIZE as u16);
         use MapMirror::*;
         // First A:
         if tiles_changed || mem.vram_is_dirty(self.start_addr) {
@@ -136,8 +139,8 @@ impl BGCache {
             let attr_flags = TileAttributes::from_bits_truncate(data[1]);
             let tile_num = make16!((attr_flags & TileAttributes::TILE_NUM).bits(), data[0]) as usize;
             
-            let base_y = ((i / SUB_MAP_LEN) * tile_size) + y_offset;
-            let base_x = ((i % SUB_MAP_LEN) * tile_size) + x_offset;
+            let base_y = ((i / SUB_MAP_LEN) + y_offset) * tile_size;
+            let base_x = ((i % SUB_MAP_LEN) + x_offset) * tile_size;
 
             for (y, (texel_row, attrs_row)) in self.texels.iter_mut().zip(self.attrs.iter_mut()).skip(base_y).take(tile_size).enumerate() {
                 for (x, (texel, attrs)) in texel_row.iter_mut().zip(attrs_row.iter_mut()).skip(base_x).take(tile_size).enumerate() {

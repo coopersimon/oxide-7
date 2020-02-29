@@ -96,6 +96,7 @@ impl PatternMem {
     pub fn make_tiles(&mut self, data: &[u8]) {
         let start = self.start_addr as usize;
         let end = self.end_addr as usize;
+        //println!("Making tiles from {} to {}", start, end);
         match self.bits_per_pixel {
             // 16 bytes per tile.
             BitsPerPixel::_2 => self.make_tiles_2bpp(&data[start..=end]),

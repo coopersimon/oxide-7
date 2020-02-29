@@ -91,51 +91,20 @@ impl Renderer {
         }
 
         let mut recreate_borders = false;
+        let num_bgs = self.num_bgs();
 
         // Check background mem locations
         let regs = mem.get_registers();
-        if self.bg_pattern_mem[0].get_start_addr() != regs.bg1_pattern_addr() {
-            let height = regs.get_pattern_table_height(regs.bg1_pattern_addr(), self.bg_pattern_mem[0].get_bits_per_pixel() as u32);
-            self.bg_pattern_mem[0].set_addr(regs.bg1_pattern_addr(), height as u16);    // TODO: figure out this u32, u16 mess
-            recreate_borders = true;
-        }
-        if !self.bg_cache[0].check_if_valid(regs.get_bg1_settings(), regs.bg1_large_tiles()) {
-            self.bg_cache[0] = BGCache::new(regs.get_bg1_settings(), regs.bg1_large_tiles());
-            recreate_borders = true;
-        }
-
-        if self.bg_pattern_mem[1].get_start_addr() != regs.bg2_pattern_addr() {
-            let height = regs.get_pattern_table_height(regs.bg2_pattern_addr(), self.bg_pattern_mem[1].get_bits_per_pixel() as u32);
-            self.bg_pattern_mem[1].set_addr(regs.bg2_pattern_addr(), height as u16);
-            recreate_borders = true;
-        }
-        if !self.bg_cache[1].check_if_valid(regs.get_bg1_settings(), regs.bg1_large_tiles()) {
-            self.bg_cache[1] = BGCache::new(regs.get_bg1_settings(), regs.bg1_large_tiles());
-            recreate_borders = true;
-        }
-
-        if (stored_mode == VideoMode::_1) || (stored_mode == VideoMode::_0) {
-            if self.bg_pattern_mem[2].get_start_addr() != regs.bg3_pattern_addr() {
-                let height = regs.get_pattern_table_height(regs.bg3_pattern_addr(), self.bg_pattern_mem[2].get_bits_per_pixel() as u32);
-                self.bg_pattern_mem[2].set_addr(regs.bg3_pattern_addr(), height as u16);
+        for (bg, (bg_pattern, cache)) in self.bg_pattern_mem.iter_mut().zip(self.bg_cache.iter_mut()).take(num_bgs).enumerate() {
+            if bg_pattern.get_start_addr() != regs.bg_pattern_addr(bg) {
+                let height = regs.get_pattern_table_height(regs.bg_pattern_addr(bg), bg_pattern.get_bits_per_pixel() as u32);
+                bg_pattern.set_addr(regs.bg_pattern_addr(bg), height as u16);    // TODO: figure out this u32, u16 mess
                 recreate_borders = true;
             }
-            if !self.bg_cache[2].check_if_valid(regs.get_bg1_settings(), regs.bg1_large_tiles()) {
-                self.bg_cache[2] = BGCache::new(regs.get_bg1_settings(), regs.bg1_large_tiles());
+            if cache.check_if_valid(regs.get_bg_settings(bg), regs.bg_large_tiles(bg)) {
+                *cache = BGCache::new(regs.get_bg_settings(bg), regs.bg_large_tiles(bg));
                 recreate_borders = true;
             }
-        }
-
-        if stored_mode == VideoMode::_0 {
-            if self.bg_pattern_mem[3].get_start_addr() != regs.bg4_pattern_addr() {
-                let height = regs.get_pattern_table_height(regs.bg4_pattern_addr(), self.bg_pattern_mem[3].get_bits_per_pixel() as u32);
-                self.bg_pattern_mem[3].set_addr(regs.bg4_pattern_addr(), height as u16);
-                recreate_borders = true;
-            }
-            if !self.bg_cache[3].check_if_valid(regs.get_bg1_settings(), regs.bg1_large_tiles()) {
-                self.bg_cache[3] = BGCache::new(regs.get_bg1_settings(), regs.bg1_large_tiles());
-                recreate_borders = true;
-            }    
         }
 
         // Check OAM dirtiness.
@@ -156,9 +125,7 @@ impl Renderer {
         }
 
         // If vram is dirty:
-        let num_bgs = self.num_bgs();
-        let iter = self.bg_pattern_mem.iter_mut().zip(self.bg_cache.iter_mut()).take(num_bgs);
-        for (bg_pattern, cache) in iter {
+        for (bg_pattern, cache) in self.bg_pattern_mem.iter_mut().zip(self.bg_cache.iter_mut()).take(num_bgs) {
             let tiles_changed = if mem.vram_is_dirty(bg_pattern.get_start_addr()) {
                 bg_pattern.make_tiles(mem.get_vram());
                 true
@@ -389,7 +356,7 @@ impl Renderer {
             } else {
                 BGPixel::Lo(colour)
             }
-        }
+        }        
     }
 
     fn mode_1_bg_3(&self, mem: &VideoMem, x: usize, y: usize) -> BG3Pixel {
