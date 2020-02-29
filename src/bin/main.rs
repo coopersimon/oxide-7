@@ -231,6 +231,7 @@ fn main() {
             /*for pix in frame_tex.chunks(4) {
                 println!("r: {}, g: {}, b: {}", pix[0], pix[1], pix[2]);
             }*/
+            previous_frame_future.cleanup_finished();
 
             // Get current framebuffer index from the swapchain.
             let (image_num, acquire_future) = acquire_next_image(swapchain.clone(), None).expect("Didn't get next image");
@@ -276,8 +277,6 @@ fn main() {
                 Ok(future) => previous_frame_future = Box::new(future) as Box<_>,
                 Err(e) => println!("Err: {:?}", e),
             }
-
-            previous_frame_future.cleanup_finished();
 
             //averager.add((Utc::now() - frame).num_milliseconds());
             //println!("Frame t: {}ms", averager.get_avg());

@@ -280,6 +280,20 @@ impl Registers {
         }
     }
 
+    pub fn bg_mosaic_enabled(&self, bg: usize) -> bool {
+        match bg {
+            0 => self.mosaic_settings.contains(Mosaic::BG1_ENABLE),
+            1 => self.mosaic_settings.contains(Mosaic::BG2_ENABLE),
+            2 => self.mosaic_settings.contains(Mosaic::BG3_ENABLE),
+            3 => self.mosaic_settings.contains(Mosaic::BG4_ENABLE),
+            _ => unreachable!()
+        }
+    }
+
+    pub fn bg_mosaic_mask(&self) -> u8 {
+        ((self.mosaic_settings & Mosaic::PIXEL_SIZE).bits() >> 4) + 1
+    }
+
     // Other checks
     pub fn in_fblank(&self) -> bool {
         test_bit!(self.screen_display, 7, u8)

@@ -233,7 +233,18 @@ enum SpritePixel {
     Prio2(Colour),
     Prio1(Colour),
     Prio0(Colour),
+    Masked,
     None
+}
+
+impl SpritePixel {
+    #[inline]
+    fn is_masked(&self) -> bool {
+        match self {
+            SpritePixel::Masked => true,
+            _ => false
+        }
+    }
 }
 
 enum BGPixel {
@@ -297,6 +308,13 @@ impl Renderer {
             _ => unreachable!()
         };
 
+        let window_regs = mem.get_window_registers();
+        for (x, pix) in line.iter_mut().enumerate() {
+            if !window_regs.show_obj_pixel_main(x as u8) {
+                *pix = SpritePixel::Masked;
+            }
+        }
+
         let objects = mem.get_oam();
         
         objects.iter().filter(|object| { // See if this sprite should appear on this line.
@@ -308,15 +326,18 @@ impl Renderer {
                 (y >= object.y) && (y <= bottom_y)
             } else {
                 (y >= object.y) || (y <= bottom_y)
-            }
-        }).take(32).for_each(|object| { // Actually do drawing.
+            }   // TODO: fix sprite priorities...
+        }).take(32).collect::<Vec<_>>().iter().rev().for_each(|object| { // Actually do drawing.
             let size = if object.large {large} else {small};
             let sprite_y = y - object.y;   // TODO: deal with wraparound.
             let y_pixel = if object.y_flip() {size.1 - 1 - sprite_y} else {sprite_y} as usize;
 
             for x in 0..size.0 {
-                let line_x = object.x + x;
+                let line_x = object.x + x;  // TODO cast to unsigned here.
                 if line_x >= 0 && line_x < 256 {  // TODO: no magic number here.
+                    if line[line_x as usize].is_masked() {
+                        continue;
+                    }
                     let x_pixel = if object.x_flip() {size.0 - 1 - x} else {x} as usize;
                     let tile_num = object.calc_tile_num(x_pixel, y_pixel);
 
@@ -338,49 +359,74 @@ impl Renderer {
         });
     }
 
+    #[inline]
     fn bg_pixel(&self, mem: &VideoMem, x: usize, y: usize, bg: usize, bpp: BitsPerPixel) -> BGPixel {
-        let bg_x = (x + (mem.get_bg_registers().get_bg_scroll_x(bg) as usize)) % self.bg_cache[bg].width();
-        let bg_y = (y + (mem.get_bg_registers().get_bg_scroll_y(bg) as usize)) % self.bg_cache[bg].height();
+        // Check if pixel should be shown.
+        if mem.get_window_registers().show_bg_pixel_main(bg, x as u8) {
+            let regs = mem.get_bg_registers();
+            let bg_x = (x + (regs.get_bg_scroll_x(bg) as usize)) % self.bg_cache[bg].width();
+            let bg_y = (y + (regs.get_bg_scroll_y(bg) as usize)) % self.bg_cache[bg].height();
 
-        let texel = self.bg_cache[bg].get_texel(bg_x, bg_y) as usize;
-
-        if texel == 0 {
-            BGPixel::None
-        } else {
-            let attrs = self.bg_cache[bg].get_attrs(bg_x, bg_y);
-            let palette_shift = (bpp as usize) - 2;
-            let palette_num = ((attrs & TileAttributes::PALETTE).bits() << palette_shift) as usize;
-            let colour = self.palettes.get_bg_colour(palette_num + texel);
-            if attrs.contains(TileAttributes::PRIORITY) {
-                BGPixel::Hi(colour)
+            // TODO: make this faster
+            let texel = if regs.bg_mosaic_enabled(bg) {
+                let mosaic_mask = regs.bg_mosaic_mask() as usize;
+                self.bg_cache[bg].get_texel((bg_x / mosaic_mask) * mosaic_mask, (bg_y / mosaic_mask) * mosaic_mask)
             } else {
-                BGPixel::Lo(colour)
+                self.bg_cache[bg].get_texel(bg_x, bg_y)
+            } as usize;
+
+            if texel == 0 {
+                BGPixel::None
+            } else {
+                let attrs = self.bg_cache[bg].get_attrs(bg_x, bg_y);
+                let palette_shift = (bpp as usize) - 2;
+                let palette_num = ((attrs & TileAttributes::PALETTE).bits() << palette_shift) as usize;
+                let colour = self.palettes.get_bg_colour(palette_num + texel);
+                if attrs.contains(TileAttributes::PRIORITY) {
+                    BGPixel::Hi(colour)
+                } else {
+                    BGPixel::Lo(colour)
+                }
             }
+        } else {
+            BGPixel::None
         }
     }
 
+    #[inline]
     fn mode_1_bg_3(&self, mem: &VideoMem, x: usize, y: usize) -> BG3Pixel {
         const BG_3: usize = 2;
-        let bg_x = (x + (mem.get_bg_registers().get_bg_scroll_x(BG_3) as usize)) % self.bg_cache[BG_3].width();
-        let bg_y = (y + (mem.get_bg_registers().get_bg_scroll_y(BG_3) as usize)) % self.bg_cache[BG_3].height();
+        // Check if pixel should be shown.
+        if mem.get_window_registers().show_bg_pixel_main(BG_3, x as u8) {
+            let regs = mem.get_bg_registers();
+            let bg_x = (x + (regs.get_bg_scroll_x(BG_3) as usize)) % self.bg_cache[BG_3].width();
+            let bg_y = (y + (regs.get_bg_scroll_y(BG_3) as usize)) % self.bg_cache[BG_3].height();
 
-        let texel = self.bg_cache[BG_3].get_texel(bg_x, bg_y) as usize;
-
-        if texel == 0 {
-            BG3Pixel::None
-        } else {
-            let attrs = self.bg_cache[BG_3].get_attrs(bg_x, bg_y);
-            let palette_num = (attrs & TileAttributes::PALETTE).bits() as usize;
-            let colour = self.palettes.get_bg_colour(palette_num + texel);
-            if attrs.contains(TileAttributes::PRIORITY) {
-                if mem.get_bg_registers().get_bg3_priority() {
-                    BG3Pixel::XHi(colour)
-                } else {
-                    BG3Pixel::Hi(colour)
-                }
+            let texel = if regs.bg_mosaic_enabled(BG_3) {
+                let mosaic_mask = regs.bg_mosaic_mask() as usize;
+                self.bg_cache[BG_3].get_texel((bg_x / mosaic_mask) * mosaic_mask, (bg_y / mosaic_mask) * mosaic_mask)
             } else {
-                BG3Pixel::Lo(colour)
+                self.bg_cache[BG_3].get_texel(bg_x, bg_y)
+            } as usize;
+
+            if texel == 0 {
+                BG3Pixel::None
+            } else {
+                let attrs = self.bg_cache[BG_3].get_attrs(bg_x, bg_y);
+                let palette_num = (attrs & TileAttributes::PALETTE).bits() as usize;
+                let colour = self.palettes.get_bg_colour(palette_num + texel);
+                if attrs.contains(TileAttributes::PRIORITY) {
+                    if regs.get_bg3_priority() {
+                        BG3Pixel::XHi(colour)
+                    } else {
+                        BG3Pixel::Hi(colour)
+                    }
+                } else {
+                    BG3Pixel::Lo(colour)
+                }
             }
+        } else {
+            BG3Pixel::None
         }
     }
 }
@@ -432,6 +478,7 @@ impl Renderer {
                         }
                     }
                 },
+                SpritePixel::Masked |
                 SpritePixel::None => match self.bg_pixel(mem, x, y, 0, BitsPerPixel::_2) {
                     BGPixel::Hi(b1) => write_pixel(i, b1),
                     BGPixel::Lo(b1) => match self.bg_pixel(mem, x, y, 1, BitsPerPixel::_2) {
@@ -514,6 +561,7 @@ impl Renderer {
                         }
                     }
                 },
+                SpritePixel::Masked |
                 SpritePixel::None => {
                     let bg3_pixel = self.mode_1_bg_3(mem, x, y);
                     match bg3_pixel {
