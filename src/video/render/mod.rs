@@ -76,6 +76,38 @@ impl Colour {
             b: 0
         }
     }
+
+    const fn red() -> Colour {
+        Colour {
+            r: 255,
+            g: 0,
+            b: 0
+        }
+    }
+
+    const fn blue() -> Colour {
+        Colour {
+            r: 0,
+            g: 0,
+            b: 255
+        }
+    }
+
+    const fn green() -> Colour {
+        Colour {
+            r: 0,
+            g: 255,
+            b: 0
+        }
+    }
+
+    const fn yellow() -> Colour {
+        Colour {
+            r: 255,
+            g: 255,
+            b: 0
+        }
+    }
 }
 
 // Messages to send to the render thread.

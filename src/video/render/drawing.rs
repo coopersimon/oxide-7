@@ -4,7 +4,8 @@ use crate::video::{
     VideoMem,
     ram::{
         BGReg,
-        ObjectSettings
+        ObjectSettings,
+        SpritePriority
     },
     render::{
         Colour,
@@ -285,7 +286,7 @@ impl Renderer {
     // TODO: lots of cleanup here
     fn draw_sprites_to_line(&self, mem: &VideoMem, line: &mut [SpritePixel], y: u8) {
         // TODO: get this elsewhere..?
-        /*let obj_regs = ObjectSettings::from_bits_truncate(mem.get_registers().get_object_settings());
+        let obj_regs = ObjectSettings::from_bits_truncate(mem.get_registers().get_object_settings());
         let (small, large) = match (obj_regs & ObjectSettings::SIZE).bits() >> 5 {
             0 => ((8, 8), (16, 16)),
             1 => ((8, 8), (32, 32)),
@@ -298,44 +299,50 @@ impl Renderer {
             _ => unreachable!()
         };
 
-        let (hi_table, lo_table) = mem.get_oam();
+        let objects = mem.get_oam();
         
-        for lo in (0..lo_table.len()).step_by(4) {
-            let hi_addr = lo / 16;
-            let shift_amt = ((lo / 4) % 4) * 2;
-            let hi = (hi_table[hi_addr] >> shift_amt) & bits![1, 0];
+        for object in objects {
+            let size = if object.large {large} else {small};
 
-            let large_sprite = test_bit!(hi, 1, u8);
-            let size = if large_sprite {large} else {small};
-
-            let y_pos = lo_table[lo+1];
-            let bottom_y = y_pos.wrapping_add(size.1 - 1);
+            let bottom_y = object.y.wrapping_add(size.1 - 1);
 
             // See if this sprite should appear on this line.
-            let should_render = if bottom_y > y_pos {
-                (y >= y_pos) && (y <= bottom_y)
+            let should_render = if bottom_y > object.y {
+                (y >= object.y) && (y <= bottom_y)
             } else {
-                (y >= y_pos) || (y <= bottom_y)
+                (y >= object.y) || (y <= bottom_y)
             };
 
+            // Actually do drawing.
             if should_render {
-                let x_pos = make16!(if test_bit!(hi, 0, u8) {0xFF} else {0}, lo_table[0]) as i16;
-
-                let tile_num = lo_table[lo+2];
-                let attrs = lo_table[lo+3]; // TODO: bitflags. should be moved into object type.
-
-                let sprite_y = y - y_pos;   // TODO: deal with wraparound.
-                let tile_y = if test_bit!(attrs, 6, u8) {size.1 - 1 - y_pos} else {y_pos} as usize;
+                let sprite_y = y - object.y;   // TODO: deal with wraparound.
+                let y_pixel = if object.y_flip() {size.1 - 1 - sprite_y} else {sprite_y} as usize;
 
                 for x in 0..size.0 {
-                    let texel_x = x_pos + x;
-                    if texel_x >= 0 && texel_x < 256 {  // TODO: no magic number here.
-                        let tile_x = if test_bit!(attrs, 6, u8) {size.0 - 1 - x} else {x} as usize;
+                    let line_x = object.x + x;
+                    if line_x >= 0 && line_x < 256 {  // TODO: no magic number here.
+                        let x_pixel = if object.x_flip() {size.0 - 1 - x} else {x} as usize;
+                        let tile_num = object.calc_tile_num(x_pixel, y_pixel);
 
+                        let texel = if object.is_name_table_0() {
+                            self.obj_pattern_mem[0].ref_tile(tile_num).get_texel(x_pixel % 8, y_pixel % 8)
+                        } else {
+                            self.obj_pattern_mem[1].ref_tile(tile_num).get_texel(x_pixel % 8, y_pixel % 8)
+                        } as usize;
+
+                        if texel != 0 {
+                            let colour = self.palettes.get_obj_colour(object.palette_offset() + texel);
+                            line[line_x as usize] = match object.priority() {
+                                SpritePriority::_3 => SpritePixel::Prio3(colour),
+                                SpritePriority::_2 => SpritePixel::Prio2(colour),
+                                SpritePriority::_1 => SpritePixel::Prio1(colour),
+                                SpritePriority::_0 => SpritePixel::Prio0(colour),
+                            };
+                        }
                     }
-                }
+                }   // for sprite x pixels
             }
-        }*/
+        }
     }
 
     fn bg_pixel(&self, mem: &VideoMem, x: usize, y: usize, bg: usize, bpp: BitsPerPixel) -> BGPixel {

@@ -9,6 +9,7 @@ mod windowregs;
 pub use bgregs::*;
 use cgram::CGRAM;
 use oam::OAM;
+pub use oam::SpritePriority;
 use vram::VRAM;
 use windowregs::WindowRegisters;
 
@@ -145,7 +146,7 @@ impl VideoMem {
     }
 
     // Renderer methods to get raw data.
-    pub fn get_oam<'a>(&'a mut self) -> (&'a [u8], &'a [u8]) {
+    pub fn get_oam<'a>(&'a self) -> &'a [oam::Object] {
         self.oam.ref_data()
     }
 
