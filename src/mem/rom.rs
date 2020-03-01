@@ -1,6 +1,6 @@
 // ROM types
 use std::{
-    collections::BTreeMap,
+    collections::HashMap,
     io::{
         BufReader,
         Read,
@@ -12,7 +12,7 @@ use std::{
 
 use crate::constants::timing;
 
-use super::RAM;
+use super::SRAM;
 
 const LOROM_RAM_BANK_SIZE: u32 = 0x8000;
 const HIROM_RAM_BANK_SIZE: u32 = 0x2000;
@@ -29,7 +29,7 @@ pub trait Cart {
 // ROM banks.
 struct ROM {
     rom_file:   BufReader<File>,
-    banks:      BTreeMap<u8, Vec<u8>>,
+    banks:      HashMap<u8, Vec<u8>>,
     bank_size:  usize
 }
 
@@ -38,7 +38,7 @@ impl ROM {
         // read and store
         ROM {
             rom_file:   cart_file,
-            banks:      BTreeMap::new(),
+            banks:      HashMap::new(),
             bank_size:  bank_size
         }
     }
@@ -65,16 +65,16 @@ impl ROM {
 
 pub struct LoROM {
     rom: ROM,
-    ram: RAM,
+    ram: SRAM,
 
     rom_speed: usize,
 }
 
 impl LoROM {
-    pub fn new(cart_file: BufReader<File>/*, fast: bool*/) -> Self {
+    pub fn new(cart_file: BufReader<File>, sram: SRAM/*, fast: bool*/) -> Self {
         LoROM {
             rom: ROM::new(cart_file, 0x8000),
-            ram: RAM::new(512 * 1024),
+            ram: sram,
 
             rom_speed: timing::SLOW_MEM_ACCESS
         }
@@ -117,16 +117,16 @@ impl Cart for LoROM {
 
 pub struct HiROM {
     rom: ROM,
-    ram: RAM,
+    ram: SRAM,
 
     rom_speed: usize,
 }
 
 impl HiROM {
-    pub fn new(cart_file: BufReader<File>/*, fast: bool*/) -> Self {
+    pub fn new(cart_file: BufReader<File>, sram: SRAM/*, fast: bool*/) -> Self {
         HiROM {
             rom: ROM::new(cart_file, 0x10000),
-            ram: RAM::new(256 * 1024),
+            ram: sram,
 
             rom_speed: timing::SLOW_MEM_ACCESS
         }
@@ -138,12 +138,12 @@ impl Cart for HiROM {
         let internal_bank = bank % 0x80;
 
         match internal_bank {
-            0x00..=0x3F if addr >= 0x8000 => (self.rom.read(internal_bank, addr), if bank < 0x80 {timing::SLOW_MEM_ACCESS} else {self.rom_speed}),
+            0x00..=0x3F if addr >= 0x8000 => (self.rom.read(internal_bank, addr % 0x8000), if bank < 0x80 {timing::SLOW_MEM_ACCESS} else {self.rom_speed}),
             0x20..=0x3F if addr >= 0x6000 => {
                 let ram_bank = ((internal_bank - 0x20) as u32) * HIROM_RAM_BANK_SIZE;
                 (self.ram.read(ram_bank + (addr as u32 - 0x6000)), timing::SLOW_MEM_ACCESS)
             },
-            0x40..=0x7F => (self.rom.read(internal_bank % 0x40, addr), if bank < 0x80 {timing::SLOW_MEM_ACCESS} else {self.rom_speed}),
+            0x40..=0x7F => (self.rom.read(internal_bank % 0x40, addr % 0x8000), if bank < 0x80 {timing::SLOW_MEM_ACCESS} else {self.rom_speed}),
             _ => (0, timing::SLOW_MEM_ACCESS)
         }
     }

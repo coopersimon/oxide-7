@@ -23,6 +23,7 @@ use crate::{
 
 use super::{
     RAM,
+    SRAM,
     dma::{
         DMAChannel,
         DMAControl
@@ -59,13 +60,9 @@ pub struct MemBus {
 }
 
 impl MemBus {
-    pub fn new(cart_path: &str) -> Self {
+    pub fn new(cart_path: &str, save_path: &str) -> Self {
         // Open ROM file.
-        let f = File::open(cart_path).expect(&format!("Couldn't open file {}", cart_path));
-
-        let reader = BufReader::new(f);
-        
-        let cart = MemBus::make_cart(reader);
+        let cart = MemBus::make_cart(cart_path, save_path);
 
         MemBus {
             bus_b:      AddrBusB::new(),
@@ -211,7 +208,11 @@ impl MemBus {
 
 // Internal
 impl MemBus {
-    fn make_cart(mut reader: BufReader<File>) -> Box<dyn Cart> {
+    fn make_cart(cart_path: &str, save_path: &str) -> Box<dyn Cart> {
+        let rom_file = File::open(cart_path).expect(&format!("Couldn't open file {}", cart_path));
+
+        let mut reader = BufReader::new(rom_file);
+        
         let mut buf = [0; 0x40];
         
         // Check for LoROM
@@ -219,7 +220,9 @@ impl MemBus {
         reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
 
         if (buf[0x15] & 0x21) == 0x20 {
-            return Box::new(LoROM::new(reader/*, test_bit!(buf[0x15], 4, u8)*/));
+            let save_file_size = 0x400 << buf[0x18];    // TODO: check if there should be save data at all.
+            let sram = SRAM::new(save_path, save_file_size).expect("Couldn't make save file.");
+            return Box::new(LoROM::new(reader, sram/*, test_bit!(buf[0x15], 4, u8)*/));
         }
 
         // Check for HiROM
@@ -227,7 +230,9 @@ impl MemBus {
         reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
 
         if (buf[0x15] & 0x21) == 0x21 {
-            return Box::new(HiROM::new(reader/*, test_bit!(buf[0x15], 4, u8)*/));
+            let save_file_size = 0x400 << buf[0x18];    // TODO: check if there should be save data at all.
+            let sram = SRAM::new(save_path, save_file_size).expect("Couldn't make save file.");
+            return Box::new(HiROM::new(reader, sram/*, test_bit!(buf[0x15], 4, u8)*/));
         } else {
             panic!("Unrecognised ROM: {:X}", buf[0x15]);
         }

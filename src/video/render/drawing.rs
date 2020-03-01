@@ -429,77 +429,6 @@ impl Renderer {
         });
     }
 
-    /*#[inline]
-    fn bg_pixel(&self, mem: &VideoMem, x: usize, y: usize, bg: usize, bpp: BitsPerPixel) -> BGPixel {
-        // Check if pixel should be shown.
-        if mem.get_window_registers().show_bg_pixel_main(bg, x as u8) {
-            let regs = mem.get_bg_registers();
-            let bg_x = (x + (regs.get_bg_scroll_x(bg) as usize)) % self.bg_cache[bg].width();
-            let bg_y = (y + (regs.get_bg_scroll_y(bg) as usize)) % self.bg_cache[bg].height();
-
-            // TODO: make this faster
-            let texel = if regs.bg_mosaic_enabled(bg) {
-                let mosaic_mask = regs.bg_mosaic_mask() as usize;
-                self.bg_cache[bg].get_texel((bg_x / mosaic_mask) * mosaic_mask, (bg_y / mosaic_mask) * mosaic_mask)
-            } else {
-                self.bg_cache[bg].get_texel(bg_x, bg_y)
-            } as usize;
-
-            if texel == 0 {
-                BGPixel::None
-            } else {
-                let attrs = self.bg_cache[bg].get_attrs(bg_x, bg_y);
-                let palette_shift = (bpp as usize) - 2;
-                let palette_num = ((attrs & TileAttributes::PALETTE).bits() << palette_shift) as usize;
-                let colour = self.palettes.get_bg_colour(palette_num + texel);
-                if attrs.contains(TileAttributes::PRIORITY) {
-                    BGPixel::Hi(colour)
-                } else {
-                    BGPixel::Lo(colour)
-                }
-            }
-        } else {
-            BGPixel::None
-        }
-    }
-
-    #[inline]
-    fn mode_1_bg_3(&self, mem: &VideoMem, x: usize, y: usize) -> BG3Pixel {
-        const BG_3: usize = 2;
-        // Check if pixel should be shown.
-        if mem.get_window_registers().show_bg_pixel_main(BG_3, x as u8) {
-            let regs = mem.get_bg_registers();
-            let bg_x = (x + (regs.get_bg_scroll_x(BG_3) as usize)) % self.bg_cache[BG_3].width();
-            let bg_y = (y + (regs.get_bg_scroll_y(BG_3) as usize)) % self.bg_cache[BG_3].height();
-
-            let texel = if regs.bg_mosaic_enabled(BG_3) {
-                let mosaic_mask = regs.bg_mosaic_mask() as usize;
-                self.bg_cache[BG_3].get_texel((bg_x / mosaic_mask) * mosaic_mask, (bg_y / mosaic_mask) * mosaic_mask)
-            } else {
-                self.bg_cache[BG_3].get_texel(bg_x, bg_y)
-            } as usize;
-
-            if texel == 0 {
-                BG3Pixel::None
-            } else {
-                let attrs = self.bg_cache[BG_3].get_attrs(bg_x, bg_y);
-                let palette_num = (attrs & TileAttributes::PALETTE).bits() as usize;
-                let colour = self.palettes.get_bg_colour(palette_num + texel);
-                if attrs.contains(TileAttributes::PRIORITY) {
-                    if regs.get_bg3_priority() {
-                        BG3Pixel::XHi(colour)
-                    } else {
-                        BG3Pixel::Hi(colour)
-                    }
-                } else {
-                    BG3Pixel::Lo(colour)
-                }
-            }
-        } else {
-            BG3Pixel::None
-        }
-    }*/
-
     // Get a texel and attribute pair for a BG pixel.
     fn get_bg_data(&self, regs: &Registers, bg: usize, x: usize, y: usize) -> BGData {
         let bg_x = (x + (regs.get_bg_scroll_x(bg) as usize)) & self.bg_cache[bg].mask_x();   // TODO: replace with &
@@ -523,86 +452,6 @@ impl Renderer {
     fn make_4bpp_pixel(&self, data: BGData) -> Colour {
         let palette_num = (data.attrs & TileAttributes::PALETTE).bits() << 2;
         self.palettes.get_bg_colour((palette_num + data.texel) as usize)
-    }
-
-    // Returns a pixel.
-    fn eval_mode_1(&self, mem: &VideoMem, mut pixels: PixelData, x: usize, y: usize) -> (Pixel, Colour) {
-        let window_regs = mem.get_window_registers();
-
-        let main = self.eval_mode_1_screen(mem, Screen::Main, &mut pixels, x, y);
-        let sub = if window_regs.use_subscreen() {
-            self.eval_mode_1_screen(mem, Screen::Sub, &mut pixels, x, y).any()
-                .unwrap_or(window_regs.get_fixed_colour())
-        } else {
-            window_regs.get_fixed_colour()
-        };
-
-        (main, sub)
-    }
-
-    fn eval_mode_1_screen(&self, mem: &VideoMem, screen: Screen, pixels: &mut PixelData, x: usize, y: usize) -> Pixel {
-        let bg_regs = mem.get_bg_registers();
-        let window_regs = mem.get_window_registers();
-
-        let show_bg3 = window_regs.show_bg_pixel(2, screen, x as u8);
-        if show_bg3 && bg_regs.get_bg3_priority() {
-            let bg3 = pixels.get_bg3(self, bg_regs, x, y);
-            if bg3.texel != 0 && bg3.attrs.contains(TileAttributes::PRIORITY) {
-                return Pixel::BG3(self.make_2bpp_pixel(bg3));
-            }
-        }
-        if let SpritePixel::Prio3(c) = pixels.get_obj(screen) {
-            return Pixel::Obj(c);
-        }
-        let show_bg1 = window_regs.show_bg_pixel(0, screen, x as u8);
-        if show_bg1 {
-            let bg1 = pixels.get_bg1(self, bg_regs, x, y);
-            if bg1.texel != 0 && bg1.attrs.contains(TileAttributes::PRIORITY) {
-                return Pixel::BG1(self.make_4bpp_pixel(bg1));
-            }
-        }
-        let show_bg2 = window_regs.show_bg_pixel(1, screen, x as u8);
-        if show_bg2 {
-            let bg2 = pixels.get_bg2(self, bg_regs, x, y);
-            if bg2.texel != 0 && bg2.attrs.contains(TileAttributes::PRIORITY) {
-                return Pixel::BG2(self.make_4bpp_pixel(bg2));
-            }
-        }
-        if let SpritePixel::Prio2(c) = pixels.get_obj(screen) {
-            return Pixel::Obj(c);
-        }
-        if show_bg1 {
-            let bg1 = pixels.get_bg1(self, bg_regs, x, y);
-            if bg1.texel != 0 {
-                return Pixel::BG1(self.make_4bpp_pixel(bg1));
-            }
-        }
-        if show_bg2 {
-            let bg2 = pixels.get_bg2(self, bg_regs, x, y);
-            if bg2.texel != 0 {
-                return Pixel::BG2(self.make_4bpp_pixel(bg2));
-            }
-        }
-        if let SpritePixel::Prio1(c) = pixels.get_obj(screen) {
-            return Pixel::Obj(c);
-        }
-        if show_bg3 && !bg_regs.get_bg3_priority() {
-            let bg3 = pixels.get_bg3(self, bg_regs, x, y);
-            if bg3.texel != 0 && bg3.attrs.contains(TileAttributes::PRIORITY) {
-                return Pixel::BG3(self.make_2bpp_pixel(bg3));
-            }
-        }
-        if let SpritePixel::Prio0(c) = pixels.get_obj(screen) {
-            return Pixel::Obj(c);
-        }
-        if show_bg3 {
-            let bg3 = pixels.get_bg3(self, bg_regs, x, y);
-            if bg3.texel != 0 {
-                return Pixel::BG3(self.make_2bpp_pixel(bg3));
-            }
-        }
-
-        Pixel::None
     }
 
     // Returns a pixel.
@@ -691,6 +540,86 @@ impl Renderer {
 
         Pixel::None
     }
+
+    // Returns a pixel.
+    fn eval_mode_1(&self, mem: &VideoMem, mut pixels: PixelData, x: usize, y: usize) -> (Pixel, Colour) {
+        let window_regs = mem.get_window_registers();
+
+        let main = self.eval_mode_1_screen(mem, Screen::Main, &mut pixels, x, y);
+        let sub = if window_regs.use_subscreen() {
+            self.eval_mode_1_screen(mem, Screen::Sub, &mut pixels, x, y).any()
+                .unwrap_or(window_regs.get_fixed_colour())
+        } else {
+            window_regs.get_fixed_colour()
+        };
+
+        (main, sub)
+    }
+
+    fn eval_mode_1_screen(&self, mem: &VideoMem, screen: Screen, pixels: &mut PixelData, x: usize, y: usize) -> Pixel {
+        let bg_regs = mem.get_bg_registers();
+        let window_regs = mem.get_window_registers();
+
+        let show_bg3 = window_regs.show_bg_pixel(2, screen, x as u8);
+        if show_bg3 && bg_regs.get_bg3_priority() {
+            let bg3 = pixels.get_bg3(self, bg_regs, x, y);
+            if bg3.texel != 0 && bg3.attrs.contains(TileAttributes::PRIORITY) {
+                return Pixel::BG3(self.make_2bpp_pixel(bg3));
+            }
+        }
+        if let SpritePixel::Prio3(c) = pixels.get_obj(screen) {
+            return Pixel::Obj(c);
+        }
+        let show_bg1 = window_regs.show_bg_pixel(0, screen, x as u8);
+        if show_bg1 {
+            let bg1 = pixels.get_bg1(self, bg_regs, x, y);
+            if bg1.texel != 0 && bg1.attrs.contains(TileAttributes::PRIORITY) {
+                return Pixel::BG1(self.make_4bpp_pixel(bg1));
+            }
+        }
+        let show_bg2 = window_regs.show_bg_pixel(1, screen, x as u8);
+        if show_bg2 {
+            let bg2 = pixels.get_bg2(self, bg_regs, x, y);
+            if bg2.texel != 0 && bg2.attrs.contains(TileAttributes::PRIORITY) {
+                return Pixel::BG2(self.make_4bpp_pixel(bg2));
+            }
+        }
+        if let SpritePixel::Prio2(c) = pixels.get_obj(screen) {
+            return Pixel::Obj(c);
+        }
+        if show_bg1 {
+            let bg1 = pixels.get_bg1(self, bg_regs, x, y);
+            if bg1.texel != 0 {
+                return Pixel::BG1(self.make_4bpp_pixel(bg1));
+            }
+        }
+        if show_bg2 {
+            let bg2 = pixels.get_bg2(self, bg_regs, x, y);
+            if bg2.texel != 0 {
+                return Pixel::BG2(self.make_4bpp_pixel(bg2));
+            }
+        }
+        if let SpritePixel::Prio1(c) = pixels.get_obj(screen) {
+            return Pixel::Obj(c);
+        }
+        if show_bg3 && !bg_regs.get_bg3_priority() {
+            let bg3 = pixels.get_bg3(self, bg_regs, x, y);
+            if bg3.texel != 0 && bg3.attrs.contains(TileAttributes::PRIORITY) {
+                return Pixel::BG3(self.make_2bpp_pixel(bg3));
+            }
+        }
+        if let SpritePixel::Prio0(c) = pixels.get_obj(screen) {
+            return Pixel::Obj(c);
+        }
+        if show_bg3 {
+            let bg3 = pixels.get_bg3(self, bg_regs, x, y);
+            if bg3.texel != 0 {
+                return Pixel::BG3(self.make_2bpp_pixel(bg3));
+            }
+        }
+
+        Pixel::None
+    }
 }
 
 // Drawing modes
@@ -746,159 +675,4 @@ impl Renderer {
             write_pixel(i, col);
         }
     }
-
-    /*fn draw_line_mode_0(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
-        let target_start = y * SCREEN_WIDTH;
-
-        let mut sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
-
-        self.draw_sprites_to_line(mem, &mut sprite_pixels, y as u8);
-
-        for (x, i) in target.chunks_mut(4).skip(target_start).take(SCREEN_WIDTH).enumerate() {
-            match sprite_pixels[x] {
-                SpritePixel::Prio3(s3) => write_pixel(i, s3),
-                SpritePixel::Prio2(s2) => match self.bg_pixel(mem, x, y, 0, BitsPerPixel::_2) {
-                    BGPixel::Hi(b1) => write_pixel(i, b1),
-                    _ => match self.bg_pixel(mem, x, y, 1, BitsPerPixel::_2) {
-                        BGPixel::Hi(b2) => write_pixel(i, b2),
-                        _ => write_pixel(i, s2)
-                    }
-                },
-                SpritePixel::Prio1(s1) => match self.bg_pixel(mem, x, y, 0, BitsPerPixel::_2) {
-                    BGPixel::Hi(b1) => write_pixel(i, b1),
-                    BGPixel::Lo(b1) => match self.bg_pixel(mem, x, y, 1, BitsPerPixel::_2) {
-                        BGPixel::Hi(b2) => write_pixel(i, b2),
-                        _ => write_pixel(i, b1)
-                    },
-                    BGPixel::None => match self.bg_pixel(mem, x, y, 1, BitsPerPixel::_2).any() {
-                        Some(b2) => write_pixel(i, b2),
-                        None => write_pixel(i, s1)
-                    }
-                },
-                SpritePixel::Prio0(s0) => match self.bg_pixel(mem, x, y, 0, BitsPerPixel::_2) {
-                    BGPixel::Hi(b1) => write_pixel(i, b1),
-                    BGPixel::Lo(b1) => match self.bg_pixel(mem, x, y, 1, BitsPerPixel::_2) {
-                        BGPixel::Hi(b2) => write_pixel(i, b2),
-                        _ => write_pixel(i, b1)
-                    },
-                    BGPixel::None => match self.bg_pixel(mem, x, y, 1, BitsPerPixel::_2).any() {
-                        Some(b2) => write_pixel(i, b2),
-                        None => match self.bg_pixel(mem, x, y, 2, BitsPerPixel::_2) {
-                            BGPixel::Hi(b3) => write_pixel(i, b3),
-                            _ => match self.bg_pixel(mem, x, y, 3, BitsPerPixel::_2) {
-                                BGPixel::Hi(b4) => write_pixel(i, b4),
-                                _ => write_pixel(i, s0)
-                            }
-                        }
-                    }
-                },
-                SpritePixel::Masked |
-                SpritePixel::None => match self.bg_pixel(mem, x, y, 0, BitsPerPixel::_2) {
-                    BGPixel::Hi(b1) => write_pixel(i, b1),
-                    BGPixel::Lo(b1) => match self.bg_pixel(mem, x, y, 1, BitsPerPixel::_2) {
-                        BGPixel::Hi(b2) => write_pixel(i, b2),
-                        _ => write_pixel(i, b1)
-                    },
-                    BGPixel::None => match self.bg_pixel(mem, x, y, 1, BitsPerPixel::_2).any() {
-                        Some(b2) => write_pixel(i, b2),
-                        None => match self.bg_pixel(mem, x, y, 2, BitsPerPixel::_2) {
-                            BGPixel::Hi(b3) => write_pixel(i, b3),
-                            BGPixel::Lo(b3) => match self.bg_pixel(mem, x, y, 3, BitsPerPixel::_2) {
-                                BGPixel::Hi(b4) => write_pixel(i, b4),
-                                _ => write_pixel(i, b3)
-                            },
-                            BGPixel::None => match self.bg_pixel(mem, x, y, 3, BitsPerPixel::_2).any() {
-                                Some(b4) => write_pixel(i, b4),
-                                _ => write_pixel(i, mem.get_window_registers().get_fixed_colour())
-                            }
-                        }
-                    }
-                },
-            }
-        }
-    }*/
-
-    /*fn old_draw_line_mode_1(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
-        let target_start = y * SCREEN_WIDTH;
-
-        let mut sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
-        self.draw_sprites_to_line(mem, &mut sprite_pixels, y as u8);
-
-        let mut main_screen = [Colour::zero(); SCREEN_WIDTH];
-        let mut sub_screen = [Colour::zero(); SCREEN_WIDTH];
-
-        for (x, i) in target.chunks_mut(4).skip(target_start).take(SCREEN_WIDTH).enumerate() {
-            match sprite_pixels[x] {
-                SpritePixel::Prio3(s3) => match self.mode_1_bg_3(mem, x, y) {
-                    BG3Pixel::XHi(b3) => write_pixel(i, b3),
-                    _ => write_pixel(i, s3)
-                },
-                SpritePixel::Prio2(s2) => match self.mode_1_bg_3(mem, x, y) {
-                    BG3Pixel::XHi(b3) => write_pixel(i, b3),
-                    _ => match self.bg_pixel(mem, x, y, 0, BitsPerPixel::_4) {
-                        BGPixel::Hi(b1) => write_pixel(i, b1),
-                        _ => match self.bg_pixel(mem, x, y, 1, BitsPerPixel::_4) {
-                            BGPixel::Hi(b2) => write_pixel(i, b2),
-                            _ => write_pixel(i, s2)
-                        }
-                    }
-                },
-                SpritePixel::Prio1(s1) => match self.mode_1_bg_3(mem, x, y) {
-                    BG3Pixel::XHi(b3) => write_pixel(i, b3),
-                    _ => match self.bg_pixel(mem, x, y, 0, BitsPerPixel::_4) {
-                        BGPixel::Hi(b1) => write_pixel(i, b1),
-                        BGPixel::Lo(b1) => match self.bg_pixel(mem, x, y, 1, BitsPerPixel::_4) {
-                            BGPixel::Hi(b2) => write_pixel(i, b2),
-                            _ => write_pixel(i, b1)
-                        },
-                        BGPixel::None => match self.bg_pixel(mem, x, y, 1, BitsPerPixel::_4).any() {
-                            Some(b2) => write_pixel(i, b2),
-                            None => write_pixel(i, s1)
-                        }
-                    }
-                },
-                SpritePixel::Prio0(s0) => {
-                    let bg3_pixel = self.mode_1_bg_3(mem, x, y);
-                    match bg3_pixel {
-                        BG3Pixel::XHi(b3) => write_pixel(i, b3),
-                        _ => match self.bg_pixel(mem, x, y, 0, BitsPerPixel::_4) {
-                            BGPixel::Hi(b1) => write_pixel(i, b1),
-                            BGPixel::Lo(b1) => match self.bg_pixel(mem, x, y, 1, BitsPerPixel::_4) {
-                                BGPixel::Hi(b2) => write_pixel(i, b2),
-                                _ => write_pixel(i, b1)
-                            },
-                            BGPixel::None => match self.bg_pixel(mem, x, y, 1, BitsPerPixel::_4).any() {
-                                Some(b2) => write_pixel(i, b2),
-                                None => match bg3_pixel {
-                                    BG3Pixel::Hi(b3) => write_pixel(i, b3),
-                                    _ => write_pixel(i, s0)
-                                }
-                            }
-                        }
-                    }
-                },
-                SpritePixel::Masked |
-                SpritePixel::None => {
-                    let bg3_pixel = self.mode_1_bg_3(mem, x, y);
-                    match bg3_pixel {
-                        BG3Pixel::XHi(b3) => write_pixel(i, b3),
-                        _ => match self.bg_pixel(mem, x, y, 0, BitsPerPixel::_4) {
-                            BGPixel::Hi(b1) => write_pixel(i, b1),
-                            BGPixel::Lo(b1) => match self.bg_pixel(mem, x, y, 1, BitsPerPixel::_4) {
-                                BGPixel::Hi(b2) => write_pixel(i, b2),
-                                _ => write_pixel(i, b1)
-                            },
-                            BGPixel::None => match self.bg_pixel(mem, x, y, 1, BitsPerPixel::_4).any() {
-                                Some(b2) => write_pixel(i, b2),
-                                None => match bg3_pixel.any() {
-                                    Some(b3) => write_pixel(i, b3),
-                                    _ => write_pixel(i, mem.get_window_registers().get_fixed_colour())
-                                }
-                            }
-                        }
-                    }
-                },
-            }
-        }
-    }*/
 }

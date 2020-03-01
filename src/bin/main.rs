@@ -80,7 +80,8 @@ fn main() {
     let debug_mode = std::env::args().nth(2).is_some();
 
     let mut events_loop = EventsLoop::new();
-    let mut snes = SNES::new(&cart_path, "");
+    let save_file_name = make_save_name(&cart_path);
+    let mut snes = SNES::new(&cart_path, &save_file_name);
 
     //let mut now = Utc::now();
     let frame_duration = Duration::microseconds((FRAME_INTERVAL * 1_000_000.0) as i64);
@@ -286,12 +287,12 @@ fn main() {
     }
 }
 
-/*fn make_save_name(cart_name: &str) -> String {
+fn make_save_name(cart_name: &str) -> String {
     match cart_name.find(".") {
         Some(pos) => cart_name[0..pos].to_string() + ".sav",
         None      => cart_name.to_string() + ".sav"
     }
-}*/
+}
 
 fn read_events(events_loop: &mut EventsLoop, snes: &mut SNES) {
     events_loop.poll_events(|e| {

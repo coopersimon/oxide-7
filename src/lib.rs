@@ -42,8 +42,8 @@ pub struct SNES {
 
 impl SNES {
     // Construct a new SNES with a cartridge inserted.
-    pub fn new(cart_path: &str, _save_path: &str) -> Self {
-        let bus = MemBus::new(cart_path);
+    pub fn new(cart_path: &str, save_path: &str) -> Self {
+        let bus = MemBus::new(cart_path, save_path);
         let cpu = CPU::new(bus);
 
         SNES {
