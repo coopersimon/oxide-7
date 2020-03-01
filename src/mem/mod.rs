@@ -46,6 +46,8 @@ pub struct SRAM {
     save_file:  BufWriter<File>,
     ram:        RAM,
 
+    mask:       u32,  // Mask when reading/writing
+
     dirty:      bool,
 }
 
@@ -70,16 +72,18 @@ impl SRAM {
             save_file:  BufWriter::new(file),
             ram:        ram,
 
+            mask:       (size - 1) as u32,
+
             dirty:      false
         })
     }
 
     pub fn read(&self, addr: u32) -> u8 {
-        self.ram.read(addr)
+        self.ram.read(addr & self.mask)
     }
 
     pub fn write(&mut self, addr: u32, data: u8) {
-        self.ram.write(addr, data);
+        self.ram.write(addr & self.mask, data);
         self.dirty = true;
     }
 

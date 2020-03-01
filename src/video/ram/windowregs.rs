@@ -262,7 +262,7 @@ impl WindowRegisters {
 
 // internal helpers
 impl WindowRegisters {
-    // Returns true if the bg pixel specified should be shown through the window mask
+    // Returns true if the bg pixel specified is inside the window
     fn show_masked_bg_pixel(&self, bg: usize, x: u8) -> bool {
         let enable_1 = self.enable_window_1_bg(bg);
         let enable_2 = self.enable_window_2_bg(bg);
@@ -273,7 +273,7 @@ impl WindowRegisters {
                 let op = self.window_op_bg(bg);
                 do_window_op(op, win_1, win_2)
             },
-            (true, false) => {
+            (true, false) => {  // Just use window 1
                 self.test_inside_window_1(x) != self.invert_window_1_bg(bg)
             },
             (false, true) => {  // Just use window 2
@@ -285,7 +285,7 @@ impl WindowRegisters {
         }
     }
 
-    // Returns true if the obj pixel specified should be shown through the window mask
+    // Returns true if the obj pixel specified is inside the window
     fn show_masked_obj_pixel(&self, x: u8) -> bool {
         let enable_1 = self.enable_window_1_obj();
         let enable_2 = self.enable_window_2_obj();
@@ -563,6 +563,7 @@ impl WindowRegisters {
 
 // Does the window operation
 // TODO: make this a type?
+#[inline]
 fn do_window_op(op: u8, win_1: bool, win_2: bool) -> bool {
     const MASK_LOGIC_OR: u8 = 0;
     const MASK_LOGIC_AND: u8 = 1;

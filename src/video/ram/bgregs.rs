@@ -281,11 +281,12 @@ impl Registers {
     }
 
     pub fn bg_mosaic_enabled(&self, bg: usize) -> bool {
+        let empty_mask = (self.mosaic_settings & Mosaic::PIXEL_SIZE).is_empty();
         match bg {
-            0 => self.mosaic_settings.contains(Mosaic::BG1_ENABLE),
-            1 => self.mosaic_settings.contains(Mosaic::BG2_ENABLE),
-            2 => self.mosaic_settings.contains(Mosaic::BG3_ENABLE),
-            3 => self.mosaic_settings.contains(Mosaic::BG4_ENABLE),
+            0 => self.mosaic_settings.contains(Mosaic::BG1_ENABLE) && !empty_mask,
+            1 => self.mosaic_settings.contains(Mosaic::BG2_ENABLE) && !empty_mask,
+            2 => self.mosaic_settings.contains(Mosaic::BG3_ENABLE) && !empty_mask,
+            3 => self.mosaic_settings.contains(Mosaic::BG4_ENABLE) && !empty_mask,
             _ => unreachable!()
         }
     }

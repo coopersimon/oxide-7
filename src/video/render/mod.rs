@@ -136,9 +136,14 @@ impl RenderThread {
                     },
                     DrawLine(y) => {
                         let mut mem = mem.lock().unwrap();
-                        let mut t = target.as_ref().unwrap().lock().unwrap();
-                        send_reply.send(()).unwrap();
-                        renderer.draw_line(&mut mem, &mut t, y);
+                        if !mem.get_bg_registers().in_fblank() {
+                            send_reply.send(()).unwrap();
+                            renderer.setup_caches(&mut mem);
+                            let mut t = target.as_ref().unwrap().lock().unwrap();
+                            renderer.draw_line(&mem, &mut t, y);
+                        } else {
+                            send_reply.send(()).unwrap();
+                        }
                     }
                 }
             }

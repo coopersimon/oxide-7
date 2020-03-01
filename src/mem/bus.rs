@@ -53,6 +53,7 @@ pub struct MemBus {
     mult_result:    u16,
 
     // DMA
+    hdma_enable:    u8,
     hdma_active:    u8,
     dma_channels:   Vec<DMAChannel>,
 
@@ -71,6 +72,7 @@ impl MemBus {
             cart:       cart,
             wram:       RAM::new(0x20000),
 
+            hdma_enable:    0,
             hdma_active:    0,
             dma_channels:   vec![DMAChannel::new(); 8],
 
@@ -90,7 +92,7 @@ impl MemBus {
             0x00..=0x3F | 0x80..=0xBF => match offset {
                 0x0000..=0x1FFF => (self.wram.read(offset as u32), SLOW_MEM_ACCESS),
 
-                0x2134..=0x2143 => (self.bus_b.read(lo!(offset)), FAST_MEM_ACCESS),
+                0x2100..=0x2143 => (self.bus_b.read(lo!(offset)), FAST_MEM_ACCESS),
                 0x2180          => self.read_wram(),
                 0x2100..=0x21FF => (0, FAST_MEM_ACCESS),
                 0x3000..=0x3FFF => (0, FAST_MEM_ACCESS),                                // Extensions
@@ -166,10 +168,6 @@ impl MemBus {
             },
             PPUSignal::IRQ => Some(Interrupt::IRQ),
             PPUSignal::VBlank => {
-                //let j = read_events(&mut self.events_loop, &mut self.renderer);
-
-                //self.joypads.set_buttons(j, 0);
-
                 self.joypads.prepare_read();
                 None
             },
@@ -186,6 +184,15 @@ impl MemBus {
                     PPUSignal::None => None,
                     _ => unreachable!(),
                 }
+            },
+            PPUSignal::FrameStart => {
+                self.hdma_active = self.hdma_enable;
+                for chan in 0..8 {
+                    if test_bit!(self.hdma_active, chan, u8) {
+                        self.dma_channels[chan].start_hdma();
+                    }
+                }
+                None
             },
             PPUSignal::None => None
         }
@@ -263,7 +270,7 @@ impl MemBus {
             0x4216 => lo!(self.mult_result),
             0x4217 => hi!(self.mult_result),
             0x4218..=0x421F => self.joypads.read(addr),
-            _ => 0,
+            _ => unreachable!(),
         }
     }
 
@@ -291,15 +298,7 @@ impl MemBus {
             0x4209 => self.bus_b.ppu.set_v_timer_lo(data),
             0x420a => self.bus_b.ppu.set_v_timer_hi(data),
             0x420b => self.dma_transfer(data),
-            0x420c => {
-                self.hdma_active = data;
-
-                for chan in 0..8 {
-                    if test_bit!(self.hdma_active, chan, u8) {
-                        self.dma_channels[chan].start_hdma();
-                    }
-                }
-            },
+            0x420c => self.hdma_enable = data,
             0x420d => self.cart.set_write_speed(data),
             _ => unreachable!(),
         }
@@ -477,7 +476,7 @@ impl AddrBusB {
             0x41        => self.apu.read_port_1(),
             0x42        => self.apu.read_port_2(),
             0x43        => self.apu.read_port_3(),
-            _ => unreachable!()
+            _ => unreachable!("Reading from open bus")
         }
     }
 
@@ -488,7 +487,7 @@ impl AddrBusB {
             0x41        => self.apu.write_port_1(data),
             0x42        => self.apu.write_port_2(data),
             0x43        => self.apu.write_port_3(data),
-            _ => {}//panic!("Tried to write silly shit: {:X} to {:X}", data, addr),
+            _ => panic!("Tried to write silly shit: {:X} to {:X}", data, addr),
         }
     }
 

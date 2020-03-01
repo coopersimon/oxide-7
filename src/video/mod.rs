@@ -50,6 +50,7 @@ pub enum PPUSignal {
     VBlank,     // V-blank period entered without NMI.
     HBlank,     // H-Blank period entered.
     Delay,      // Delay CPU by 40 cycles in middle of scanline.
+    FrameStart, // Frame begin. Reset HDMA.
 }
 
 // PPU internal state
@@ -143,10 +144,11 @@ impl PPU {
         self.cycle_count += cycles;
 
         let signal = match self.state {
-            VBlank if (self.scanline == 1) && (self.cycle_count >= timing::SCANLINE_OFFSET) => {
-                self.renderer.draw_line(0);
+            VBlank if (self.scanline == 0) && (self.cycle_count >= timing::SCANLINE_OFFSET) => {
+                //self.renderer.draw_line(0);
 
-                self.change_state(DrawingBeforePause)
+                self.change_state(DrawingBeforePause);
+                PPUSignal::FrameStart
             },
             HBlankLeft if self.cycle_count >= timing::SCANLINE_OFFSET => {
                 if self.scanline <= screen::V_RES {
@@ -233,6 +235,7 @@ impl PPU {
 
 // Internal
 impl PPU {
+    // TODO: change this to transition?
     fn change_state(&mut self, state: PPUState) -> PPUSignal {
         self.state = state;
         match self.state {

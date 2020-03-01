@@ -66,28 +66,23 @@ impl Renderer {
         }
     }
 
-    pub fn draw_line(&mut self, mem: &mut VideoMem, target: &mut [u8], y: usize) {
-        if !mem.get_bg_registers().in_fblank() {
-            // Refresh caches
-            self.setup_caches(mem);
-
-            match self.mode {
-                VideoMode::_0 => self.draw_line_mode_0(mem, target, y),
-                VideoMode::_1 => self.draw_line_mode_1(mem, target, y),
-                VideoMode::_2 => panic!("Mode 2 not supported."),
-                VideoMode::_3 => panic!("Mode 3 not supported."),
-                VideoMode::_4 => panic!("Mode 4 not supported."),
-                VideoMode::_5 => panic!("Mode 5 not supported."),
-                VideoMode::_6 => panic!("Mode 6 not supported."),
-                VideoMode::_7 => panic!("Mode 7 not supported."),
-            }
+    pub fn draw_line(&mut self, mem: &VideoMem, target: &mut [u8], y: usize) {
+        match self.mode {
+            VideoMode::_0 => self.draw_line_mode_0(mem, target, y),
+            VideoMode::_1 => self.draw_line_mode_1(mem, target, y),
+            VideoMode::_2 => panic!("Mode 2 not supported."),
+            VideoMode::_3 => panic!("Mode 3 not supported."),
+            VideoMode::_4 => panic!("Mode 4 not supported."),
+            VideoMode::_5 => panic!("Mode 5 not supported."),
+            VideoMode::_6 => panic!("Mode 6 not supported."),
+            VideoMode::_7 => panic!("Mode 7 not supported."),
         }
     }
 }
 
 // Caches
 impl Renderer {
-    fn setup_caches(&mut self, mem: &mut VideoMem) {
+    pub fn setup_caches(&mut self, mem: &mut VideoMem) {
         // Check mode and alter backgrounds.
         let stored_mode = VideoMode::from(mem.get_bg_registers().get_mode());
         if stored_mode != self.mode {

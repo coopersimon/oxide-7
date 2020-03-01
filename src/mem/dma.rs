@@ -9,7 +9,7 @@ bitflags! {
         const HDMA_INDIRECT = bit!(6);
         const ADDR_DEC      = bit!(4);
         const FIXED_ADDR    = bit!(3);
-        const TRANSFER_MODE = bit!(2) | bit!(1) | bit!(0);
+        const TRANSFER_MODE = bits![2, 1, 0];
     }
 }
 
@@ -27,7 +27,7 @@ pub struct DMAChannel {
     hdma_line_count:    u8,
     hdma_repeat:        bool,
 
-    bytes_per_cycle:        u16,
+    bytes_per_cycle:    u16,
 }
 
 impl DMAChannel {
