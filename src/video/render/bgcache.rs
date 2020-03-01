@@ -31,16 +31,21 @@ bitflags!{
     }
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct BGData {
+    pub texel: u8,
+    pub attrs: TileAttributes
+}
+
 pub struct BGCache {
-    texels:         Vec<Vec<u8>>,
-    attrs:          Vec<Vec<TileAttributes>>,
+    data:           Vec<Vec<BGData>>,
 
     bg_reg:         BGReg,      // Address and size as stored in register.
     large_tiles:    bool,
     start_addr:     u16,
 
-    size_x:         usize,
-    size_y:         usize,
+    mask_x:         usize,
+    mask_y:         usize,
 
     // dirty?
 }
@@ -53,15 +58,14 @@ impl BGCache {
         let size_y = if bg_reg.contains(BGReg::MIRROR_Y) {SUB_MAP_LEN * 2} else {SUB_MAP_LEN} * tile_size;
 
         BGCache {
-            texels:         vec![vec![0; size_x]; size_y],
-            attrs:          vec![vec![TileAttributes::default(); size_x]; size_y],
+            data:           vec![vec![BGData::default(); size_x]; size_y],
 
             bg_reg:         bg_reg,
             large_tiles:    large_tiles,
             start_addr:     ((bg_reg & BGReg::ADDR).bits() as u16) << 9,    // TODO: do this elsewhere
 
-            size_x:         size_x,
-            size_y:         size_y,
+            mask_x:         size_x - 1,
+            mask_y:         size_y - 1,
         }
     }
 
@@ -71,13 +75,13 @@ impl BGCache {
     }
 
     #[inline]
-    pub fn width(&self) -> usize {
-        self.size_x
+    pub fn mask_x(&self) -> usize {
+        self.mask_x
     }
 
     #[inline]
-    pub fn height(&self) -> usize {
-        self.size_y
+    pub fn mask_y(&self) -> usize {
+        self.mask_y
     }
 
     pub fn construct(&mut self, tiles: &PatternMem, mem: &VideoMem, tiles_changed: bool) {
@@ -116,13 +120,8 @@ impl BGCache {
     }
 
     #[inline]
-    pub fn get_texel(&self, x: usize, y: usize) -> u8 {
-        self.texels[y][x]
-    }
-
-    #[inline]
-    pub fn get_attrs(&self, x: usize, y: usize) -> TileAttributes {
-        self.attrs[y][x]
+    pub fn get_data(&self, x: usize, y: usize) -> BGData {
+        self.data[y][x]
     }
 }
 
@@ -140,8 +139,8 @@ impl BGCache {
             let base_y = ((i / SUB_MAP_LEN) + y_offset) * tile_size;
             let base_x = ((i % SUB_MAP_LEN) + x_offset) * tile_size;
 
-            for (y, (texel_row, attrs_row)) in self.texels.iter_mut().zip(self.attrs.iter_mut()).skip(base_y).take(tile_size).enumerate() {
-                for (x, (texel, attrs)) in texel_row.iter_mut().zip(attrs_row.iter_mut()).skip(base_x).take(tile_size).enumerate() {
+            for (y, row) in self.data.iter_mut().skip(base_y).take(tile_size).enumerate() {
+                for (x, d) in row.iter_mut().skip(base_x).take(tile_size).enumerate() {
                     let (tex_x, tile_idx_x) = {
                         let tex_x = if attr_flags.contains(TileAttributes::X_FLIP) {tile_size - 1 - x} else {x};
                         if tex_x >= SMALL_TILE {
@@ -158,8 +157,8 @@ impl BGCache {
                             (tex_y, tile_idx_x)
                         }
                     };
-                    *texel = tiles.ref_tile(tile_idx).get_texel(tex_x, tex_y);
-                    *attrs = attr_flags;
+                    d.texel = tiles.ref_tile(tile_idx).get_texel(tex_x, tex_y);
+                    d.attrs = attr_flags;
                 }
             }
         }

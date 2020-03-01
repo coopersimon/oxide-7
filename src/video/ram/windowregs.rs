@@ -35,11 +35,6 @@ bitflags! {
     }
 }
 
-const MASK_LOGIC_OR: u8 = 0;
-const MASK_LOGIC_AND: u8 = 1;
-const MASK_LOGIC_XOR: u8 = 2;
-const MASK_LOGIC_XNOR: u8 = 3;
-
 bitflags! {
     #[derive(Default)]
     struct LayerDesignation: u8 {
@@ -48,6 +43,16 @@ bitflags! {
         const BG3 = bit!(2);
         const BG2 = bit!(1);
         const BG1 = bit!(0);
+    }
+}
+
+bitflags! {
+    #[derive(Default)]
+    struct ColourAddSelect: u8 {
+        const CLIP_TO_BLACK = bits![7, 6];
+        const PREVENT       = bits![5, 4];
+        const USE_SUB       = bit!(1);
+        const DIRECT_COL    = bit!(0);
     }
 }
 
@@ -70,6 +75,13 @@ const FIXED_COLOUR_G_BIT: u8 = 6;
 const FIXED_COLOUR_R_BIT: u8 = 5;
 const MAX_COLOUR: u8 = 0x1F;
 
+// Used as input to some window reg methods.
+#[derive(Clone, Copy)]
+pub enum Screen {
+    Main,
+    Sub
+}
+
 pub struct WindowRegisters {
     mask_bg1_2:         WindowMaskSettings,
     mask_bg3_4:         WindowMaskSettings,
@@ -89,7 +101,7 @@ pub struct WindowRegisters {
     main_mask_desg:     LayerDesignation,
     sub_mask_desg:      LayerDesignation,
 
-    colour_add_select:  u8,
+    colour_add_select:  ColourAddSelect,
     colour_math_desg:   ColourMathDesignation,
 
     fixed_colour:       Colour,
@@ -116,7 +128,7 @@ impl WindowRegisters {
             main_mask_desg:     LayerDesignation::default(),
             sub_mask_desg:      LayerDesignation::default(),
 
-            colour_add_select:  0,
+            colour_add_select:  ColourAddSelect::default(),
             colour_math_desg:   ColourMathDesignation::default(),
 
             fixed_colour:       Colour::zero(),
@@ -161,7 +173,7 @@ impl WindowRegisters {
     }
 
     pub fn set_colour_add_select(&mut self, data: u8) {
-        self.colour_add_select = data;
+        self.colour_add_select = ColourAddSelect::from_bits_truncate(data);
     }
 
     pub fn set_colour_math_desg(&mut self, data: u8) {
@@ -184,59 +196,66 @@ impl WindowRegisters {
     }
 
     // Getters - renderer side
+
+    // Returns true if the pixel should be shown for the bg specified on a screen.
+    pub fn show_bg_pixel(&self, bg: usize, screen: Screen, x: u8) -> bool {
+        if self.enable_bg(bg, screen) {    // Check if this bg is enabled for the screen.
+            if self.enable_masking_bg(bg, screen) {    // Check if masking is enabled for this background.
+                self.show_masked_bg_pixel(bg, x)
+            } else {
+                true
+            }
+        } else {
+            false
+        }
+    }
+
+    // Returns true if the pixel should be shown for the objects on a screen.
+    pub fn show_obj_pixel(&self, screen: Screen, x: u8) -> bool {
+        if self.enable_obj(screen) {    // Check if objects are enabled for the screen.
+            if self.enable_masking_obj(screen) {    // Check if masking is enabled for objects.
+                self.show_masked_obj_pixel(x)
+            } else {
+                true
+            }
+        } else {
+            false
+        }
+    }
+
     pub fn get_fixed_colour(&self) -> Colour {
         self.fixed_colour
     }
 
-    // Returns true if the pixel should be shown for the bg specified on the main screen.
-    pub fn show_bg_pixel_main(&self, bg: usize, x: u8) -> bool {
-        if self.enable_bg_main(bg) {    // Check if this bg is enabled for the main screen.
-            if self.enable_masking_bg_main(bg) {    // Check if masking is enabled for this background.
-                self.show_bg_pixel(bg, x)
-            } else {
-                true
-            }
+    // Returns true if subscreen should be used, false if fixed colour should be used.
+    pub fn use_subscreen(&self) -> bool {
+        self.colour_add_select.contains(ColourAddSelect::USE_SUB)
+    }
+
+    // Combine colours.
+    pub fn calc_colour_math_bg(&self, main: Colour, sub: Colour, bg: usize, x: u8) -> Colour {
+        if self.enable_bg_colour_math(bg) {
+            self.do_colour_math(main, sub, x)
         } else {
-            false
+            main
         }
     }
 
-    // Returns true if the pixel should be shown for the objects on the main screen.
-    pub fn show_obj_pixel_main(&self, x: u8) -> bool {
-        if self.enable_obj_main() {    // Check if objects are enabled for the main screen.
-            if self.enable_masking_obj_main() {    // Check if masking is enabled for objects.
-                self.show_obj_pixel(x)
-            } else {
-                true
-            }
+    // Combine colours.
+    pub fn calc_colour_math_obj(&self, main: Colour, sub: Colour, x: u8) -> Colour {
+        if self.enable_obj_colour_math() {
+            self.do_colour_math(main, sub, x)
         } else {
-            false
+            main
         }
     }
 
-    // Returns true if the pixel should be shown for the bg specified on the sub screen.
-    pub fn show_bg_pixel_sub(&self, bg: usize, x: u8) -> bool {
-        if self.enable_bg_sub(bg) {    // Check if this bg is enabled for the sub screen.
-            if self.enable_masking_bg_sub(bg) {    // Check if masking is enabled for this background.
-                self.show_bg_pixel(bg, x)
-            } else {
-                true
-            }
+    // Combine colours.
+    pub fn calc_colour_math_backdrop(&self, main: Colour, sub: Colour, x: u8) -> Colour {
+        if self.enable_backdrop_colour_math() {
+            self.do_colour_math(main, sub, x)
         } else {
-            false
-        }
-    }
-
-    // Returns true if the pixel should be shown for the objects on the sub screen.
-    pub fn show_obj_pixel_sub(&self, x: u8) -> bool {
-        if self.enable_obj_sub() {    // Check if objects are enabled for the sub screen.
-            if self.enable_masking_obj_sub() {    // Check if masking is enabled for objects.
-                self.show_obj_pixel(x)
-            } else {
-                true
-            }
-        } else {
-            false
+            main
         }
     }
 }
@@ -244,7 +263,7 @@ impl WindowRegisters {
 // internal helpers
 impl WindowRegisters {
     // Returns true if the bg pixel specified should be shown through the window mask
-    fn show_bg_pixel(&self, bg: usize, x: u8) -> bool {
+    fn show_masked_bg_pixel(&self, bg: usize, x: u8) -> bool {
         let enable_1 = self.enable_window_1_bg(bg);
         let enable_2 = self.enable_window_2_bg(bg);
         match (enable_1, enable_2) {
@@ -267,7 +286,7 @@ impl WindowRegisters {
     }
 
     // Returns true if the obj pixel specified should be shown through the window mask
-    fn show_obj_pixel(&self, x: u8) -> bool {
+    fn show_masked_obj_pixel(&self, x: u8) -> bool {
         let enable_1 = self.enable_window_1_obj();
         let enable_2 = self.enable_window_2_obj();
         match (enable_1, enable_2) {
@@ -289,60 +308,80 @@ impl WindowRegisters {
         }
     }
 
+    // Returns true if the colour math pixel specified is inside the window
+    fn col_window_pixel(&self, x: u8) -> bool {
+        let enable_1 = self.enable_window_1_col();
+        let enable_2 = self.enable_window_2_col();
+        match (enable_1, enable_2) {
+            (true, true) => {   // Use op to combine
+                let win_1 = self.test_inside_window_1(x) != self.invert_window_1_col();
+                let win_2 = self.test_inside_window_2(x) != self.invert_window_2_col();
+                let op = self.window_op_col();
+                do_window_op(op, win_1, win_2)
+            },
+            (true, false) => {  // Just use window 1
+                self.test_inside_window_1(x) != self.invert_window_1_col()
+            },
+            (false, true) => {  // Just use window 2
+                self.test_inside_window_2(x) != self.invert_window_2_col()
+            },
+            (false, false) => { // No windows enabled for colour
+                true
+            }
+        }
+    }
+
     // Returns true if layer is enabled for the screen
-    fn enable_bg_main(&self, bg: usize) -> bool {
-        match bg {
-            0 => self.main_screen_desg.contains(LayerDesignation::BG1),
-            1 => self.main_screen_desg.contains(LayerDesignation::BG2),
-            2 => self.main_screen_desg.contains(LayerDesignation::BG3),
-            3 => self.main_screen_desg.contains(LayerDesignation::BG4),
-            _ => unreachable!()
+    fn enable_bg(&self, bg: usize, screen: Screen) -> bool {
+        match screen {
+            Screen::Main => match bg {
+                0 => self.main_screen_desg.contains(LayerDesignation::BG1),
+                1 => self.main_screen_desg.contains(LayerDesignation::BG2),
+                2 => self.main_screen_desg.contains(LayerDesignation::BG3),
+                3 => self.main_screen_desg.contains(LayerDesignation::BG4),
+                _ => unreachable!()
+            },
+            Screen::Sub => match bg {
+                0 => self.sub_screen_desg.contains(LayerDesignation::BG1),
+                1 => self.sub_screen_desg.contains(LayerDesignation::BG2),
+                2 => self.sub_screen_desg.contains(LayerDesignation::BG3),
+                3 => self.sub_screen_desg.contains(LayerDesignation::BG4),
+                _ => unreachable!()
+            }
         }
     }
-    fn enable_obj_main(&self) -> bool {
-        self.main_screen_desg.contains(LayerDesignation::OBJ)
-    }
-    fn enable_bg_sub(&self, bg: usize) -> bool {
-        match bg {
-            0 => self.sub_screen_desg.contains(LayerDesignation::BG1),
-            1 => self.sub_screen_desg.contains(LayerDesignation::BG2),
-            2 => self.sub_screen_desg.contains(LayerDesignation::BG3),
-            3 => self.sub_screen_desg.contains(LayerDesignation::BG4),
-            _ => unreachable!()
+    fn enable_obj(&self, screen: Screen) -> bool {
+        match screen {
+            Screen::Main => self.main_screen_desg.contains(LayerDesignation::OBJ),
+            Screen::Sub => self.sub_screen_desg.contains(LayerDesignation::OBJ)
         }
-    }
-    fn enable_obj_sub(&self) -> bool {
-        self.sub_screen_desg.contains(LayerDesignation::OBJ)
     }
 
     // Returns true if masking is enabled for the BG
-    fn enable_masking_bg_main(&self, bg: usize) -> bool {
-        match bg {
-            0 => self.main_mask_desg.contains(LayerDesignation::BG1),
-            1 => self.main_mask_desg.contains(LayerDesignation::BG2),
-            2 => self.main_mask_desg.contains(LayerDesignation::BG3),
-            3 => self.main_mask_desg.contains(LayerDesignation::BG4),
-            _ => unreachable!()
+    fn enable_masking_bg(&self, bg: usize, screen: Screen) -> bool {
+        match screen {
+            Screen::Main => match bg {
+                0 => self.main_mask_desg.contains(LayerDesignation::BG1),
+                1 => self.main_mask_desg.contains(LayerDesignation::BG2),
+                2 => self.main_mask_desg.contains(LayerDesignation::BG3),
+                3 => self.main_mask_desg.contains(LayerDesignation::BG4),
+                _ => unreachable!()
+            },
+            Screen::Sub => match bg {
+                0 => self.sub_mask_desg.contains(LayerDesignation::BG1),
+                1 => self.sub_mask_desg.contains(LayerDesignation::BG2),
+                2 => self.sub_mask_desg.contains(LayerDesignation::BG3),
+                3 => self.sub_mask_desg.contains(LayerDesignation::BG4),
+                _ => unreachable!()
+            }
         }
     }
     // Returns true if masking is enabled for objects
-    fn enable_masking_obj_main(&self) -> bool {
-        self.main_mask_desg.contains(LayerDesignation::OBJ)
-    }
-
-    // Returns true if masking is enabled for the BG
-    fn enable_masking_bg_sub(&self, bg: usize) -> bool {
-        match bg {
-            0 => self.sub_mask_desg.contains(LayerDesignation::BG1),
-            1 => self.sub_mask_desg.contains(LayerDesignation::BG2),
-            2 => self.sub_mask_desg.contains(LayerDesignation::BG3),
-            3 => self.sub_mask_desg.contains(LayerDesignation::BG4),
-            _ => unreachable!()
+    fn enable_masking_obj(&self, screen: Screen) -> bool {
+        match screen {
+            Screen::Main => self.main_mask_desg.contains(LayerDesignation::OBJ),
+            Screen::Sub => self.sub_mask_desg.contains(LayerDesignation::OBJ)
         }
-    }
-    // Returns true if masking is enabled for objects
-    fn enable_masking_obj_sub(&self) -> bool {
-        self.sub_mask_desg.contains(LayerDesignation::OBJ)
     }
 
     // Returns true if window 1 is enabled for layer
@@ -437,11 +476,99 @@ impl WindowRegisters {
     fn window_op_col(&self) -> u8 {
         (self.mask_logic_obj_col & ObjColMaskLogic::COL_OP).bits() >> 2
     }
+
+    fn enable_bg_colour_math(&self, bg: usize) -> bool {
+        match bg {
+            0 => self.colour_math_desg.contains(ColourMathDesignation::BG1),
+            1 => self.colour_math_desg.contains(ColourMathDesignation::BG2),
+            2 => self.colour_math_desg.contains(ColourMathDesignation::BG3),
+            3 => self.colour_math_desg.contains(ColourMathDesignation::BG4),
+            _ => unreachable!()
+        }
+    }
+
+    fn enable_obj_colour_math(&self) -> bool {
+        self.colour_math_desg.contains(ColourMathDesignation::OBJ)
+    }
+
+    fn enable_backdrop_colour_math(&self) -> bool {
+        self.colour_math_desg.contains(ColourMathDesignation::BACKDROP)
+    }
+
+    // Returns true if main screen pixel should be clipped to black.
+    fn clip_to_black(&self, x: u8) -> bool {
+        const CLIP_NEVER: u8 = 0 << 6;
+        const CLIP_OUTSIDE: u8 = 1 << 6;
+        const CLIP_INSIDE: u8 = 2 << 6;
+        const CLIP_ALWAYS: u8 = 3 << 6;
+    
+        match (self.colour_add_select & ColourAddSelect::CLIP_TO_BLACK).bits() {
+            CLIP_NEVER => false,
+            CLIP_OUTSIDE => !self.col_window_pixel(x),
+            CLIP_INSIDE => self.col_window_pixel(x),
+            CLIP_ALWAYS => true,
+            _ => unreachable!()
+        }
+    }
+
+    // Returns true if colour math should happen.
+    fn should_do_colour_math(&self, x: u8) -> bool {
+        const PREVENT_NEVER: u8 = 0 << 4;
+        const PREVENT_OUTSIDE: u8 = 1 << 4;
+        const PREVENT_INSIDE: u8 = 2 << 4;
+        const PREVENT_ALWAYS: u8 = 3 << 4;
+    
+        match (self.colour_add_select & ColourAddSelect::PREVENT).bits() {
+            PREVENT_NEVER => true,
+            PREVENT_OUTSIDE => self.col_window_pixel(x),
+            PREVENT_INSIDE => !self.col_window_pixel(x),
+            PREVENT_ALWAYS => false,
+            _ => unreachable!()
+        }
+    }
+
+    fn do_colour_math(&self, main: Colour, sub: Colour, x: u8) -> Colour {
+        let main_col = if self.clip_to_black(x) {Colour::zero()} else {main};
+        if self.should_do_colour_math(x) {
+            let (r, g, b) = if !self.colour_math_desg.contains(ColourMathDesignation::ADD_SUB) {
+                let i_r = main_col.r as u16 + sub.r as u16;
+                let i_g = main_col.g as u16 + sub.g as u16;
+                let i_b = main_col.b as u16 + sub.b as u16;
+                (i_r | (i_r >> 8), i_g | (i_g >> 8), i_b | (i_b >> 8))
+            } else {
+                let i_r = main_col.r as i16 - sub.r as i16;
+                let i_g = main_col.g as i16 - sub.g as i16;
+                let i_b = main_col.b as i16 - sub.b as i16;
+                (
+                    if i_r < 0 {0} else {i_r as u16},
+                    if i_g < 0 {0} else {i_g as u16},
+                    if i_b < 0 {0} else {i_b as u16},
+                )
+            };
+    
+            if self.colour_math_desg.contains(ColourMathDesignation::HALF) {
+                Colour::new(lo!(r >> 1), lo!(g >> 1), lo!(b >> 1))
+            } else {
+                Colour::new(
+                    if r > 0xFF {0xFF} else {r as u8},
+                    if g > 0xFF {0xFF} else {g as u8},
+                    if b > 0xFF {0xFF} else {b as u8},
+                )
+            }
+        } else {
+            main_col
+        }
+    }
 }
 
 // Does the window operation
 // TODO: make this a type?
 fn do_window_op(op: u8, win_1: bool, win_2: bool) -> bool {
+    const MASK_LOGIC_OR: u8 = 0;
+    const MASK_LOGIC_AND: u8 = 1;
+    const MASK_LOGIC_XOR: u8 = 2;
+    const MASK_LOGIC_XNOR: u8 = 3;
+
     match op {
         MASK_LOGIC_OR   => win_1 || win_2,
         MASK_LOGIC_AND  => win_1 && win_2,

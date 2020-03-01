@@ -12,6 +12,7 @@ use oam::OAM;
 pub use oam::SpritePriority;
 use vram::VRAM;
 use windowregs::WindowRegisters;
+pub use windowregs::Screen;
 
 // Struct containing OAM, CGRAM and VRAM.
 pub struct VideoMem {
@@ -116,8 +117,14 @@ impl VideoMem {
             0x23 => self.windowregs.set_mask_bg1_2(data), // BG1&2 window
             0x24 => self.windowregs.set_mask_bg3_4(data), // BG3&4 window
             0x25 => self.windowregs.set_mask_obj_col(data), // Obj window
-            0x26 => self.windowregs.window_1_left = data,
-            0x27 => self.windowregs.window_1_right = data,
+            0x26 => {
+                //println!("Set win1left {}", data);
+                self.windowregs.window_1_left = data
+            },
+            0x27 => {
+                //println!("Set win1right {}", data);
+                self.windowregs.window_1_right = data
+            },
             0x28 => self.windowregs.window_2_left = data,
             0x29 => self.windowregs.window_2_right = data,
             0x2A => self.windowregs.set_mask_logic_bg(data),
