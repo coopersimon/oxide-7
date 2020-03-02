@@ -120,8 +120,8 @@ impl BGCache {
     }
 
     #[inline]
-    pub fn get_data(&self, x: usize, y: usize) -> BGData {
-        self.data[y][x]
+    pub fn ref_row<'a>(&'a self, y: usize) -> &'a [BGData] {
+        &self.data[y]
     }
 }
 
@@ -140,23 +140,25 @@ impl BGCache {
             let base_x = ((i % SUB_MAP_LEN) + x_offset) * tile_size;
 
             for (y, row) in self.data.iter_mut().skip(base_y).take(tile_size).enumerate() {
+                let (tex_y, tile_idx_i) = {
+                    let tex_y = if attr_flags.contains(TileAttributes::Y_FLIP) {tile_size - 1 - y} else {y};
+                    if tex_y >= SMALL_TILE {
+                        (tex_y - SMALL_TILE, tile_num + 16)
+                    } else {
+                        (tex_y, tile_num)
+                    }
+                };
+                
                 for (x, d) in row.iter_mut().skip(base_x).take(tile_size).enumerate() {
-                    let (tex_x, tile_idx_x) = {
+                    let (tex_x, tile_idx) = {
                         let tex_x = if attr_flags.contains(TileAttributes::X_FLIP) {tile_size - 1 - x} else {x};
                         if tex_x >= SMALL_TILE {
-                            (tex_x - SMALL_TILE, tile_num + 1)
+                            (tex_x - SMALL_TILE, tile_idx_i + 1)
                         } else {
-                            (tex_x, tile_num)
+                            (tex_x, tile_idx_i)
                         }
                     };
-                    let (tex_y, tile_idx) = {
-                        let tex_y = if attr_flags.contains(TileAttributes::Y_FLIP) {tile_size - 1 - y} else {y};
-                        if tex_y >= SMALL_TILE {
-                            (tex_y - SMALL_TILE, tile_idx_x + 16)
-                        } else {
-                            (tex_y, tile_idx_x)
-                        }
-                    };
+                    
                     d.texel = tiles.ref_tile(tile_idx).get_texel(tex_x, tex_y);
                     d.attrs = attr_flags;
                 }

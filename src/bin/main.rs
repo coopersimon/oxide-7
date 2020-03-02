@@ -85,6 +85,7 @@ fn main() {
 
     //let mut now = Utc::now();
     let frame_duration = Duration::microseconds((FRAME_INTERVAL * 1_000_000.0) as i64);
+    let mut averager = averager::Averager::new(100);
 
     let mut frame_tex = [0_u8; 256 * 224 * 4];
 
@@ -279,8 +280,8 @@ fn main() {
                 Err(e) => println!("Err: {:?}", e),
             }
 
-            //averager.add((Utc::now() - frame).num_milliseconds());
-            //println!("Frame t: {}ms", averager.get_avg());
+            averager.add((Utc::now() - frame).num_milliseconds() as usize);
+            println!("Frame t: {}ms", averager.get_avg());
 
             while (Utc::now() - frame) < frame_duration {}  // Wait until next frame.
         }
@@ -329,4 +330,40 @@ fn read_events(events_loop: &mut EventsLoop, snes: &mut SNES) {
             _ => {},
         }
     });
+}
+
+mod averager {
+    use std::{
+        collections::VecDeque,
+        ops::{
+            Add,
+            Div
+        }
+    };
+    
+    pub struct Averager<T: Add + Div> {
+        queue:      VecDeque<T>,
+        max_len:    usize
+    }
+    
+    impl Averager<usize> {
+        pub fn new(len: usize) -> Self {
+            Averager {
+                queue:      VecDeque::with_capacity(len),
+                max_len:    len
+            }
+        }
+    
+        pub fn add(&mut self, data: usize) {
+            self.queue.push_back(data);
+    
+            if self.queue.len() > self.max_len {
+                self.queue.pop_front();
+            }
+        }
+    
+        pub fn get_avg(&self) -> usize {
+            self.queue.iter().sum::<usize>() / self.queue.len()
+        }
+    }
 }

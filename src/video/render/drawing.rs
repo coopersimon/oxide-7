@@ -224,6 +224,114 @@ impl Renderer {
     }
 }
 
+// Drawing modes
+impl Renderer {
+    fn draw_line_mode_0(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
+        let window_regs = mem.get_window_registers();
+        let target_start = y * SCREEN_WIDTH;
+
+        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
+        let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        self.draw_bg_to_line(mem, 0, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
+        let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        self.draw_bg_to_line(mem, 1, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
+        let mut main_bg3_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut sub_bg3_pixels = [BGData::default(); SCREEN_WIDTH];
+        self.draw_bg_to_line(mem, 2, &mut main_bg3_pixels, &mut sub_bg3_pixels, y);
+        let mut main_bg4_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut sub_bg4_pixels = [BGData::default(); SCREEN_WIDTH];
+        self.draw_bg_to_line(mem, 3, &mut main_bg4_pixels, &mut sub_bg4_pixels, y);
+
+        for (x, i) in target.chunks_mut(4).skip(target_start).take(SCREEN_WIDTH).enumerate() {
+            let main = {
+                let sprite_pix = main_sprite_pixels[x];
+                let bg1_pix = main_bg1_pixels[x];
+                let bg2_pix = main_bg2_pixels[x];
+                let bg3_pix = main_bg3_pixels[x];
+                let bg4_pix = main_bg4_pixels[x];
+                self.eval_mode_0(sprite_pix, bg1_pix, bg2_pix, bg3_pix, bg4_pix)
+            };
+            let sub = if window_regs.use_subscreen() {
+                let sprite_pix = sub_sprite_pixels[x];
+                let bg1_pix = sub_bg1_pixels[x];
+                let bg2_pix = sub_bg2_pixels[x];
+                let bg3_pix = sub_bg3_pixels[x];
+                let bg4_pix = main_bg4_pixels[x];
+                self.eval_mode_0(sprite_pix, bg1_pix, bg2_pix, bg3_pix, bg4_pix).any()
+                    .unwrap_or(window_regs.get_fixed_colour())
+            } else {
+                window_regs.get_fixed_colour()
+            };
+
+            let col = match main {
+                Pixel::BG1(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 0, x as u8),
+                Pixel::BG2(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 1, x as u8),
+                Pixel::BG3(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 2, x as u8),
+                Pixel::BG4(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 3, x as u8),
+                Pixel::ObjHi(c) => mem.get_window_registers().calc_colour_math_obj(c, sub, x as u8),
+                Pixel::ObjLo(c) => c,
+                Pixel::None => mem.get_window_registers().calc_colour_math_backdrop(self.palettes.get_bg_colour(0), sub, x as u8),
+            };
+
+            write_pixel(i, col);
+        }
+    }
+
+    fn draw_line_mode_1(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
+        let window_regs = mem.get_window_registers();
+        let target_start = y * SCREEN_WIDTH;
+
+        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
+        let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        self.draw_bg_to_line(mem, 0, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
+        let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        self.draw_bg_to_line(mem, 1, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
+        let mut main_bg3_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut sub_bg3_pixels = [BGData::default(); SCREEN_WIDTH];
+        self.draw_bg_to_line(mem, 2, &mut main_bg3_pixels, &mut sub_bg3_pixels, y);
+
+        for (x, i) in target.chunks_mut(4).skip(target_start).take(SCREEN_WIDTH).enumerate() {
+            let main = {
+                let sprite_pix = main_sprite_pixels[x];
+                let bg1_pix = main_bg1_pixels[x];
+                let bg2_pix = main_bg2_pixels[x];
+                let bg3_pix = main_bg3_pixels[x];
+                self.eval_mode_1(mem.get_bg_registers().get_bg3_priority(), sprite_pix, bg1_pix, bg2_pix, bg3_pix)
+            };
+            let sub = if window_regs.use_subscreen() {
+                let sprite_pix = sub_sprite_pixels[x];
+                let bg1_pix = sub_bg1_pixels[x];
+                let bg2_pix = sub_bg2_pixels[x];
+                let bg3_pix = sub_bg3_pixels[x];
+                self.eval_mode_1(mem.get_bg_registers().get_bg3_priority(), sprite_pix, bg1_pix, bg2_pix, bg3_pix).any()
+                    .unwrap_or(window_regs.get_fixed_colour())
+            } else {
+                window_regs.get_fixed_colour()
+            };
+
+            let col = match main {
+                Pixel::BG1(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 0, x as u8),
+                Pixel::BG2(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 1, x as u8),
+                Pixel::BG3(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 2, x as u8),
+                Pixel::BG4(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 3, x as u8),
+                Pixel::ObjHi(c) => mem.get_window_registers().calc_colour_math_obj(c, sub, x as u8),
+                Pixel::ObjLo(c) => c,
+                Pixel::None => mem.get_window_registers().calc_colour_math_backdrop(self.palettes.get_bg_colour(0), sub, x as u8),
+            };
+
+            write_pixel(i, col);
+        }
+    }
+}
+
 // Drawing types
 #[derive(Clone, Copy)]
 struct SpriteColour {
@@ -281,78 +389,6 @@ impl Pixel {
             Pixel::ObjHi(c) => Some(c),
             Pixel::ObjLo(c) => Some(c),
             Pixel::None => None
-        }
-    }
-}
-
-// Struct for lazy-loading metadata about background pixels, and evaluating priorities.
-struct PixelData {
-    bg1: Option<BGData>,
-    bg2: Option<BGData>,
-    bg3: Option<BGData>,
-    bg4: Option<BGData>,
-    main_obj: SpritePixel,
-    sub_obj: SpritePixel,
-}
-
-impl PixelData {
-    fn new(main_obj: SpritePixel, sub_obj: SpritePixel) -> Self {
-        PixelData {
-            bg1: None,
-            bg2: None,
-            bg3: None,
-            bg4: None,
-            main_obj: main_obj,
-            sub_obj: sub_obj,
-        }
-    }
-
-    #[inline]
-    fn get_obj(&self, screen: Screen) -> SpritePixel {
-        match screen {
-            Screen::Main => self.main_obj,
-            Screen::Sub => self.sub_obj
-        }
-    }
-
-    #[inline]
-    fn get_bg1(&mut self, renderer: &Renderer, regs: &Registers, x: usize, y: usize) -> BGData {
-        if let Some(data) = self.bg1 {
-            data
-        } else {
-            let data = renderer.get_bg_data(regs, 0, x, y);
-            self.bg1 = Some(data);
-            data
-        }
-    }
-    #[inline]
-    fn get_bg2(&mut self, renderer: &Renderer, regs: &Registers, x: usize, y: usize) -> BGData {
-        if let Some(data) = self.bg2 {
-            data
-        } else {
-            let data = renderer.get_bg_data(regs, 1, x, y);
-            self.bg2 = Some(data);
-            data
-        }
-    }
-    #[inline]
-    fn get_bg3(&mut self, renderer: &Renderer, regs: &Registers, x: usize, y: usize) -> BGData {
-        if let Some(data) = self.bg3 {
-            data
-        } else {
-            let data = renderer.get_bg_data(regs, 2, x, y);
-            self.bg3 = Some(data);
-            data
-        }
-    }
-    #[inline]
-    fn get_bg4(&mut self, renderer: &Renderer, regs: &Registers, x: usize, y: usize) -> BGData {
-        if let Some(data) = self.bg4 {
-            data
-        } else {
-            let data = renderer.get_bg_data(regs, 3, x, y);
-            self.bg4 = Some(data);
-            data
         }
     }
 }
@@ -444,16 +480,37 @@ impl Renderer {
         });
     }
 
-    // Get a texel and attribute pair for a BG pixel.
-    fn get_bg_data(&self, regs: &Registers, bg: usize, x: usize, y: usize) -> BGData {
-        let bg_x = (x + (regs.get_bg_scroll_x(bg) as usize)) & self.bg_cache[bg].mask_x();
-        let bg_y = (y + (regs.get_bg_scroll_y(bg) as usize)) & self.bg_cache[bg].mask_y();
-
-        if regs.bg_mosaic_enabled(bg) {
-            let mosaic_mask = regs.bg_mosaic_mask() as usize;
-            self.bg_cache[bg].get_data((bg_x / mosaic_mask) * mosaic_mask, (bg_y / mosaic_mask) * mosaic_mask)
+    fn draw_bg_to_line(&self, mem: &VideoMem, bg: usize, main_line: &mut [BGData], sub_line: &mut [BGData], y: usize) {
+        let regs = mem.get_bg_registers();
+        let window_regs = mem.get_window_registers();
+        // TODO: separate mosaic stuff?
+        let mosaic_amount = if regs.bg_mosaic_enabled(bg) {
+            regs.bg_mosaic_mask()
         } else {
-            self.bg_cache[bg].get_data(bg_x, bg_y)
+            0
+        } as usize;
+        let mut x_mosaic_offset = 0;
+
+        let y_mosaic_offset = y % (mosaic_amount + 1);
+        let bg_y = (y + (regs.get_bg_scroll_y(bg) as usize) - y_mosaic_offset) & self.bg_cache[bg].mask_y();
+        let bg_row = self.bg_cache[bg].ref_row(bg_y);
+
+        let x_offset = regs.get_bg_scroll_x(bg) as usize;
+        let mask_x = self.bg_cache[bg].mask_x();
+
+        for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
+            let bg_x = (x + x_offset - x_mosaic_offset) & mask_x;
+            if x_mosaic_offset == mosaic_amount {
+                x_mosaic_offset = 0;
+            } else {
+                x_mosaic_offset += 1;
+            }
+            if window_regs.show_bg_pixel(bg, Screen::Main, x as u8) {
+                *main = bg_row[bg_x];
+            }
+            if window_regs.show_bg_pixel(bg, Screen::Sub, x as u8) {
+                *sub = bg_row[bg_x];
+            }
         }
     }
 
@@ -469,227 +526,61 @@ impl Renderer {
         self.palettes.get_bg_colour((palette_num + data.texel) as usize)
     }
 
-    // Returns a pixel.
-    fn eval_mode_0(&self, mem: &VideoMem, mut pixels: PixelData, x: usize, y: usize) -> (Pixel, Colour) {
-        let window_regs = mem.get_window_registers();
-
-        let main = self.eval_mode_0_screen(mem, Screen::Main, &mut pixels, x, y);
-        let sub = if window_regs.use_subscreen() {
-            self.eval_mode_0_screen(mem, Screen::Sub, &mut pixels, x, y).any()
-                .unwrap_or(window_regs.get_fixed_colour())
+    fn eval_mode_0(&self, sprite_pix: SpritePixel, bg1: BGData, bg2: BGData, bg3: BGData, bg4: BGData) -> Pixel {
+        if let SpritePixel::Prio3(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg1.texel != 0 && bg1.attrs.contains(TileAttributes::PRIORITY) {
+            Pixel::BG1(self.make_2bpp_pixel(bg1))
+        } else if bg2.texel != 0 && bg2.attrs.contains(TileAttributes::PRIORITY) {
+            Pixel::BG2(self.make_2bpp_pixel(bg2))
+        } else if let SpritePixel::Prio2(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg1.texel != 0 {
+            Pixel::BG1(self.make_2bpp_pixel(bg1))
+        } else if bg2.texel != 0 {
+            Pixel::BG2(self.make_2bpp_pixel(bg2))
+        } else if let SpritePixel::Prio1(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg3.texel != 0 && bg3.attrs.contains(TileAttributes::PRIORITY) {
+            Pixel::BG3(self.make_2bpp_pixel(bg3))
+        } else if bg4.texel != 0 && bg4.attrs.contains(TileAttributes::PRIORITY) {
+            Pixel::BG4(self.make_2bpp_pixel(bg4))
+        } else if let SpritePixel::Prio0(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg3.texel != 0 {
+            Pixel::BG3(self.make_2bpp_pixel(bg3))
+        } else if bg4.texel != 0 {
+            Pixel::BG4(self.make_2bpp_pixel(bg4))
         } else {
-            window_regs.get_fixed_colour()
-        };
-
-        (main, sub)
+            Pixel::None
+        }
     }
 
-    fn eval_mode_0_screen(&self, mem: &VideoMem, screen: Screen, pixels: &mut PixelData, x: usize, y: usize) -> Pixel {
-        let bg_regs = mem.get_bg_registers();
-        let window_regs = mem.get_window_registers();
-
-        if let SpritePixel::Prio3(_) = pixels.get_obj(screen) {
-            return pixels.get_obj(screen).pixel();
-        }
-        let show_bg1 = window_regs.show_bg_pixel(0, screen, x as u8);
-        if show_bg1 {
-            let bg1 = pixels.get_bg1(self, bg_regs, x, y);
-            if bg1.texel != 0 && bg1.attrs.contains(TileAttributes::PRIORITY) {
-                return Pixel::BG1(self.make_2bpp_pixel(bg1));
-            }
-        }
-        let show_bg2 = window_regs.show_bg_pixel(1, screen, x as u8);
-        if show_bg2 {
-            let bg2 = pixels.get_bg2(self, bg_regs, x, y);
-            if bg2.texel != 0 && bg2.attrs.contains(TileAttributes::PRIORITY) {
-                return Pixel::BG2(self.make_2bpp_pixel(bg2));
-            }
-        }
-        if let SpritePixel::Prio2(_) = pixels.get_obj(screen) {
-            return pixels.get_obj(screen).pixel();
-        }
-        if show_bg1 {
-            let bg1 = pixels.get_bg1(self, bg_regs, x, y);
-            if bg1.texel != 0 {
-                return Pixel::BG1(self.make_2bpp_pixel(bg1));
-            }
-        }
-        if show_bg2 {
-            let bg2 = pixels.get_bg2(self, bg_regs, x, y);
-            if bg2.texel != 0 {
-                return Pixel::BG2(self.make_2bpp_pixel(bg2));
-            }
-        }
-        if let SpritePixel::Prio1(_) = pixels.get_obj(screen) {
-            return pixels.get_obj(screen).pixel();
-        }
-        let show_bg3 = window_regs.show_bg_pixel(2, screen, x as u8);
-        if show_bg3 {
-            let bg3 = pixels.get_bg3(self, bg_regs, x, y);
-            if bg3.texel != 0 && bg3.attrs.contains(TileAttributes::PRIORITY) {
-                return Pixel::BG3(self.make_2bpp_pixel(bg3));
-            }
-        }
-        let show_bg4 = window_regs.show_bg_pixel(3, screen, x as u8);
-        if show_bg4 {
-            let bg4 = pixels.get_bg4(self, bg_regs, x, y);
-            if bg4.texel != 0 && bg4.attrs.contains(TileAttributes::PRIORITY) {
-                return Pixel::BG4(self.make_2bpp_pixel(bg4));
-            }
-        }
-        if let SpritePixel::Prio0(_) = pixels.get_obj(screen) {
-            return pixels.get_obj(screen).pixel();
-        }
-        if show_bg3 {
-            let bg3 = pixels.get_bg3(self, bg_regs, x, y);
-            if bg3.texel != 0 {
-                return Pixel::BG3(self.make_2bpp_pixel(bg3));
-            }
-        }
-        if show_bg4 {
-            let bg4 = pixels.get_bg4(self, bg_regs, x, y);
-            if bg4.texel != 0 {
-                return Pixel::BG4(self.make_2bpp_pixel(bg4));
-            }
-        }
-
-        Pixel::None
-    }
-
-    // Returns a pixel.
-    fn eval_mode_1(&self, mem: &VideoMem, mut pixels: PixelData, x: usize, y: usize) -> (Pixel, Colour) {
-        let window_regs = mem.get_window_registers();
-
-        let main = self.eval_mode_1_screen(mem, Screen::Main, &mut pixels, x, y);
-        let sub = if window_regs.use_subscreen() {
-            self.eval_mode_1_screen(mem, Screen::Sub, &mut pixels, x, y).any()
-                .unwrap_or(window_regs.get_fixed_colour())
+    fn eval_mode_1(&self, bg3_hi: bool, sprite_pix: SpritePixel, bg1: BGData, bg2: BGData, bg3: BGData) -> Pixel {
+        if bg3_hi && bg3.texel != 0 {
+            Pixel::BG3(self.make_2bpp_pixel(bg3))
+        } else if let SpritePixel::Prio3(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg1.texel != 0 && bg1.attrs.contains(TileAttributes::PRIORITY) {
+            Pixel::BG1(self.make_4bpp_pixel(bg1))
+        } else if bg2.texel != 0 && bg2.attrs.contains(TileAttributes::PRIORITY) {
+            Pixel::BG2(self.make_4bpp_pixel(bg2))
+        } else if let SpritePixel::Prio2(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg1.texel != 0 {
+            Pixel::BG1(self.make_4bpp_pixel(bg1))
+        } else if bg2.texel != 0 {
+            Pixel::BG2(self.make_4bpp_pixel(bg2))
+        } else if let SpritePixel::Prio1(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg3.texel != 0 && bg3.attrs.contains(TileAttributes::PRIORITY) {
+            Pixel::BG3(self.make_2bpp_pixel(bg3))
+        } else if let SpritePixel::Prio0(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg3.texel != 0 {
+            Pixel::BG3(self.make_2bpp_pixel(bg3))
         } else {
-            window_regs.get_fixed_colour()
-        };
-
-        (main, sub)
-    }
-
-    fn eval_mode_1_screen(&self, mem: &VideoMem, screen: Screen, pixels: &mut PixelData, x: usize, y: usize) -> Pixel {
-        let bg_regs = mem.get_bg_registers();
-        let window_regs = mem.get_window_registers();
-
-        let show_bg3 = window_regs.show_bg_pixel(2, screen, x as u8);
-        if show_bg3 && bg_regs.get_bg3_priority() {
-            let bg3 = pixels.get_bg3(self, bg_regs, x, y);
-            if bg3.texel != 0 && bg3.attrs.contains(TileAttributes::PRIORITY) {
-                return Pixel::BG3(self.make_2bpp_pixel(bg3));
-            }
-        }
-        if let SpritePixel::Prio3(_) = pixels.get_obj(screen) {
-            return pixels.get_obj(screen).pixel();
-        }
-        let show_bg1 = window_regs.show_bg_pixel(0, screen, x as u8);
-        if show_bg1 {
-            let bg1 = pixels.get_bg1(self, bg_regs, x, y);
-            if bg1.texel != 0 && bg1.attrs.contains(TileAttributes::PRIORITY) {
-                return Pixel::BG1(self.make_4bpp_pixel(bg1));
-            }
-        }
-        let show_bg2 = window_regs.show_bg_pixel(1, screen, x as u8);
-        if show_bg2 {
-            let bg2 = pixels.get_bg2(self, bg_regs, x, y);
-            if bg2.texel != 0 && bg2.attrs.contains(TileAttributes::PRIORITY) {
-                return Pixel::BG2(self.make_4bpp_pixel(bg2));
-            }
-        }
-        if let SpritePixel::Prio2(_) = pixels.get_obj(screen) {
-            return pixels.get_obj(screen).pixel();
-        }
-        if show_bg1 {
-            let bg1 = pixels.get_bg1(self, bg_regs, x, y);
-            if bg1.texel != 0 {
-                return Pixel::BG1(self.make_4bpp_pixel(bg1));
-            }
-        }
-        if show_bg2 {
-            let bg2 = pixels.get_bg2(self, bg_regs, x, y);
-            if bg2.texel != 0 {
-                return Pixel::BG2(self.make_4bpp_pixel(bg2));
-            }
-        }
-        if let SpritePixel::Prio1(_) = pixels.get_obj(screen) {
-            return pixels.get_obj(screen).pixel();
-        }
-        if show_bg3 && !bg_regs.get_bg3_priority() {
-            let bg3 = pixels.get_bg3(self, bg_regs, x, y);
-            if bg3.texel != 0 && bg3.attrs.contains(TileAttributes::PRIORITY) {
-                return Pixel::BG3(self.make_2bpp_pixel(bg3));
-            }
-        }
-        if let SpritePixel::Prio0(_) = pixels.get_obj(screen) {
-            return pixels.get_obj(screen).pixel();
-        }
-        if show_bg3 {
-            let bg3 = pixels.get_bg3(self, bg_regs, x, y);
-            if bg3.texel != 0 {
-                return Pixel::BG3(self.make_2bpp_pixel(bg3));
-            }
-        }
-
-        Pixel::None
-    }
-}
-
-// Drawing modes
-impl Renderer {
-    fn draw_line_mode_0(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
-        let target_start = y * SCREEN_WIDTH;
-
-        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
-        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
-        self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
-
-        for (x, i) in target.chunks_mut(4).skip(target_start).take(SCREEN_WIDTH).enumerate() {
-            let main_sprite_pix = main_sprite_pixels[x];
-            let sub_sprite_pix = sub_sprite_pixels[x];
-
-            let (main, sub) = self.eval_mode_0(mem, PixelData::new(main_sprite_pix, sub_sprite_pix), x, y);
-
-            let col = match main {
-                Pixel::BG1(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 0, x as u8),
-                Pixel::BG2(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 1, x as u8),
-                Pixel::BG3(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 2, x as u8),
-                Pixel::BG4(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 3, x as u8),
-                Pixel::ObjHi(c) => mem.get_window_registers().calc_colour_math_obj(c, sub, x as u8),
-                Pixel::ObjLo(c) => c,
-                Pixel::None => mem.get_window_registers().calc_colour_math_backdrop(self.palettes.get_bg_colour(0), sub, x as u8),
-            };
-
-            write_pixel(i, col);
-        }
-    }
-
-    fn draw_line_mode_1(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
-        let target_start = y * SCREEN_WIDTH;
-
-        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
-        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
-        self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
-
-        for (x, i) in target.chunks_mut(4).skip(target_start).take(SCREEN_WIDTH).enumerate() {
-            let main_sprite_pix = main_sprite_pixels[x];
-            let sub_sprite_pix = sub_sprite_pixels[x];
-
-            let (main, sub) = self.eval_mode_1(mem, PixelData::new(main_sprite_pix, sub_sprite_pix), x, y);
-
-            let col = match main {
-                Pixel::BG1(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 0, x as u8),
-                Pixel::BG2(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 1, x as u8),
-                Pixel::BG3(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 2, x as u8),
-                Pixel::BG4(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 3, x as u8),
-                Pixel::ObjHi(c) => mem.get_window_registers().calc_colour_math_obj(c, sub, x as u8),
-                Pixel::ObjLo(c) => c,
-                Pixel::None => mem.get_window_registers().calc_colour_math_backdrop(self.palettes.get_bg_colour(0), sub, x as u8),
-            };
-
-            write_pixel(i, col);
+            Pixel::None
         }
     }
 }

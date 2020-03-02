@@ -292,7 +292,7 @@ impl Registers {
     }
 
     pub fn bg_mosaic_mask(&self) -> u8 {
-        ((self.mosaic_settings & Mosaic::PIXEL_SIZE).bits() >> 4) + 1
+        ((self.mosaic_settings & Mosaic::PIXEL_SIZE).bits() >> 4)
     }
 
     // Other checks
