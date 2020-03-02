@@ -226,11 +226,17 @@ impl Renderer {
 
 // Drawing types
 #[derive(Clone, Copy)]
+struct SpriteColour {
+    colour:     Colour, // The colour of the sprite
+    col_math:   bool    // Should it participate in colour math
+}
+
+#[derive(Clone, Copy)]
 enum SpritePixel {
-    Prio3(Colour),
-    Prio2(Colour),
-    Prio1(Colour),
-    Prio0(Colour),
+    Prio3(SpriteColour),
+    Prio2(SpriteColour),
+    Prio1(SpriteColour),
+    Prio0(SpriteColour),
     Masked,
     None
 }
@@ -243,6 +249,16 @@ impl SpritePixel {
             _ => false
         }
     }
+
+    fn pixel(&self) -> Pixel {
+        match self {
+            SpritePixel::Prio3(c) => if c.col_math {Pixel::ObjHi(c.colour)} else {Pixel::ObjLo(c.colour)},
+            SpritePixel::Prio2(c) => if c.col_math {Pixel::ObjHi(c.colour)} else {Pixel::ObjLo(c.colour)},
+            SpritePixel::Prio1(c) => if c.col_math {Pixel::ObjHi(c.colour)} else {Pixel::ObjLo(c.colour)},
+            SpritePixel::Prio0(c) => if c.col_math {Pixel::ObjHi(c.colour)} else {Pixel::ObjLo(c.colour)},
+            _ => panic!("Don't call this on pixels with no colour value.")
+        }
+    }
 }
 
 enum Pixel {
@@ -250,7 +266,8 @@ enum Pixel {
     BG2(Colour),
     BG3(Colour),
     BG4(Colour),
-    Obj(Colour),
+    ObjHi(Colour),  // Uses object palette 4-7, uses colour math
+    ObjLo(Colour),  // Uses object palette 0-3, doesn't use colmath
     None
 }
 
@@ -261,7 +278,8 @@ impl Pixel {
             Pixel::BG2(c) => Some(c),
             Pixel::BG3(c) => Some(c),
             Pixel::BG4(c) => Some(c),
-            Pixel::Obj(c) => Some(c),
+            Pixel::ObjHi(c) => Some(c),
+            Pixel::ObjLo(c) => Some(c),
             Pixel::None => None
         }
     }
@@ -405,12 +423,14 @@ impl Renderer {
                         .get_texel(x_pixel % 8, y_pixel % 8) as usize;
 
                     if texel != 0 {
-                        let colour = self.palettes.get_obj_colour(object.palette_offset() + texel);
+                        let col_index = object.palette_offset() + texel;
+                        let colour = self.palettes.get_obj_colour(col_index);
+                        let col_math = col_index >= 64; // Top 4 palettes participate in colour math
                         let pix = match object.priority() {
-                            SpritePriority::_3 => SpritePixel::Prio3(colour),
-                            SpritePriority::_2 => SpritePixel::Prio2(colour),
-                            SpritePriority::_1 => SpritePixel::Prio1(colour),
-                            SpritePriority::_0 => SpritePixel::Prio0(colour),
+                            SpritePriority::_3 => SpritePixel::Prio3(SpriteColour{colour, col_math}),
+                            SpritePriority::_2 => SpritePixel::Prio2(SpriteColour{colour, col_math}),
+                            SpritePriority::_1 => SpritePixel::Prio1(SpriteColour{colour, col_math}),
+                            SpritePriority::_0 => SpritePixel::Prio0(SpriteColour{colour, col_math}),
                         };
                         if !main_line[line_x as usize].is_masked() {
                             main_line[line_x as usize] = pix;
@@ -426,7 +446,7 @@ impl Renderer {
 
     // Get a texel and attribute pair for a BG pixel.
     fn get_bg_data(&self, regs: &Registers, bg: usize, x: usize, y: usize) -> BGData {
-        let bg_x = (x + (regs.get_bg_scroll_x(bg) as usize)) & self.bg_cache[bg].mask_x();   // TODO: replace with &
+        let bg_x = (x + (regs.get_bg_scroll_x(bg) as usize)) & self.bg_cache[bg].mask_x();
         let bg_y = (y + (regs.get_bg_scroll_y(bg) as usize)) & self.bg_cache[bg].mask_y();
 
         if regs.bg_mosaic_enabled(bg) {
@@ -468,8 +488,8 @@ impl Renderer {
         let bg_regs = mem.get_bg_registers();
         let window_regs = mem.get_window_registers();
 
-        if let SpritePixel::Prio3(c) = pixels.get_obj(screen) {
-            return Pixel::Obj(c);
+        if let SpritePixel::Prio3(_) = pixels.get_obj(screen) {
+            return pixels.get_obj(screen).pixel();
         }
         let show_bg1 = window_regs.show_bg_pixel(0, screen, x as u8);
         if show_bg1 {
@@ -485,8 +505,8 @@ impl Renderer {
                 return Pixel::BG2(self.make_2bpp_pixel(bg2));
             }
         }
-        if let SpritePixel::Prio2(c) = pixels.get_obj(screen) {
-            return Pixel::Obj(c);
+        if let SpritePixel::Prio2(_) = pixels.get_obj(screen) {
+            return pixels.get_obj(screen).pixel();
         }
         if show_bg1 {
             let bg1 = pixels.get_bg1(self, bg_regs, x, y);
@@ -500,8 +520,8 @@ impl Renderer {
                 return Pixel::BG2(self.make_2bpp_pixel(bg2));
             }
         }
-        if let SpritePixel::Prio1(c) = pixels.get_obj(screen) {
-            return Pixel::Obj(c);
+        if let SpritePixel::Prio1(_) = pixels.get_obj(screen) {
+            return pixels.get_obj(screen).pixel();
         }
         let show_bg3 = window_regs.show_bg_pixel(2, screen, x as u8);
         if show_bg3 {
@@ -517,8 +537,8 @@ impl Renderer {
                 return Pixel::BG4(self.make_2bpp_pixel(bg4));
             }
         }
-        if let SpritePixel::Prio0(c) = pixels.get_obj(screen) {
-            return Pixel::Obj(c);
+        if let SpritePixel::Prio0(_) = pixels.get_obj(screen) {
+            return pixels.get_obj(screen).pixel();
         }
         if show_bg3 {
             let bg3 = pixels.get_bg3(self, bg_regs, x, y);
@@ -562,8 +582,8 @@ impl Renderer {
                 return Pixel::BG3(self.make_2bpp_pixel(bg3));
             }
         }
-        if let SpritePixel::Prio3(c) = pixels.get_obj(screen) {
-            return Pixel::Obj(c);
+        if let SpritePixel::Prio3(_) = pixels.get_obj(screen) {
+            return pixels.get_obj(screen).pixel();
         }
         let show_bg1 = window_regs.show_bg_pixel(0, screen, x as u8);
         if show_bg1 {
@@ -579,8 +599,8 @@ impl Renderer {
                 return Pixel::BG2(self.make_4bpp_pixel(bg2));
             }
         }
-        if let SpritePixel::Prio2(c) = pixels.get_obj(screen) {
-            return Pixel::Obj(c);
+        if let SpritePixel::Prio2(_) = pixels.get_obj(screen) {
+            return pixels.get_obj(screen).pixel();
         }
         if show_bg1 {
             let bg1 = pixels.get_bg1(self, bg_regs, x, y);
@@ -594,8 +614,8 @@ impl Renderer {
                 return Pixel::BG2(self.make_4bpp_pixel(bg2));
             }
         }
-        if let SpritePixel::Prio1(c) = pixels.get_obj(screen) {
-            return Pixel::Obj(c);
+        if let SpritePixel::Prio1(_) = pixels.get_obj(screen) {
+            return pixels.get_obj(screen).pixel();
         }
         if show_bg3 && !bg_regs.get_bg3_priority() {
             let bg3 = pixels.get_bg3(self, bg_regs, x, y);
@@ -603,8 +623,8 @@ impl Renderer {
                 return Pixel::BG3(self.make_2bpp_pixel(bg3));
             }
         }
-        if let SpritePixel::Prio0(c) = pixels.get_obj(screen) {
-            return Pixel::Obj(c);
+        if let SpritePixel::Prio0(_) = pixels.get_obj(screen) {
+            return pixels.get_obj(screen).pixel();
         }
         if show_bg3 {
             let bg3 = pixels.get_bg3(self, bg_regs, x, y);
@@ -637,7 +657,8 @@ impl Renderer {
                 Pixel::BG2(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 1, x as u8),
                 Pixel::BG3(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 2, x as u8),
                 Pixel::BG4(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 3, x as u8),
-                Pixel::Obj(c) => mem.get_window_registers().calc_colour_math_obj(c, sub, x as u8),
+                Pixel::ObjHi(c) => mem.get_window_registers().calc_colour_math_obj(c, sub, x as u8),
+                Pixel::ObjLo(c) => c,
                 Pixel::None => mem.get_window_registers().calc_colour_math_backdrop(self.palettes.get_bg_colour(0), sub, x as u8),
             };
 
@@ -663,7 +684,8 @@ impl Renderer {
                 Pixel::BG2(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 1, x as u8),
                 Pixel::BG3(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 2, x as u8),
                 Pixel::BG4(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 3, x as u8),
-                Pixel::Obj(c) => mem.get_window_registers().calc_colour_math_obj(c, sub, x as u8),
+                Pixel::ObjHi(c) => mem.get_window_registers().calc_colour_math_obj(c, sub, x as u8),
+                Pixel::ObjLo(c) => c,
                 Pixel::None => mem.get_window_registers().calc_colour_math_backdrop(self.palettes.get_bg_colour(0), sub, x as u8),
             };
 

@@ -210,6 +210,7 @@ impl MemBus {
 
     pub fn start_frame(&mut self, frame: Arc<Mutex<[u8]>>) {
         self.bus_b.ppu.start_frame(frame);
+        self.cart.flush();
     }
 }
 

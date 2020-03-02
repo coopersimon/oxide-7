@@ -22,6 +22,7 @@ const SPEED_BIT: u8 = 0;
 pub trait Cart {
     fn read(&mut self, bank: u8, addr: u16) -> (u8, usize);
     fn write(&mut self, bank: u8, addr: u16, data: u8) -> usize;
+    fn flush(&mut self);
 
     fn set_write_speed(&mut self, data: u8);
 }
@@ -106,6 +107,10 @@ impl Cart for LoROM {
         timing::SLOW_MEM_ACCESS
     }
 
+    fn flush(&mut self) {
+        self.ram.flush();
+    }
+
     fn set_write_speed(&mut self, data: u8) {
         self.rom_speed = if test_bit!(data, SPEED_BIT, u8) {
             timing::FAST_MEM_ACCESS
@@ -160,6 +165,10 @@ impl Cart for HiROM {
         }
 
         timing::SLOW_MEM_ACCESS
+    }
+
+    fn flush(&mut self) {
+        self.ram.flush();
     }
 
     fn set_write_speed(&mut self, data: u8) {

@@ -268,16 +268,16 @@ impl WindowRegisters {
         let enable_2 = self.enable_window_2_bg(bg);
         match (enable_1, enable_2) {
             (true, true) => {   // Use op to combine
-                let win_1 = self.test_inside_window_1(x) != self.invert_window_1_bg(bg);
-                let win_2 = self.test_inside_window_2(x) != self.invert_window_2_bg(bg);
+                let win_1 = self.test_inside_window_1(x) == self.invert_window_1_bg(bg);
+                let win_2 = self.test_inside_window_2(x) == self.invert_window_2_bg(bg);
                 let op = self.window_op_bg(bg);
                 do_window_op(op, win_1, win_2)
             },
             (true, false) => {  // Just use window 1
-                self.test_inside_window_1(x) != self.invert_window_1_bg(bg)
+                self.test_inside_window_1(x) == self.invert_window_1_bg(bg)
             },
             (false, true) => {  // Just use window 2
-                self.test_inside_window_2(x) != self.invert_window_2_bg(bg)
+                self.test_inside_window_2(x) == self.invert_window_2_bg(bg)
             },
             (false, false) => { // No windows enabled for bg.
                 true
@@ -291,16 +291,16 @@ impl WindowRegisters {
         let enable_2 = self.enable_window_2_obj();
         match (enable_1, enable_2) {
             (true, true) => {   // Use op to combine
-                let win_1 = self.test_inside_window_1(x) != self.invert_window_1_obj();
-                let win_2 = self.test_inside_window_2(x) != self.invert_window_2_obj();
+                let win_1 = self.test_inside_window_1(x) == self.invert_window_1_obj();
+                let win_2 = self.test_inside_window_2(x) == self.invert_window_2_obj();
                 let op = self.window_op_obj();
                 do_window_op(op, win_1, win_2)
             },
             (true, false) => {  // Just use window 1
-                self.test_inside_window_1(x) != self.invert_window_1_obj()
+                self.test_inside_window_1(x) == self.invert_window_1_obj()
             },
             (false, true) => {  // Just use window 2
-                self.test_inside_window_2(x) != self.invert_window_2_obj()
+                self.test_inside_window_2(x) == self.invert_window_2_obj()
             },
             (false, false) => { // No windows enabled for objects
                 true
