@@ -83,9 +83,8 @@ fn main() {
     let save_file_name = make_save_name(&cart_path);
     let mut snes = SNES::new(&cart_path, &save_file_name);
 
-    //let mut now = Utc::now();
     let frame_duration = Duration::microseconds((FRAME_INTERVAL * 1_000_000.0) as i64);
-    let mut averager = averager::Averager::new(100);
+    //let mut averager = averager::Averager::new(100);
 
     let mut frame_tex = [0_u8; 256 * 224 * 4];
 
@@ -280,8 +279,8 @@ fn main() {
                 Err(e) => println!("Err: {:?}", e),
             }
 
-            averager.add((Utc::now() - frame).num_milliseconds() as usize);
-            println!("Frame t: {}ms", averager.get_avg());
+            //averager.add((Utc::now() - frame).num_milliseconds() as usize);
+            //println!("Frame t: {}ms", averager.get_avg());
 
             while (Utc::now() - frame) < frame_duration {}  // Wait until next frame.
         }
@@ -332,7 +331,7 @@ fn read_events(events_loop: &mut EventsLoop, snes: &mut SNES) {
     });
 }
 
-mod averager {
+/*mod averager {
     use std::{
         collections::VecDeque,
         ops::{
@@ -366,4 +365,4 @@ mod averager {
             self.queue.iter().sum::<usize>() / self.queue.len()
         }
     }
-}
+}*/
