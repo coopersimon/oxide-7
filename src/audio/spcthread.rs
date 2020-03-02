@@ -2,9 +2,10 @@
 
 use std::sync::{
     Arc,
-    Mutex,
-    mpsc::Receiver,
+    Mutex
 };
+
+use crossbeam_channel::Receiver;
 
 use std::thread;
 

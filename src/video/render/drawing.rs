@@ -498,6 +498,11 @@ impl Renderer {
         let x_offset = regs.get_bg_scroll_x(bg) as usize;
         let mask_x = self.bg_cache[bg].mask_x();
 
+        let mut main_window = [true; SCREEN_WIDTH];
+        window_regs.bg_window(bg, Screen::Main, &mut main_window);
+        let mut sub_window = [true; SCREEN_WIDTH];
+        window_regs.bg_window(bg, Screen::Sub, &mut sub_window);
+
         for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
             let bg_x = (x + x_offset - x_mosaic_offset) & mask_x;
             if x_mosaic_offset == mosaic_amount {
@@ -505,10 +510,10 @@ impl Renderer {
             } else {
                 x_mosaic_offset += 1;
             }
-            if window_regs.show_bg_pixel(bg, Screen::Main, x as u8) {
+            if main_window[x] { // If pixel shows through main window.
                 *main = bg_row[bg_x];
             }
-            if window_regs.show_bg_pixel(bg, Screen::Sub, x as u8) {
+            if sub_window[x] {  // If pixel shows through sub window.
                 *sub = bg_row[bg_x];
             }
         }

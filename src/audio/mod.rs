@@ -8,11 +8,12 @@ use spcthread::*;
 
 use std::sync::{
     Arc,
-    Mutex,
-    mpsc::{
-        channel,
-        Sender,
-    }
+    Mutex
+};
+
+use crossbeam_channel::{
+    bounded,
+    Sender
 };
 
 // CPU-side of APU. Sends and receives to/from audio thread, direct connection with CPU.
@@ -29,7 +30,7 @@ pub struct APU {
 
 impl APU {
     pub fn new() -> Self {
-        let (command_tx, command_rx) = channel();
+        let (command_tx, command_rx) = bounded(1);
 
         let ports = [Arc::new(Mutex::new(0)), Arc::new(Mutex::new(0)), Arc::new(Mutex::new(0)), Arc::new(Mutex::new(0))];
 

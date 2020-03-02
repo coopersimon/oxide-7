@@ -6,13 +6,13 @@ mod drawing;
 mod palette;
 
 use std::sync::{
-    Arc,
-    mpsc::{
-        channel,
-        Sender,
-        Receiver
-    },
-    Mutex
+    Arc, Mutex
+};
+
+use crossbeam_channel::{
+    bounded,
+    Sender,
+    Receiver
 };
 
 // Renderer trait.
@@ -121,8 +121,8 @@ pub struct RenderThread {
 
 impl RenderThread {
     pub fn new(mem: super::VRamRef) -> Self {
-        let (send_msg, recv_msg) = channel::<RendererMessage>();
-        let (send_reply, recv_reply) = channel::<()>();
+        let (send_msg, recv_msg) = bounded(1);
+        let (send_reply, recv_reply) = bounded(1);
 
         std::thread::spawn(move || {
             use RendererMessage::*;

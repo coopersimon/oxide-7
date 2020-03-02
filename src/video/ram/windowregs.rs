@@ -197,16 +197,19 @@ impl WindowRegisters {
 
     // Getters - renderer side
 
-    // Returns true if the pixel should be shown for the bg specified on a screen.
-    pub fn show_bg_pixel(&self, bg: usize, screen: Screen, x: u8) -> bool {
-        if self.enable_bg(bg, screen) {    // Check if this bg is enabled for the screen.
-            if self.enable_masking_bg(bg, screen) {    // Check if masking is enabled for this background.
-                self.show_masked_bg_pixel(bg, x)
-            } else {
-                true
+    // Sets the input bool slice to false if the associated pixel shouldn't be shown.
+    // Assumes an input of true bools.
+    pub fn bg_window(&self, bg: usize, screen: Screen, window_line: &mut [bool]) {
+        if self.enable_bg(bg, screen) {                 // Check if this bg is enabled for the screen.
+            if self.enable_masking_bg(bg, screen) {     // Check if masking is enabled for this background.
+                for (x, w) in window_line.iter_mut().enumerate() {
+                    *w = self.show_masked_bg_pixel(bg, x as u8);
+                }
             }
         } else {
-            false
+            for w in window_line.iter_mut() {
+                *w = false;
+            }
         }
     }
 

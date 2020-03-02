@@ -24,6 +24,7 @@ vulkano-win = "0.16"
 winit = "0.19"
 cgmath = "0.17"
 chrono = "0.4"
+crossbeam-channel = "0.4.2"
 
 [features]
 debug = []
