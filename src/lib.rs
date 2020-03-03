@@ -19,7 +19,7 @@ use std::sync::{
 };
 
 // Size of destination buffer in bytes (R8G8B8A8uint format).
-pub const FRAME_BUFFER_SIZE: usize = 256 * 224 * 4;
+pub const FRAME_BUFFER_SIZE: usize = 512 * 224 * 4;
 
 // Joypad buttons.
 pub enum Button {

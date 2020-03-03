@@ -86,7 +86,7 @@ fn main() {
     let frame_duration = Duration::microseconds((FRAME_INTERVAL * 1_000_000.0) as i64);
     //let mut averager = averager::Averager::new(100);
 
-    let mut frame_tex = [0_u8; 256 * 224 * 4];
+    let mut frame_tex = [0_u8; FRAME_BUFFER_SIZE];
 
     if debug_mode {
         #[cfg(feature = "debug")]
@@ -236,7 +236,7 @@ fn main() {
             // Get image with current texture.
             let (image, image_future) = ImmutableImage::from_iter(
                 frame_tex.iter().cloned(),
-                Dimensions::Dim2d { width: 256, height: 224 },
+                Dimensions::Dim2d { width: 512, height: 224 },
                 Format::R8G8B8A8Uint,
                 queue.clone()
             ).expect("Couldn't create image.");

@@ -42,6 +42,7 @@ pub struct BGCache {
 
     bg_reg:         BGReg,      // Address and size as stored in register.
     large_tiles:    bool,
+    wide_tiles:     bool,
     start_addr:     u16,
 
     mask_x:         usize,
@@ -52,16 +53,18 @@ pub struct BGCache {
 
 impl BGCache {
     // TODO: avoid complete recreation if these values change
-    pub fn new(bg_reg: BGReg, large_tiles: bool) -> Self {
-        let tile_size = if large_tiles {LARGE_TILE} else {SMALL_TILE};
-        let size_x = if bg_reg.contains(BGReg::MIRROR_X) {SUB_MAP_LEN * 2} else {SUB_MAP_LEN} * tile_size;
-        let size_y = if bg_reg.contains(BGReg::MIRROR_Y) {SUB_MAP_LEN * 2} else {SUB_MAP_LEN} * tile_size;
+    pub fn new(bg_reg: BGReg, large_tiles: bool, wide_tiles: bool) -> Self {
+        let tile_size_x = if large_tiles || wide_tiles {LARGE_TILE} else {SMALL_TILE};
+        let tile_size_y = if large_tiles {LARGE_TILE} else {SMALL_TILE};
+        let size_x = if bg_reg.contains(BGReg::MIRROR_X) {SUB_MAP_LEN * 2} else {SUB_MAP_LEN} * tile_size_x;
+        let size_y = if bg_reg.contains(BGReg::MIRROR_Y) {SUB_MAP_LEN * 2} else {SUB_MAP_LEN} * tile_size_y;
 
         BGCache {
             data:           vec![vec![BGData::default(); size_x]; size_y],
 
             bg_reg:         bg_reg,
             large_tiles:    large_tiles,
+            wide_tiles:     wide_tiles,
             start_addr:     ((bg_reg & BGReg::ADDR).bits() as u16) << 9,    // TODO: do this elsewhere
 
             mask_x:         size_x - 1,
@@ -70,8 +73,8 @@ impl BGCache {
     }
 
     // Returns true if the settings are still valid for this background.
-    pub fn check_if_valid(&self, settings: BGReg, large_tiles: bool) -> bool {
-        ((settings != self.bg_reg) || (large_tiles != self.large_tiles))
+    pub fn check_if_valid(&self, settings: BGReg, large_tiles: bool, wide_tiles: bool) -> bool {
+        (settings != self.bg_reg) || (large_tiles != self.large_tiles) || (wide_tiles != self.wide_tiles)
     }
 
     #[inline]
@@ -129,18 +132,19 @@ impl BGCache {
     // Store data for a single sub-map.
     fn construct_submap(&mut self, tiles: &PatternMem, mem: &VideoMem, start_offset: usize, x_offset: usize, y_offset: usize) {
         let start_addr = (self.start_addr as usize) + start_offset;
-        let tile_size = if self.large_tiles {LARGE_TILE} else {SMALL_TILE};
+        let tile_size_x = if self.large_tiles || self.wide_tiles {LARGE_TILE} else {SMALL_TILE};
+        let tile_size_y = if self.large_tiles {LARGE_TILE} else {SMALL_TILE};
 
         for (i, data) in mem.get_vram().chunks(2).skip(start_addr / 2).take(SUB_MAP_SIZE / 2).enumerate() {
             let attr_flags = TileAttributes::from_bits_truncate(data[1]);
             let tile_num = make16!((attr_flags & TileAttributes::TILE_NUM).bits(), data[0]) as usize;
             
-            let base_y = ((i / SUB_MAP_LEN) + y_offset) * tile_size;
-            let base_x = ((i % SUB_MAP_LEN) + x_offset) * tile_size;
+            let base_y = ((i / SUB_MAP_LEN) + y_offset) * tile_size_y;
+            let base_x = ((i % SUB_MAP_LEN) + x_offset) * tile_size_x;
 
-            for (y, row) in self.data.iter_mut().skip(base_y).take(tile_size).enumerate() {
+            for (y, row) in self.data.iter_mut().skip(base_y).take(tile_size_y).enumerate() {
                 let (tex_y, tile_idx_i) = {
-                    let tex_y = if attr_flags.contains(TileAttributes::Y_FLIP) {tile_size - 1 - y} else {y};
+                    let tex_y = if attr_flags.contains(TileAttributes::Y_FLIP) {tile_size_y - 1 - y} else {y};
                     if tex_y >= SMALL_TILE {
                         (tex_y - SMALL_TILE, tile_num + 16)
                     } else {
@@ -148,9 +152,9 @@ impl BGCache {
                     }
                 };
 
-                for (x, d) in row.iter_mut().skip(base_x).take(tile_size).enumerate() {
+                for (x, d) in row.iter_mut().skip(base_x).take(tile_size_x).enumerate() {
                     let (tex_x, tile_idx) = {
-                        let tex_x = if attr_flags.contains(TileAttributes::X_FLIP) {tile_size - 1 - x} else {x};
+                        let tex_x = if attr_flags.contains(TileAttributes::X_FLIP) {tile_size_x - 1 - x} else {x};
                         if tex_x >= SMALL_TILE {
                             (tex_x - SMALL_TILE, tile_idx_i + 1)
                         } else {

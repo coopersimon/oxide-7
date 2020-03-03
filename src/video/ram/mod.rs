@@ -11,8 +11,10 @@ use cgram::CGRAM;
 use oam::OAM;
 pub use oam::SpritePriority;
 use vram::VRAM;
-use windowregs::WindowRegisters;
-pub use windowregs::Screen;
+pub use windowregs::{
+    Screen,
+    WindowRegisters
+};
 
 // Struct containing OAM, CGRAM and VRAM.
 pub struct VideoMem {
@@ -117,14 +119,8 @@ impl VideoMem {
             0x23 => self.windowregs.set_mask_bg1_2(data), // BG1&2 window
             0x24 => self.windowregs.set_mask_bg3_4(data), // BG3&4 window
             0x25 => self.windowregs.set_mask_obj_col(data), // Obj window
-            0x26 => {
-                //println!("Set win1left {}", data);
-                self.windowregs.window_1_left = data
-            },
-            0x27 => {
-                //println!("Set win1right {}", data);
-                self.windowregs.window_1_right = data
-            },
+            0x26 => self.windowregs.window_1_left = data,
+            0x27 => self.windowregs.window_1_right = data,
             0x28 => self.windowregs.window_2_left = data,
             0x29 => self.windowregs.window_2_right = data,
             0x2A => self.windowregs.set_mask_logic_bg(data),
@@ -136,7 +132,7 @@ impl VideoMem {
             0x30 => self.windowregs.set_colour_add_select(data),
             0x31 => self.windowregs.set_colour_math_desg(data),
             0x32 => self.windowregs.set_fixed_colour(data),
-            0x33 => {}, // Screen mode select
+            0x33 => self.windowregs.set_video_select(data),
             _ => unreachable!()
         }
     }

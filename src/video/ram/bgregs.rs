@@ -200,6 +200,14 @@ impl Registers {
         (self.bg_mode & BGMode::MODE).bits()
     }
 
+    // Modes 5 and 6 always use 16-pixel wide tiles.
+    pub fn use_wide_tiles(&self) -> bool {
+        match self.get_mode() {
+            5 | 6 => true,
+            _ => false
+        }
+    }
+
     pub fn get_bg3_priority(&self) -> bool {
         self.bg_mode.contains(BGMode::BG3_PRIORITY)
     }

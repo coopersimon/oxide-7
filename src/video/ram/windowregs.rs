@@ -70,6 +70,17 @@ bitflags! {
     }
 }
 
+bitflags! {
+    #[derive(Default)]
+    struct VideoSelect: u8 {
+        const MODE_7_EXT_BG     = bit!(6);
+        const PSEUDO_HIRES      = bit!(3);
+        const OVERSCAN          = bit!(2);
+        const OBJ_INTERLACE     = bit!(1);
+        const SCREEN_INTERLACE  = bit!(0);
+    }
+}
+
 const FIXED_COLOUR_B_BIT: u8 = 7;
 const FIXED_COLOUR_G_BIT: u8 = 6;
 const FIXED_COLOUR_R_BIT: u8 = 5;
@@ -105,6 +116,7 @@ pub struct WindowRegisters {
     colour_math_desg:   ColourMathDesignation,
 
     fixed_colour:       Colour,
+    video_select:       VideoSelect,
 }
 
 impl WindowRegisters {
@@ -132,6 +144,7 @@ impl WindowRegisters {
             colour_math_desg:   ColourMathDesignation::default(),
 
             fixed_colour:       Colour::zero(),
+            video_select:       VideoSelect::default(),
         }
     }
 
@@ -195,6 +208,10 @@ impl WindowRegisters {
         }
     }
 
+    pub fn set_video_select(&mut self, data: u8) {
+        self.video_select = VideoSelect::from_bits_truncate(data);
+    }
+
     // Getters - renderer side
 
     // Sets the input bool slice to false if the associated pixel shouldn't be shown.
@@ -238,6 +255,11 @@ impl WindowRegisters {
     // Returns true if direct colour mode should be used for modes 3 and 4 8bpp backgrounds.
     pub fn use_direct_colour(&self) -> bool {
         self.colour_add_select.contains(ColourAddSelect::DIRECT_COL)
+    }
+
+    // Returns true if pseudo hi-res mode is on.
+    pub fn use_pseudo_hires(&self) -> bool {
+        self.video_select.contains(VideoSelect::PSEUDO_HIRES)
     }
 
     // Combine colours.
