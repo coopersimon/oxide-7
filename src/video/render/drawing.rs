@@ -4,7 +4,6 @@ use crate::video::{
     VideoMem,
     ram::{
         BGReg,
-        Registers,
         ObjectSettings,
         Screen,
         SpritePriority
@@ -406,17 +405,7 @@ impl Renderer {
     fn draw_sprites_to_line(&self, mem: &VideoMem, main_line: &mut [SpritePixel], sub_line: &mut [SpritePixel], y: u8) {
         // TODO: get this elsewhere..?
         let obj_regs = ObjectSettings::from_bits_truncate(mem.get_bg_registers().get_object_settings());
-        let (small, large) = match (obj_regs & ObjectSettings::SIZE).bits() >> 5 {
-            0 => ((8, 8), (16, 16)),
-            1 => ((8, 8), (32, 32)),
-            2 => ((8, 8), (64, 64)),
-            3 => ((16, 16), (32, 32)),
-            4 => ((16, 16), (64, 64)),
-            5 => ((32, 32), (64, 64)),
-            6 => ((16, 32), (32, 64)),
-            7 => ((16, 32), (32, 32)),
-            _ => unreachable!()
-        };
+        let (small, large) = sprite_size_lookup((obj_regs & ObjectSettings::SIZE).bits() >> 5);
 
         let window_regs = mem.get_window_registers();
         for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
@@ -521,49 +510,73 @@ impl Renderer {
 
     // Make a pixel from a texel and attributes
     #[inline]
-    fn make_2bpp_pixel(&self, data: BGData) -> Colour {
+    fn make_2bpp_pixel(&self, data: BGData, offset: u8) -> Colour {
         let palette_num = (data.attrs & TileAttributes::PALETTE).bits();
-        self.palettes.get_bg_colour((palette_num + data.texel) as usize)
+        self.palettes.get_bg_colour((palette_num + offset + data.texel) as usize)
     }
     #[inline]
     fn make_4bpp_pixel(&self, data: BGData) -> Colour {
         let palette_num = (data.attrs & TileAttributes::PALETTE).bits() << 2;
         self.palettes.get_bg_colour((palette_num + data.texel) as usize)
     }
+    #[inline]
+    fn make_8bpp_pixel(&self, data: BGData, direct_col: bool) -> Colour {
+        if direct_col {
+            let palette_num = (data.attrs & TileAttributes::PALETTE).bits();
+            let r = (data.texel & bits![2, 1, 0]) << 5;
+            let g = (data.texel & bits![5, 4, 3]) << 2;
+            let b = data.texel & bits![7, 6];
+            let p_r = (palette_num & bit!(2)) << 2;
+            let p_g = (palette_num & bit!(3)) << 1;
+            let p_b = (palette_num & bit!(4)) << 1;
+            let r_i = r | p_r;
+            let g_i = g | p_g;
+            let b_i = b | p_b;
+            Colour::new(r_i | (r_i >> 5), g_i | (g_i >> 5), b_i | (b_i >> 5))
+        } else {
+            self.palettes.get_bg_colour(data.texel as usize)
+        }
+    }
 
     fn eval_mode_0(&self, sprite_pix: SpritePixel, bg1: BGData, bg2: BGData, bg3: BGData, bg4: BGData) -> Pixel {
+        const BG1_PALETTE_OFFSET: u8 = 0;
+        const BG2_PALETTE_OFFSET: u8 = 32;
+        const BG3_PALETTE_OFFSET: u8 = 64;
+        const BG4_PALETTE_OFFSET: u8 = 96;
+
         if let SpritePixel::Prio3(_) = sprite_pix {
             sprite_pix.pixel()
         } else if bg1.texel != 0 && bg1.attrs.contains(TileAttributes::PRIORITY) {
-            Pixel::BG1(self.make_2bpp_pixel(bg1))
+            Pixel::BG1(self.make_2bpp_pixel(bg1, BG1_PALETTE_OFFSET))
         } else if bg2.texel != 0 && bg2.attrs.contains(TileAttributes::PRIORITY) {
-            Pixel::BG2(self.make_2bpp_pixel(bg2))
+            Pixel::BG2(self.make_2bpp_pixel(bg2, BG2_PALETTE_OFFSET))
         } else if let SpritePixel::Prio2(_) = sprite_pix {
             sprite_pix.pixel()
         } else if bg1.texel != 0 {
-            Pixel::BG1(self.make_2bpp_pixel(bg1))
+            Pixel::BG1(self.make_2bpp_pixel(bg1, BG1_PALETTE_OFFSET))
         } else if bg2.texel != 0 {
-            Pixel::BG2(self.make_2bpp_pixel(bg2))
+            Pixel::BG2(self.make_2bpp_pixel(bg2, BG2_PALETTE_OFFSET))
         } else if let SpritePixel::Prio1(_) = sprite_pix {
             sprite_pix.pixel()
         } else if bg3.texel != 0 && bg3.attrs.contains(TileAttributes::PRIORITY) {
-            Pixel::BG3(self.make_2bpp_pixel(bg3))
+            Pixel::BG3(self.make_2bpp_pixel(bg3, BG3_PALETTE_OFFSET))
         } else if bg4.texel != 0 && bg4.attrs.contains(TileAttributes::PRIORITY) {
-            Pixel::BG4(self.make_2bpp_pixel(bg4))
+            Pixel::BG4(self.make_2bpp_pixel(bg4, BG4_PALETTE_OFFSET))
         } else if let SpritePixel::Prio0(_) = sprite_pix {
             sprite_pix.pixel()
         } else if bg3.texel != 0 {
-            Pixel::BG3(self.make_2bpp_pixel(bg3))
+            Pixel::BG3(self.make_2bpp_pixel(bg3, BG3_PALETTE_OFFSET))
         } else if bg4.texel != 0 {
-            Pixel::BG4(self.make_2bpp_pixel(bg4))
+            Pixel::BG4(self.make_2bpp_pixel(bg4, BG4_PALETTE_OFFSET))
         } else {
             Pixel::None
         }
     }
 
     fn eval_mode_1(&self, bg3_hi: bool, sprite_pix: SpritePixel, bg1: BGData, bg2: BGData, bg3: BGData) -> Pixel {
+        const BG3_PALETTE_OFFSET: u8 = 0;
         if bg3_hi && bg3.texel != 0 {
-            Pixel::BG3(self.make_2bpp_pixel(bg3))
+            Pixel::BG3(self.make_2bpp_pixel(bg3, BG3_PALETTE_OFFSET))
         } else if let SpritePixel::Prio3(_) = sprite_pix {
             sprite_pix.pixel()
         } else if bg1.texel != 0 && bg1.attrs.contains(TileAttributes::PRIORITY) {
@@ -579,13 +592,94 @@ impl Renderer {
         } else if let SpritePixel::Prio1(_) = sprite_pix {
             sprite_pix.pixel()
         } else if bg3.texel != 0 && bg3.attrs.contains(TileAttributes::PRIORITY) {
-            Pixel::BG3(self.make_2bpp_pixel(bg3))
+            Pixel::BG3(self.make_2bpp_pixel(bg3, BG3_PALETTE_OFFSET))
         } else if let SpritePixel::Prio0(_) = sprite_pix {
             sprite_pix.pixel()
         } else if bg3.texel != 0 {
-            Pixel::BG3(self.make_2bpp_pixel(bg3))
+            Pixel::BG3(self.make_2bpp_pixel(bg3, BG3_PALETTE_OFFSET))
         } else {
             Pixel::None
         }
+    }
+
+    fn eval_mode_2(&self, sprite_pix: SpritePixel, bg1: BGData, bg2: BGData) -> Pixel {
+        if let SpritePixel::Prio3(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg1.texel != 0 && bg1.attrs.contains(TileAttributes::PRIORITY) {
+            Pixel::BG1(self.make_4bpp_pixel(bg1))
+        } else if let SpritePixel::Prio2(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg2.texel != 0 && bg2.attrs.contains(TileAttributes::PRIORITY) {
+            Pixel::BG2(self.make_4bpp_pixel(bg2))
+        } else if let SpritePixel::Prio1(_) = sprite_pix {
+            sprite_pix.pixel()
+        }  else if bg1.texel != 0 {
+            Pixel::BG1(self.make_4bpp_pixel(bg1))
+        } else if let SpritePixel::Prio0(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg2.texel != 0 {
+            Pixel::BG2(self.make_4bpp_pixel(bg2))
+        } else {
+            Pixel::None
+        }
+    }
+
+    fn eval_mode_3(&self, direct_col: bool, sprite_pix: SpritePixel, bg1: BGData, bg2: BGData) -> Pixel {
+        if let SpritePixel::Prio3(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg1.texel != 0 && bg1.attrs.contains(TileAttributes::PRIORITY) {
+            Pixel::BG1(self.make_8bpp_pixel(bg1, direct_col))
+        } else if let SpritePixel::Prio2(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg2.texel != 0 && bg2.attrs.contains(TileAttributes::PRIORITY) {
+            Pixel::BG2(self.make_4bpp_pixel(bg2))
+        } else if let SpritePixel::Prio1(_) = sprite_pix {
+            sprite_pix.pixel()
+        }  else if bg1.texel != 0 {
+            Pixel::BG1(self.make_8bpp_pixel(bg1, direct_col))
+        } else if let SpritePixel::Prio0(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg2.texel != 0 {
+            Pixel::BG2(self.make_4bpp_pixel(bg2))
+        } else {
+            Pixel::None
+        }
+    }
+
+    fn eval_mode_4(&self, direct_col: bool, sprite_pix: SpritePixel, bg1: BGData, bg2: BGData) -> Pixel {
+        const BG2_PALETTE_OFFSET: u8 = 0;
+        if let SpritePixel::Prio3(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg1.texel != 0 && bg1.attrs.contains(TileAttributes::PRIORITY) {
+            Pixel::BG1(self.make_8bpp_pixel(bg1, direct_col))
+        } else if let SpritePixel::Prio2(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg2.texel != 0 && bg2.attrs.contains(TileAttributes::PRIORITY) {
+            Pixel::BG2(self.make_2bpp_pixel(bg2, BG2_PALETTE_OFFSET))
+        } else if let SpritePixel::Prio1(_) = sprite_pix {
+            sprite_pix.pixel()
+        }  else if bg1.texel != 0 {
+            Pixel::BG1(self.make_8bpp_pixel(bg1, direct_col))
+        } else if let SpritePixel::Prio0(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if bg2.texel != 0 {
+            Pixel::BG2(self.make_2bpp_pixel(bg2, BG2_PALETTE_OFFSET))
+        } else {
+            Pixel::None
+        }
+    }
+}
+
+fn sprite_size_lookup(size: u8) -> ((i16, u8), (i16, u8)) {
+    match size {
+        0 => ((8, 8), (16, 16)),
+        1 => ((8, 8), (32, 32)),
+        2 => ((8, 8), (64, 64)),
+        3 => ((16, 16), (32, 32)),
+        4 => ((16, 16), (64, 64)),
+        5 => ((32, 32), (64, 64)),
+        6 => ((16, 32), (32, 64)),
+        7 => ((16, 32), (32, 32)),
+        _ => unreachable!()
     }
 }

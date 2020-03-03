@@ -223,15 +223,11 @@ fn main() {
         let mut previous_frame_future = Box::new(vertex_future) as Box<dyn GpuFuture>;
 
         loop {
-            //println!("Frame");
             let frame = Utc::now();
 
             read_events(&mut events_loop, &mut snes);
             snes.frame(&mut frame_tex);
 
-            /*for pix in frame_tex.chunks(4) {
-                println!("r: {}, g: {}, b: {}", pix[0], pix[1], pix[2]);
-            }*/
             previous_frame_future.cleanup_finished();
 
             // Get current framebuffer index from the swapchain.

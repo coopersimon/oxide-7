@@ -18,6 +18,9 @@ use std::sync::{
     Arc, Mutex
 };
 
+// Size of destination buffer in bytes (R8G8B8A8uint format).
+pub const FRAME_BUFFER_SIZE: usize = 256 * 224 * 4;
+
 // Joypad buttons.
 pub enum Button {
     Up,
@@ -37,7 +40,7 @@ pub enum Button {
 pub struct SNES {
     cpu:    CPU,    // CPU, along with mem bus and devices
 
-    frame:  Arc<Mutex<[u8; 256 * 224 * 4]>>
+    frame:  Arc<Mutex<[u8; FRAME_BUFFER_SIZE]>>
 }
 
 impl SNES {
@@ -49,7 +52,7 @@ impl SNES {
         SNES {
             cpu: cpu,
 
-            frame: Arc::new(Mutex::new([0; 256 * 224 * 4]))
+            frame: Arc::new(Mutex::new([0; FRAME_BUFFER_SIZE]))
         }
     }
 

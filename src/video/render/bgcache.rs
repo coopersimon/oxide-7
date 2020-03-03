@@ -85,7 +85,6 @@ impl BGCache {
     }
 
     pub fn construct(&mut self, tiles: &PatternMem, mem: &VideoMem, tiles_changed: bool) {
-        //println!("Making bg cache from {} to {}", self.start_addr, self.start_addr + SUB_MAP_SIZE as u16);
         use MapMirror::*;
         // First A:
         if tiles_changed || mem.vram_is_dirty(self.start_addr) {
@@ -148,7 +147,7 @@ impl BGCache {
                         (tex_y, tile_num)
                     }
                 };
-                
+
                 for (x, d) in row.iter_mut().skip(base_x).take(tile_size).enumerate() {
                     let (tex_x, tile_idx) = {
                         let tex_x = if attr_flags.contains(TileAttributes::X_FLIP) {tile_size - 1 - x} else {x};
