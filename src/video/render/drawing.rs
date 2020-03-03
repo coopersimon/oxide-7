@@ -69,9 +69,9 @@ impl Renderer {
         match self.mode {
             VideoMode::_0 => self.draw_line_mode_0(mem, target, y),
             VideoMode::_1 => self.draw_line_mode_1(mem, target, y),
-            VideoMode::_2 => panic!("Mode 2 not supported."),
-            VideoMode::_3 => panic!("Mode 3 not supported."),
-            VideoMode::_4 => panic!("Mode 4 not supported."),
+            VideoMode::_2 => self.draw_line_mode_2(mem, target, y),
+            VideoMode::_3 => self.draw_line_mode_3(mem, target, y),
+            VideoMode::_4 => self.draw_line_mode_4(mem, target, y),
             VideoMode::_5 => panic!("Mode 5 not supported."),
             VideoMode::_6 => panic!("Mode 6 not supported."),
             VideoMode::_7 => panic!("Mode 7 not supported."),
@@ -311,6 +311,141 @@ impl Renderer {
                 let bg2_pix = sub_bg2_pixels[x];
                 let bg3_pix = sub_bg3_pixels[x];
                 self.eval_mode_1(mem.get_bg_registers().get_bg3_priority(), sprite_pix, bg1_pix, bg2_pix, bg3_pix).any()
+                    .unwrap_or(window_regs.get_fixed_colour())
+            } else {
+                window_regs.get_fixed_colour()
+            };
+
+            let col = match main {
+                Pixel::BG1(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 0, x as u8),
+                Pixel::BG2(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 1, x as u8),
+                Pixel::BG3(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 2, x as u8),
+                Pixel::BG4(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 3, x as u8),
+                Pixel::ObjHi(c) => mem.get_window_registers().calc_colour_math_obj(c, sub, x as u8),
+                Pixel::ObjLo(c) => c,
+                Pixel::None => mem.get_window_registers().calc_colour_math_backdrop(self.palettes.get_bg_colour(0), sub, x as u8),
+            };
+
+            write_pixel(i, col);
+        }
+    }
+
+    fn draw_line_mode_2(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
+        let window_regs = mem.get_window_registers();
+        let target_start = y * SCREEN_WIDTH;
+
+        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
+        let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        self.draw_bg_to_line(mem, 0, &mut main_bg1_pixels, &mut sub_bg1_pixels, y); // TODO: draw offset bg to line
+        let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        self.draw_bg_to_line(mem, 1, &mut main_bg2_pixels, &mut sub_bg2_pixels, y); // TODO: draw offset bg to line
+
+        for (x, i) in target.chunks_mut(4).skip(target_start).take(SCREEN_WIDTH).enumerate() {
+            let main = {
+                let sprite_pix = main_sprite_pixels[x];
+                let bg1_pix = main_bg1_pixels[x];
+                let bg2_pix = main_bg2_pixels[x];
+                self.eval_mode_2(sprite_pix, bg1_pix, bg2_pix)
+            };
+            let sub = if window_regs.use_subscreen() {
+                let sprite_pix = sub_sprite_pixels[x];
+                let bg1_pix = sub_bg1_pixels[x];
+                let bg2_pix = sub_bg2_pixels[x];
+                self.eval_mode_2(sprite_pix, bg1_pix, bg2_pix).any()
+                    .unwrap_or(window_regs.get_fixed_colour())
+            } else {
+                window_regs.get_fixed_colour()
+            };
+
+            let col = match main {
+                Pixel::BG1(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 0, x as u8),
+                Pixel::BG2(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 1, x as u8),
+                Pixel::BG3(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 2, x as u8),
+                Pixel::BG4(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 3, x as u8),
+                Pixel::ObjHi(c) => mem.get_window_registers().calc_colour_math_obj(c, sub, x as u8),
+                Pixel::ObjLo(c) => c,
+                Pixel::None => mem.get_window_registers().calc_colour_math_backdrop(self.palettes.get_bg_colour(0), sub, x as u8),
+            };
+
+            write_pixel(i, col);
+        }
+    }
+
+    fn draw_line_mode_3(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
+        let window_regs = mem.get_window_registers();
+        let target_start = y * SCREEN_WIDTH;
+
+        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
+        let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        self.draw_bg_to_line(mem, 0, &mut main_bg1_pixels, &mut sub_bg1_pixels, y); // TODO: draw offset bg to line
+        let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        self.draw_bg_to_line(mem, 1, &mut main_bg2_pixels, &mut sub_bg2_pixels, y); // TODO: draw offset bg to line
+
+        for (x, i) in target.chunks_mut(4).skip(target_start).take(SCREEN_WIDTH).enumerate() {
+            let main = {
+                let sprite_pix = main_sprite_pixels[x];
+                let bg1_pix = main_bg1_pixels[x];
+                let bg2_pix = main_bg2_pixels[x];
+                self.eval_mode_3(window_regs.use_direct_colour(), sprite_pix, bg1_pix, bg2_pix)
+            };
+            let sub = if window_regs.use_subscreen() {
+                let sprite_pix = sub_sprite_pixels[x];
+                let bg1_pix = sub_bg1_pixels[x];
+                let bg2_pix = sub_bg2_pixels[x];
+                self.eval_mode_3(window_regs.use_direct_colour(), sprite_pix, bg1_pix, bg2_pix).any()
+                    .unwrap_or(window_regs.get_fixed_colour())
+            } else {
+                window_regs.get_fixed_colour()
+            };
+
+            let col = match main {
+                Pixel::BG1(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 0, x as u8),
+                Pixel::BG2(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 1, x as u8),
+                Pixel::BG3(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 2, x as u8),
+                Pixel::BG4(c) => mem.get_window_registers().calc_colour_math_bg(c, sub, 3, x as u8),
+                Pixel::ObjHi(c) => mem.get_window_registers().calc_colour_math_obj(c, sub, x as u8),
+                Pixel::ObjLo(c) => c,
+                Pixel::None => mem.get_window_registers().calc_colour_math_backdrop(self.palettes.get_bg_colour(0), sub, x as u8),
+            };
+
+            write_pixel(i, col);
+        }
+    }
+
+    fn draw_line_mode_4(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
+        let window_regs = mem.get_window_registers();
+        let target_start = y * SCREEN_WIDTH;
+
+        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
+        let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        self.draw_bg_to_line(mem, 0, &mut main_bg1_pixels, &mut sub_bg1_pixels, y); // TODO: draw offset bg to line
+        let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        self.draw_bg_to_line(mem, 1, &mut main_bg2_pixels, &mut sub_bg2_pixels, y); // TODO: draw offset bg to line
+
+        for (x, i) in target.chunks_mut(4).skip(target_start).take(SCREEN_WIDTH).enumerate() {
+            let main = {
+                let sprite_pix = main_sprite_pixels[x];
+                let bg1_pix = main_bg1_pixels[x];
+                let bg2_pix = main_bg2_pixels[x];
+                self.eval_mode_4(window_regs.use_direct_colour(), sprite_pix, bg1_pix, bg2_pix)
+            };
+            let sub = if window_regs.use_subscreen() {
+                let sprite_pix = sub_sprite_pixels[x];
+                let bg1_pix = sub_bg1_pixels[x];
+                let bg2_pix = sub_bg2_pixels[x];
+                self.eval_mode_4(window_regs.use_direct_colour(), sprite_pix, bg1_pix, bg2_pix).any()
                     .unwrap_or(window_regs.get_fixed_colour())
             } else {
                 window_regs.get_fixed_colour()

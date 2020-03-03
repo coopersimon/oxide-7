@@ -473,22 +473,28 @@ impl AddrBusB {
         match addr {
             0x37        => self.ppu.latch_hv(),
             0x34..=0x3F => self.ppu.read_mem(addr),
-            0x40        => self.apu.read_port_0(),
-            0x41        => self.apu.read_port_1(),
-            0x42        => self.apu.read_port_2(),
-            0x43        => self.apu.read_port_3(),
-            _ => unreachable!("Reading from open bus")
+            0x40..=0x7F => match addr % 4 {
+                0   => self.apu.read_port_0(),
+                1   => self.apu.read_port_1(),
+                2   => self.apu.read_port_2(),
+                3   => self.apu.read_port_3(),
+                _   => unreachable!(),
+            },
+            _ => 0//unreachable!("Reading from open bus: {:X}", addr)
         }
     }
 
     fn write(&mut self, addr: u8, data: u8) {
         match addr {
             0x00..=0x33 => self.ppu.write_mem(addr, data),
-            0x40        => self.apu.write_port_0(data),
-            0x41        => self.apu.write_port_1(data),
-            0x42        => self.apu.write_port_2(data),
-            0x43        => self.apu.write_port_3(data),
-            _ => panic!("Tried to write silly shit: {:X} to {:X}", data, addr),
+            0x40..=0x7F => match addr % 4 {
+                0   => self.apu.write_port_0(data),
+                1   => self.apu.write_port_1(data),
+                2   => self.apu.write_port_2(data),
+                3   => self.apu.write_port_3(data),
+                _   => unreachable!(),
+            },
+            _ => {}//panic!("Tried to write silly shit: {:X} to {:X}", data, addr),
         }
     }
 

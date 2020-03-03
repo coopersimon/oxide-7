@@ -235,6 +235,11 @@ impl WindowRegisters {
         self.colour_add_select.contains(ColourAddSelect::USE_SUB)
     }
 
+    // Returns true if direct colour mode should be used for modes 3 and 4 8bpp backgrounds.
+    pub fn use_direct_colour(&self) -> bool {
+        self.colour_add_select.contains(ColourAddSelect::DIRECT_COL)
+    }
+
     // Combine colours.
     pub fn calc_colour_math_bg(&self, main: Colour, sub: Colour, bg: usize, x: u8) -> Colour {
         if self.enable_bg_colour_math(bg) {
