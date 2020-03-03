@@ -804,9 +804,8 @@ impl CPU {
     }
 
     fn wai(&mut self) {
-        // TODO
         self.clock_inc(INTERNAL_OP * 2);
-        panic!("WAI not implemented");
+        self.halt = true;
     }
 
     fn xba(&mut self) {

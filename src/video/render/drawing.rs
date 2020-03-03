@@ -87,7 +87,6 @@ impl Renderer {
         let stored_mode = VideoMode::from(mem.get_bg_registers().get_mode());
         if stored_mode != self.mode {
             self.switch_mode(stored_mode);
-            println!("New mode: {}", mem.get_bg_registers().get_mode());
         }
 
         let mut recreate_borders = false;
