@@ -1,5 +1,6 @@
 // Pattern mem for a single background. Reads VRAM, outputs Texture data.
 
+pub const TILE_SIZE: usize = 8;
 const PATTERN_MEM_WIDTH_TILES: u16 = 16;
 const OBJ_PATTERN_MEM_HEIGHT_TILES: u16 = 16;
 
@@ -12,13 +13,13 @@ pub enum BitsPerPixel {
 
 #[derive(Clone)]
 pub struct Tile {
-    data:   Vec<Vec<u8>> // Raw data. One byte for each pixel.
+    pub data:   Vec<Vec<u8>> // Raw data. One byte for each pixel.
 }
 
 impl Tile {
     pub fn new() -> Self {
         Tile {
-            data: vec![vec![0; 8]; 8]
+            data: vec![vec![0; TILE_SIZE]; TILE_SIZE]
         }
     }
 
@@ -95,15 +96,10 @@ impl PatternMem {
         self.start_addr
     }
 
-    // Make the tiles. Input raw data and size in TILES.
-    // Rows are always 16 tiles.
+    // Make the tiles.
     pub fn make_tiles(&mut self, data: &[u8]) {
         let start = self.start_addr as usize;
         let end = self.end_addr as usize;
-
-        for tile in self.tiles.iter_mut() {
-            tile.clear();
-        }
 
         match self.bits_per_pixel {
             // 16 bytes per tile.
@@ -117,13 +113,17 @@ impl PatternMem {
 
     // Ref a tile.
     pub fn ref_tile<'a>(&'a self, num: usize) -> &'a Tile {
-        &self.tiles[num % self.tiles.len()]
+        &self.tiles[num % self.tiles.len()] // TODO: replace this with bitwise &
     }
 }
 
 // Internal
 impl PatternMem {
     fn make_tiles_2bpp(&mut self, data: &[u8]) {
+        for tile in self.tiles.iter_mut() {
+            tile.clear();
+        }
+
         for (i, d) in data.iter().enumerate() {
             let y = (i / 2) % 8;
             let bitplane = i % 2;
@@ -137,6 +137,10 @@ impl PatternMem {
     }
 
     fn make_tiles_4bpp(&mut self, data: &[u8]) {
+        for tile in self.tiles.iter_mut() {
+            tile.clear();
+        }
+
         for (i, d) in data.iter().enumerate() {
             let y = (i / 2) % 8;
 
@@ -155,11 +159,19 @@ impl PatternMem {
 
     fn make_tiles_8bpp(&mut self, data: &[u8]) {
         for (i, d) in data.iter().enumerate() {
-            let x = i % 8;
-            let y = (i / 8) % 8;
-            let tile_num = i / 64;
+            let y = (i / 2) % 8;
 
-            self.tiles[tile_num].data[y][x] = *d;
+            let sub_bitplane_0 = i % 2;
+            let sub_bitplane_1 = (i / 16) % 2;
+            let bitplane_offset = (i / 32) % 2;
+            let bitplane = sub_bitplane_0 + (sub_bitplane_1 << 1) + (bitplane_offset << 2);
+
+            let tile_num = i / 64;
+            
+            for x in 0..8 {
+                let bit = (*d >> (7 - x)) & 1;
+                self.tiles[tile_num].data[y][x] |= bit << bitplane;
+            }
         }
     }
 }

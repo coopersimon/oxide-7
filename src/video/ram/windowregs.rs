@@ -187,6 +187,7 @@ impl WindowRegisters {
 
     pub fn set_colour_add_select(&mut self, data: u8) {
         self.colour_add_select = ColourAddSelect::from_bits_truncate(data);
+        //println!("Colour add sel: {:X}", data);
     }
 
     pub fn set_colour_math_desg(&mut self, data: u8) {
@@ -210,6 +211,7 @@ impl WindowRegisters {
 
     pub fn set_video_select(&mut self, data: u8) {
         self.video_select = VideoSelect::from_bits_truncate(data);
+        //println!("Video sel: {:X}", data);
     }
 
     // Getters - renderer side
@@ -260,6 +262,11 @@ impl WindowRegisters {
     // Returns true if pseudo hi-res mode is on.
     pub fn use_pseudo_hires(&self) -> bool {
         self.video_select.contains(VideoSelect::PSEUDO_HIRES)
+    }
+
+    // Returns true if the mode 7 extra background should be used.
+    pub fn use_ext_bg(&self) -> bool {
+        self.video_select.contains(VideoSelect::MODE_7_EXT_BG)
     }
 
     // Combine colours.

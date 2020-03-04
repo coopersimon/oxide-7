@@ -57,7 +57,7 @@ impl From<BGReg> for MapMirror {
 
 bitflags! {
     #[derive(Default)]
-    pub struct Mosaic: u8 {
+    struct Mosaic: u8 {
         const PIXEL_SIZE = bits![7, 6, 5, 4];
         const BG4_ENABLE = bit!(3);
         const BG3_ENABLE = bit!(2);
@@ -66,9 +66,38 @@ bitflags! {
     }
 }
 
+bitflags! {
+    #[derive(Default)]
+    struct Mode7Settings: u8 {
+        const FIELD_SIZE    = bit!(7);
+        const EMPTY_FILL    = bit!(6);
+        const FLIP_Y        = bit!(1);
+        const FLIP_X        = bit!(0);
+    }
+}
+
+pub enum Mode7Extend {
+    Repeat,
+    Transparent,
+    Clamp
+}
+
+impl From<Mode7Settings> for Mode7Extend {
+    fn from(val: Mode7Settings) -> Mode7Extend {
+        if !val.contains(Mode7Settings::FIELD_SIZE) {
+            Mode7Extend::Repeat
+        } else if val.contains(Mode7Settings::EMPTY_FILL) {
+            Mode7Extend::Clamp
+        } else {
+            Mode7Extend::Transparent
+        }
+    }
+}
+
 const VRAM_END_ADDR: u32 = 64 * 1024;
 const PATTERN_MAX_HEIGHT: u32 = 64;
 const BG_SCROLL_MASK: u16 = 0x3FF;
+const MODE_7_SCROLL_MASK: u16 = 0x1FFF;
 
 // Sub-map size (32x32 tiles)
 const SUB_MAP_LEN: u16 = 32;
@@ -86,8 +115,8 @@ pub struct Registers {
         bg3_settings:       BGReg,
         bg4_settings:       BGReg,
 
-    pub bg12_char_addr:     u8,
-    pub bg34_char_addr:     u8,
+        bg12_char_addr:     u8,
+        bg34_char_addr:     u8,
 
         bg1_scroll_x:       u16,
         bg1_scroll_y:       u16,
@@ -97,6 +126,14 @@ pub struct Registers {
         bg3_scroll_y:       u16,
         bg4_scroll_x:       u16,
         bg4_scroll_y:       u16,
+
+        mode7_settings:     Mode7Settings,
+        mode7_matrix_a:     u16,
+        mode7_matrix_b:     u16,
+        mode7_matrix_c:     u16,
+        mode7_matrix_d:     u16,
+        mode7_centre_x:     u16,
+        mode7_centre_y:     u16,
 }
 
 impl Registers {
@@ -123,6 +160,14 @@ impl Registers {
             bg3_scroll_y:       0,
             bg4_scroll_x:       0,
             bg4_scroll_y:       0,
+
+            mode7_settings:     Mode7Settings::default(),
+            mode7_matrix_a:     0,
+            mode7_matrix_b:     0,
+            mode7_matrix_c:     0,
+            mode7_matrix_d:     0,
+            mode7_centre_x:     0,
+            mode7_centre_y:     0,
         }
     }
 
@@ -189,6 +234,42 @@ impl Registers {
 
     pub fn set_bg4_settings(&mut self, data: u8) {
         self.bg4_settings = BGReg::from_bits_truncate(data);
+    }
+
+    pub fn set_bg12_char_addr(&mut self, data: u8) {
+        self.bg12_char_addr = data;
+    }
+
+    pub fn set_bg34_char_addr(&mut self, data: u8) {
+        self.bg34_char_addr = data;
+    }
+    
+    pub fn set_mode7_settings(&mut self, data: u8) {
+        self.mode7_settings = Mode7Settings::from_bits_truncate(data);
+    }
+
+    pub fn set_mode7_matrix_a(&mut self, data: u8) {
+        self.mode7_matrix_a = make16!(data, hi!(self.mode7_matrix_a));
+    }
+
+    pub fn set_mode7_matrix_b(&mut self, data: u8) {
+        self.mode7_matrix_b = make16!(data, hi!(self.mode7_matrix_b));
+    }
+
+    pub fn set_mode7_matrix_c(&mut self, data: u8) {
+        self.mode7_matrix_c = make16!(data, hi!(self.mode7_matrix_c));
+    }
+
+    pub fn set_mode7_matrix_d(&mut self, data: u8) {
+        self.mode7_matrix_d = make16!(data, hi!(self.mode7_matrix_d));
+    }
+
+    pub fn set_mode7_centre_x(&mut self, data: u8) {
+        self.mode7_centre_x = make16!(data, hi!(self.mode7_centre_x));
+    }
+
+    pub fn set_mode7_centre_y(&mut self, data: u8) {
+        self.mode7_centre_y = make16!(data, hi!(self.mode7_centre_y));
     }
 
     // Getters for the renderer.
@@ -268,24 +349,24 @@ impl Registers {
         }
     }
 
-    pub fn get_bg_scroll_x(&self, bg: usize) -> u16 {
-        match bg {
+    pub fn get_bg_scroll_x(&self, bg: usize) -> usize {
+        (match bg {
             0 => self.bg1_scroll_x & BG_SCROLL_MASK,
             1 => self.bg2_scroll_x & BG_SCROLL_MASK,
             2 => self.bg3_scroll_x & BG_SCROLL_MASK,
             3 => self.bg4_scroll_x & BG_SCROLL_MASK,
             _ => unreachable!()
-        }
+        }) as usize
     }
 
-    pub fn get_bg_scroll_y(&self, bg: usize) -> u16 {
-        match bg {
+    pub fn get_bg_scroll_y(&self, bg: usize) -> usize {
+        (match bg {
             0 => self.bg1_scroll_y & BG_SCROLL_MASK,
             1 => self.bg2_scroll_y & BG_SCROLL_MASK,
             2 => self.bg3_scroll_y & BG_SCROLL_MASK,
             3 => self.bg4_scroll_y & BG_SCROLL_MASK,
             _ => unreachable!()
-        }
+        }) as usize
     }
 
     pub fn bg_mosaic_enabled(&self, bg: usize) -> bool {
@@ -301,6 +382,41 @@ impl Registers {
 
     pub fn bg_mosaic_mask(&self) -> u8 {
         ((self.mosaic_settings & Mosaic::PIXEL_SIZE).bits() >> 4)
+    }
+
+    // Takes a screen coordinate as input (0-255, 0-224).
+    // Provides a background pixel location as output.
+    // Note that the output pixel might fall outside the range [0-1023].
+    pub fn calc_mode_7(&self, x: isize, y: isize) -> (isize, isize) {
+        let x_0 = self.mode7_centre_x as isize;
+        let y_0 = self.mode7_centre_y as isize;
+        let x_i = x + self.get_mode7_scroll_x() - x_0;
+        let y_i = y + self.get_mode7_scroll_y() - y_0;
+        let x_out = ((self.mode7_matrix_a as isize) * x_i) + ((self.mode7_matrix_b as isize) * y_i) + x_0;
+        let y_out = ((self.mode7_matrix_c as isize) * x_i) + ((self.mode7_matrix_d as isize) * y_i) + y_0;
+
+        (x_out, y_out)
+    }
+
+    pub fn get_mode7_scroll_x(&self) -> isize {
+        (self.bg1_scroll_x & MODE_7_SCROLL_MASK) as isize
+    }
+
+    pub fn get_mode7_scroll_y(&self) -> isize {
+        (self.bg1_scroll_y & MODE_7_SCROLL_MASK) as isize
+    }
+
+    // Returns the extend setting.
+    pub fn mode_7_extend(&self) -> Mode7Extend {
+        Mode7Extend::from(self.mode7_settings)
+    }
+
+    pub fn mode_7_flip_x(&self) -> bool {
+        self.mode7_settings.contains(Mode7Settings::FLIP_X)
+    }
+
+    pub fn mode_7_flip_y(&self) -> bool {
+        self.mode7_settings.contains(Mode7Settings::FLIP_Y)
     }
 
     // Other checks

@@ -431,7 +431,9 @@ impl CPU {
         let op = self.read_op(data_mode, self.is_m_set());
 
         if self.p.contains(PFlags::D) {
-            panic!("ADC not implemented for BCD");
+            panic!("BCD ADC is not supported.");
+            //let (c_4, c_8, c_12, c_16) = self.dec_arith(op);
+            //self.dec_add_adjust(c_4, c_8, c_12, c_16);
         } else {
             self.bin_arith(op);
         }
@@ -441,7 +443,9 @@ impl CPU {
         let op = self.read_op(data_mode, self.is_m_set());
 
         if self.p.contains(PFlags::D) {
-            panic!("SBC not implemented for BCD");
+            panic!("BCD SBC is not supported.");
+            //let (c_4, c_8, c_12, c_16) = self.dec_arith(!op);
+            //self.dec_sub_adjust(c_4, c_8, c_12, c_16);
         } else {
             self.bin_arith(!op);
         }
@@ -1078,7 +1082,6 @@ impl CPU {
             let result = acc.wrapping_add(add_op).wrapping_add(self.carry());
             let final_result = lo!(result);
 
-            // D adjust?
             self.p.set(PFlags::N, test_bit!(final_result, 7, u8));
             self.p.set(PFlags::V, test_bit!(!(acc ^ op) & (acc ^ result), 7));
             self.p.set(PFlags::Z, final_result == 0);
@@ -1091,7 +1094,6 @@ impl CPU {
             let result = acc.wrapping_add(add_op).wrapping_add(self.carry() as u32);
             let final_result = lo32!(result);
 
-            // D adjust?
             self.p.set(PFlags::N, test_bit!(final_result, 15));
             self.p.set(PFlags::V, test_bit!(!(acc ^ add_op) & (acc ^ result), 15, u32));
             self.p.set(PFlags::Z, final_result == 0);
@@ -1099,6 +1101,116 @@ impl CPU {
 
             self.a = final_result;
         }
+    }
+
+    // Decimal add/sub operation.
+    // Returns intermediate adjust values (lo -> hi)
+    fn dec_arith(&mut self, op: u16) -> (bool, bool, bool, bool) {
+        if self.is_m_set() {
+            let acc = lo!(self.a) as u16;
+            let add_op = lo!(op) as u16;
+            let result = acc.wrapping_add(add_op).wrapping_add(self.carry());
+            let carry_4 = test_bit!((acc & 0xF) + (add_op & 0xF) + self.carry(), 4);
+            let carry_8 = test_bit!(result, 8);
+
+            self.a = set_lo!(self.a, lo!(result));
+
+            (carry_4 || (result & 0xF) > 0x9,
+            carry_8 || (result & 0xFF) > 0x99,
+            false,
+            false)
+        } else {
+            let acc = self.a as u32;
+            let add_op = op as u32;
+            let result = acc.wrapping_add(add_op).wrapping_add(self.carry() as u32);
+            let carry_4 = test_bit!((self.a & 0xF) + (op & 0xF) + self.carry(), 4);
+            let carry_8 = test_bit!((self.a & 0xFF) + (op & 0xFF) + self.carry(), 8);
+            let carry_12 = test_bit!((self.a & 0xFFF) + (op & 0xFFF) + self.carry(), 12);
+            let carry_16 = test_bit!(result, 16, u32);
+
+            self.a = lo32!(result);
+
+            (carry_4 || (result & 0xF) > 0x9,
+            carry_8 || (result & 0xFF) > 0x99,
+            carry_12 || (result & 0xFFF) > 0x999,
+            carry_16 || (result & 0xFFFF) > 0x9999)
+        }
+    }
+
+    fn dec_add_adjust(&mut self, c_4: bool, c_8: bool, c_12: bool, c_16: bool) {
+        let mut acc = if self.is_m_set() {
+            lo!(self.a) as u32
+        } else {
+            self.a as u32
+        };
+
+        if c_4 {
+            acc = acc.wrapping_add(0x6);
+        }
+        if c_8 {
+            acc = acc.wrapping_add(0x60);
+        }
+        if c_12 {
+            acc = acc.wrapping_add(0x600);
+        }
+        if c_16 {
+            acc = acc.wrapping_add(0x6000);
+        }
+
+        let result = lo32!(acc);
+
+        self.a = if self.is_m_set() {
+            let result8 = lo!(result);
+            self.p.set(PFlags::N, test_bit!(result8, 7, u8));
+            //self.p.set(PFlags::V, test_bit!(!(acc ^ op) & (acc ^ result), 7));
+            self.p.set(PFlags::Z, result8 == 0);
+            self.p.set(PFlags::C, c_8);
+            set_lo!(self.a, result8)
+        } else {
+            self.p.set(PFlags::N, test_bit!(result, 15));
+            //self.p.set(PFlags::V, test_bit!(!(acc ^ op) & (acc ^ result), 7));
+            self.p.set(PFlags::Z, result == 0);
+            self.p.set(PFlags::C, c_16);
+            result
+        };
+    }
+
+    fn dec_sub_adjust(&mut self, c_4: bool, c_8: bool, c_12: bool, c_16: bool) {
+        let mut acc = if self.is_m_set() {
+            lo!(self.a) as u32
+        } else {
+            self.a as u32
+        };
+
+        if c_4 {
+            acc = acc.wrapping_sub(0x6);
+        }
+        if c_8 {
+            acc = acc.wrapping_sub(0x60);
+        }
+        if c_12 {
+            acc = acc.wrapping_sub(0x600);
+        }
+        if c_16 {
+            acc = acc.wrapping_sub(0x6000);
+        }
+
+        let result = lo32!(acc);
+
+        self.a = if self.is_m_set() {
+            let result8 = lo!(result);
+            self.p.set(PFlags::N, test_bit!(result8, 7, u8));
+            //self.p.set(PFlags::V, test_bit!(!(acc ^ op) & (acc ^ result), 7));
+            self.p.set(PFlags::Z, result8 == 0);
+            self.p.set(PFlags::C, c_8);
+            set_lo!(self.a, result8)
+        } else {
+            self.p.set(PFlags::N, test_bit!(result, 15));
+            //self.p.set(PFlags::V, test_bit!(!(acc ^ op) & (acc ^ result), 7));
+            self.p.set(PFlags::Z, result == 0);
+            self.p.set(PFlags::C, c_16);
+            result
+        };
     }
 
     // Compare register with operand, and set flags accordingly.

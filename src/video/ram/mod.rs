@@ -94,8 +94,8 @@ impl VideoMem {
             0x08 => self.bgregs.set_bg2_settings(data),
             0x09 => self.bgregs.set_bg3_settings(data),
             0x0A => self.bgregs.set_bg4_settings(data),
-            0x0B => self.bgregs.bg12_char_addr = data,
-            0x0C => self.bgregs.bg34_char_addr = data,
+            0x0B => self.bgregs.set_bg12_char_addr(data),
+            0x0C => self.bgregs.set_bg34_char_addr(data),
             0x0D => self.bgregs.set_bg1_scroll_x(data),
             0x0E => self.bgregs.set_bg1_scroll_y(data),
             0x0F => self.bgregs.set_bg2_scroll_x(data),
@@ -111,7 +111,13 @@ impl VideoMem {
             0x18 => self.vram.write_lo(data),
             0x19 => self.vram.write_hi(data),
 
-            0x1A..=0x20 => {}, // Mode 7 shit
+            0x1A => self.bgregs.set_mode7_settings(data),
+            0x1B => self.bgregs.set_mode7_matrix_a(data),
+            0x1C => self.bgregs.set_mode7_matrix_b(data),
+            0x1D => self.bgregs.set_mode7_matrix_c(data),
+            0x1E => self.bgregs.set_mode7_matrix_d(data),
+            0x1F => self.bgregs.set_mode7_centre_x(data),
+            0x20 => self.bgregs.set_mode7_centre_y(data),
 
             0x21 => self.cgram.set_addr(data),
             0x22 => self.cgram.write(data),

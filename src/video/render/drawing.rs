@@ -4,6 +4,7 @@ use crate::video::{
     VideoMem,
     ram::{
         BGReg,
+        Mode7Extend,
         ObjectSettings,
         Screen,
         SpritePriority,
@@ -75,7 +76,7 @@ impl Renderer {
             VideoMode::_4 => self.draw_line_mode_4(mem, target, y),
             VideoMode::_5 => self.draw_line_mode_5(mem, target, y),
             VideoMode::_6 => self.draw_line_mode_6(mem, target, y),
-            VideoMode::_7 => panic!("Mode 7 not supported."),
+            VideoMode::_7 => self.draw_line_mode_7(mem, target, y),
         }
     }
 }
@@ -154,6 +155,8 @@ impl Renderer {
     fn switch_mode(&mut self, mode: VideoMode) {
         use VideoMode::*;
 
+        println!("Switching mode to {:?}", mode);
+
         self.mode = mode;
         match mode {
             _0 => {
@@ -207,9 +210,9 @@ impl Renderer {
                     self.bg_pattern_mem[0] = PatternMem::new(BitsPerPixel::_4);
                 }
             },
-            _7 => {
-                panic!("Mode 7 not supported!");
-            }
+            _7 => {}
+                //panic!("Mode 7 not supported!");
+            //}
         }
     }
 
@@ -228,16 +231,7 @@ impl Renderer {
 impl Renderer {
     #[inline]
     fn write_hires_pixel(&self, out: &mut [u8], main: Pixel, sub: Colour) {
-        let main_col = match main {
-            Pixel::BG1(c) => c,
-            Pixel::BG2(c) => c,
-            Pixel::BG3(c) => c,
-            Pixel::BG4(c) => c,
-            Pixel::ObjHi(c) => c,
-            Pixel::ObjLo(c) => c,
-            Pixel::None => self.palettes.get_bg_colour(0),
-        };
-
+        let main_col = main.any().unwrap_or(self.palettes.get_bg_colour(0));
         out[0] = sub.r;
         out[1] = sub.g;
         out[2] = sub.b;
@@ -524,6 +518,44 @@ impl Renderer {
             self.write_hires_pixel(out, main, sub);
         }
     }
+
+    fn draw_line_mode_7(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
+        let window_regs = mem.get_window_registers();
+        let target_start = y * SCREEN_WIDTH;
+
+        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
+        let mut main_bg1_pixels = [None; SCREEN_WIDTH];
+        let mut sub_bg1_pixels = [None; SCREEN_WIDTH];
+        self.draw_mode7_bg1_to_line(mem, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
+        let mut main_bg2_pixels = [0_u8; SCREEN_WIDTH];
+        let mut sub_bg2_pixels = [0_u8; SCREEN_WIDTH];
+        let ext_bg = window_regs.use_ext_bg();
+        if ext_bg {
+            self.draw_mode7_bg2_to_line(mem, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
+        }
+
+        for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
+            let main = {
+                let sprite_pix = main_sprite_pixels[x];
+                let bg1_pix = main_bg1_pixels[x];
+                let bg2_pix = main_bg2_pixels[x];
+                self.eval_mode_7(window_regs.use_direct_colour(), ext_bg, sprite_pix, bg1_pix, bg2_pix)
+            };
+            let sub = if window_regs.use_subscreen() {
+                let sprite_pix = sub_sprite_pixels[x];
+                let bg1_pix = sub_bg1_pixels[x];
+                let bg2_pix = sub_bg2_pixels[x];
+                self.eval_mode_7(window_regs.use_direct_colour(), ext_bg, sprite_pix, bg1_pix, bg2_pix).any()
+                    .unwrap_or(window_regs.get_fixed_colour())
+            } else {
+                window_regs.get_fixed_colour()
+            };
+
+            self.write_pixel(window_regs, out, main, sub, x as u8);
+        }
+    }
 }
 
 // Drawing types
@@ -669,10 +701,10 @@ impl Renderer {
         let mut x_mosaic_offset = 0;
 
         let y_mosaic_offset = y % (mosaic_amount + 1);
-        let bg_y = (y + (regs.get_bg_scroll_y(bg) as usize) - y_mosaic_offset) & self.bg_cache[bg].mask_y();
+        let bg_y = (y + regs.get_bg_scroll_y(bg) - y_mosaic_offset) & self.bg_cache[bg].mask_y();
         let bg_row = self.bg_cache[bg].ref_row(bg_y);
 
-        let x_offset = regs.get_bg_scroll_x(bg) as usize;
+        let x_offset = regs.get_bg_scroll_x(bg);
         let mask_x = self.bg_cache[bg].mask_x();
 
         let mut main_window = [true; SCREEN_WIDTH];
@@ -692,6 +724,77 @@ impl Renderer {
             }
             if sub_window[x] {  // If pixel shows through sub window.
                 *sub = bg_row[bg_x];
+            }
+        }
+    }
+
+    fn draw_mode7_bg1_to_line(&self, mem: &VideoMem, main_line: &mut [Option<u8>], sub_line: &mut [Option<u8>], y: usize) {
+        let vram = mem.get_vram();
+        let regs = mem.get_bg_registers();
+        let window_regs = mem.get_window_registers();
+
+        let mut main_window = [true; SCREEN_WIDTH];
+        window_regs.bg_window(0, Screen::Main, &mut main_window);
+        let mut sub_window = [true; SCREEN_WIDTH];
+        window_regs.bg_window(0, Screen::Sub, &mut sub_window);
+
+        for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
+            let (bg_x, bg_y) = regs.calc_mode_7(x as isize, y as isize);
+            let lookup_x = if bg_x > 1023 || bg_x < 0 {
+                match regs.mode_7_extend() {
+                    Mode7Extend::Repeat => Some((bg_x as usize) % 1024),
+                    Mode7Extend::Transparent => None,
+                    Mode7Extend::Clamp => Some((bg_x as usize) % 8)
+                }
+            } else {
+                Some(bg_x as usize)
+            };
+            let lookup_y = if bg_y > 1023 || bg_y < 0 {
+                match regs.mode_7_extend() {
+                    Mode7Extend::Repeat => Some((bg_y as usize) % 1024),
+                    Mode7Extend::Transparent => None,
+                    Mode7Extend::Clamp => Some((bg_y as usize) % 8)
+                }
+            } else {
+                Some(bg_y as usize)
+            };
+
+            if let (Some(x_val), Some(y_val)) = (lookup_x, lookup_y) {
+                let m7x = if regs.mode_7_flip_x() {1023 - x_val} else {x_val};
+                let m7y = if regs.mode_7_flip_y() {1023 - y_val} else {y_val};
+                let pix = get_mode_7_pixel(vram, m7x, m7y);
+
+                if main_window[x] { // If pixel shows through main window.
+                    *main = Some(pix);
+                }
+                if sub_window[x] {  // If pixel shows through sub window.
+                    *sub = Some(pix);
+                }
+            }
+        }
+    }
+
+    fn draw_mode7_bg2_to_line(&self, mem: &VideoMem, main_line: &mut [u8], sub_line: &mut [u8], y: usize) {
+        let vram = mem.get_vram();
+        let regs = mem.get_bg_registers();
+        let window_regs = mem.get_window_registers();
+
+        let mut main_window = [true; SCREEN_WIDTH];
+        window_regs.bg_window(0, Screen::Main, &mut main_window);
+        let mut sub_window = [true; SCREEN_WIDTH];
+        window_regs.bg_window(0, Screen::Sub, &mut sub_window);
+
+        let bg_y = y + (regs.get_mode7_scroll_y() as usize) % 1024;
+
+        for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
+            let bg_x = x + (regs.get_mode7_scroll_x() as usize) % 1024;
+            // TODO: does this use reflect ?
+            let pix = get_mode_7_pixel(vram, bg_x, bg_y);
+            if main_window[x] { // If pixel shows through main window.
+                *main = pix;
+            }
+            if sub_window[x] {  // If pixel shows through sub window.
+                *sub = pix;
             }
         }
     }
@@ -720,10 +823,25 @@ impl Renderer {
             let r_i = r | p_r;
             let g_i = g | p_g;
             let b_i = b | p_b;
-            Colour::new(r_i | (r_i >> 5), g_i | (g_i >> 5), b_i | (b_i >> 5))
+            Colour::new(r_i | (r_i >> 4), g_i | (g_i >> 4), b_i | (b_i >> 3) | (b_i >> 6))
         } else {
             self.palettes.get_bg_colour(data.texel as usize)
         }
+    }
+    #[inline]
+    fn make_mode7_bg1_pixel(&self, texel: u8, direct_col: bool) -> Colour {
+        if direct_col {
+            let r = (texel & bits![2, 1, 0]) << 5;
+            let g = (texel & bits![5, 4, 3]) << 2;
+            let b = texel & bits![7, 6];
+            Colour::new(r | (r >> 3) | (r >> 6), g | (g >> 3) | (g >> 6), b | (b >> 2) | (b >> 4) | (b >> 6))
+        } else {
+            self.palettes.get_bg_colour(texel as usize)
+        }
+    }
+    #[inline]
+    fn make_mode7_bg2_pixel(&self, texel: u8) -> Colour {
+        self.palettes.get_bg_colour((texel & 0x7F) as usize)
     }
 
     fn eval_mode_0(&self, sprite_pix: SpritePixel, bg1: BGData, bg2: BGData, bg3: BGData, bg4: BGData) -> Pixel {
@@ -897,6 +1015,26 @@ impl Renderer {
             Pixel::None
         }
     }
+
+    fn eval_mode_7(&self, direct_col: bool, ext_bg: bool, sprite_pix: SpritePixel, bg1: Option<u8>, bg2: u8) -> Pixel {
+        if let SpritePixel::Prio3(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if let SpritePixel::Prio2(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if ext_bg && test_bit!(bg2, 7, u8) {
+            Pixel::BG2(self.make_mode7_bg2_pixel(bg2))
+        } else if let SpritePixel::Prio1(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if let Some(texel) = bg1 {
+            Pixel::BG1(self.make_mode7_bg1_pixel(texel, direct_col))
+        } else if let SpritePixel::Prio0(_) = sprite_pix {
+            sprite_pix.pixel()
+        } else if ext_bg {
+            Pixel::BG2(self.make_mode7_bg2_pixel(bg2))
+        } else {
+            Pixel::None
+        }
+    }
 }
 
 fn sprite_size_lookup(size: u8) -> ((i16, u8), (i16, u8)) {
@@ -911,4 +1049,24 @@ fn sprite_size_lookup(size: u8) -> ((i16, u8), (i16, u8)) {
         7 => ((16, 32), (32, 32)),
         _ => unreachable!()
     }
+}
+
+// Lookup mode 7 pixel using background coords.
+// X and Y must be in range 0-1023.
+#[inline]
+fn get_mode_7_pixel(vram: &[u8], x: usize, y: usize) -> u8 {
+    // Find tile num.
+    let tile_x = x / 8;
+    let tile_y = y / 8;
+    let tile = (tile_y * 128) + tile_x;
+    let tile_num = vram[tile * 2] as usize;
+
+    // Find pixel in tile.
+    let pix_x = x % 8;
+    let pix_y = y % 8;
+    let pix_num = (pix_y * 8) + pix_x;
+    
+    // Lookup pixel in vram.
+    let tile_offset = tile_num * 128;
+    vram[tile_offset + (pix_num * 2) + 1]
 }
