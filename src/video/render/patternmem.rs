@@ -101,6 +101,10 @@ impl PatternMem {
         let start = self.start_addr as usize;
         let end = self.end_addr as usize;
 
+        for tile in self.tiles.iter_mut() {
+            tile.clear();
+        }
+
         match self.bits_per_pixel {
             // 16 bytes per tile.
             BitsPerPixel::_2 => self.make_tiles_2bpp(&data[start..=end]),
@@ -120,10 +124,6 @@ impl PatternMem {
 // Internal
 impl PatternMem {
     fn make_tiles_2bpp(&mut self, data: &[u8]) {
-        for tile in self.tiles.iter_mut() {
-            tile.clear();
-        }
-
         for (i, d) in data.iter().enumerate() {
             let y = (i / 2) % 8;
             let bitplane = i % 2;
@@ -137,10 +137,6 @@ impl PatternMem {
     }
 
     fn make_tiles_4bpp(&mut self, data: &[u8]) {
-        for tile in self.tiles.iter_mut() {
-            tile.clear();
-        }
-
         for (i, d) in data.iter().enumerate() {
             let y = (i / 2) % 8;
 

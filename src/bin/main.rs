@@ -311,6 +311,10 @@ fn read_events(events_loop: &mut EventsLoop, snes: &mut SNES) {
                     match k.virtual_keycode {
                         Some(VirtualKeyCode::X)         => snes.set_button(Button::A, pressed, 0),
                         Some(VirtualKeyCode::Z)         => snes.set_button(Button::B, pressed, 0),
+                        Some(VirtualKeyCode::D)         => snes.set_button(Button::X, pressed, 0),
+                        Some(VirtualKeyCode::C)         => snes.set_button(Button::Y, pressed, 0),
+                        Some(VirtualKeyCode::A)         => snes.set_button(Button::L, pressed, 0),
+                        Some(VirtualKeyCode::S)         => snes.set_button(Button::R, pressed, 0),
                         Some(VirtualKeyCode::Space)     => snes.set_button(Button::Select, pressed, 0),
                         Some(VirtualKeyCode::Return)    => snes.set_button(Button::Start, pressed, 0),
                         Some(VirtualKeyCode::Up)        => snes.set_button(Button::Up, pressed, 0),
