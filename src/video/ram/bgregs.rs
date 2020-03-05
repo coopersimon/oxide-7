@@ -1,6 +1,7 @@
 // Other video registers, for BG settings
 
 use bitflags::bitflags;
+use fixed::types::I8F8;
 
 use std::collections::BTreeSet;
 
@@ -387,23 +388,23 @@ impl Registers {
     // Takes a screen coordinate as input (0-255, 0-224).
     // Provides a background pixel location as output.
     // Note that the output pixel might fall outside the range [0-1023].
-    pub fn calc_mode_7(&self, x: isize, y: isize) -> (isize, isize) {
-        let x_0 = self.mode7_centre_x as isize;
-        let y_0 = self.mode7_centre_y as isize;
-        let x_i = x + self.get_mode7_scroll_x() - x_0;
-        let y_i = y + self.get_mode7_scroll_y() - y_0;
-        let x_out = ((self.mode7_matrix_a as isize) * x_i) + ((self.mode7_matrix_b as isize) * y_i) + x_0;
-        let y_out = ((self.mode7_matrix_c as isize) * x_i) + ((self.mode7_matrix_d as isize) * y_i) + y_0;
+    pub fn calc_mode_7(&self, x: i16, y: i16) -> (u16, u16) {
+        let x_0 = I8F8::from_bits(self.mode7_centre_x as i16);
+        let y_0 = I8F8::from_bits(self.mode7_centre_y as i16);
+        let x_i = I8F8::from_bits(x) + I8F8::from_bits(self.get_mode7_scroll_x() as i16) - x_0;
+        let y_i = I8F8::from_bits(y) + I8F8::from_bits(self.get_mode7_scroll_y() as i16) - y_0;
+        let x_out = (I8F8::from_bits(self.mode7_matrix_a as i16) * x_i) + (I8F8::from_bits(self.mode7_matrix_b as i16) * y_i) + x_0;
+        let y_out = (I8F8::from_bits(self.mode7_matrix_c as i16) * x_i) + (I8F8::from_bits(self.mode7_matrix_d as i16) * y_i) + y_0;
 
-        (x_out, y_out)
+        (x_out.to_bits() as u16, y_out.to_bits() as u16)
     }
 
-    pub fn get_mode7_scroll_x(&self) -> isize {
-        (self.bg1_scroll_x & MODE_7_SCROLL_MASK) as isize
+    pub fn get_mode7_scroll_x(&self) -> i16 {
+        (self.bg1_scroll_x & MODE_7_SCROLL_MASK) as i16
     }
 
-    pub fn get_mode7_scroll_y(&self) -> isize {
-        (self.bg1_scroll_y & MODE_7_SCROLL_MASK) as isize
+    pub fn get_mode7_scroll_y(&self) -> i16 {
+        (self.bg1_scroll_y & MODE_7_SCROLL_MASK) as i16
     }
 
     // Returns the extend setting.

@@ -739,8 +739,8 @@ impl Renderer {
         window_regs.bg_window(0, Screen::Sub, &mut sub_window);
 
         for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
-            let (bg_x, bg_y) = regs.calc_mode_7(x as isize, y as isize);
-            let lookup_x = if bg_x > 1023 || bg_x < 0 {
+            let (bg_x, bg_y) = regs.calc_mode_7(x as i16, y as i16);
+            let lookup_x = if bg_x > 1023 {
                 match regs.mode_7_extend() {
                     Mode7Extend::Repeat => Some((bg_x as usize) % 1024),
                     Mode7Extend::Transparent => None,
@@ -749,7 +749,7 @@ impl Renderer {
             } else {
                 Some(bg_x as usize)
             };
-            let lookup_y = if bg_y > 1023 || bg_y < 0 {
+            let lookup_y = if bg_y > 1023 {
                 match regs.mode_7_extend() {
                     Mode7Extend::Repeat => Some((bg_y as usize) % 1024),
                     Mode7Extend::Transparent => None,

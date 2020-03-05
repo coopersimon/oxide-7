@@ -25,6 +25,7 @@ winit = "0.19"
 cgmath = "0.17"
 chrono = "0.4"
 crossbeam-channel = "0.4.2"
+fixed = "0.5.4"
 
 [features]
 debug = []
