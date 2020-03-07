@@ -125,7 +125,7 @@ fn main() {
         // Make a surface.
         let surface = WindowBuilder::new()
             .with_dimensions((512, 448).into())
-            .with_title("Super Rust Boy")
+            .with_title("Oxide-7")
             .build_vk_surface(&events_loop, instance.clone())
             .expect("Couldn't create surface");
 
