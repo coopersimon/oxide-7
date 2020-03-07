@@ -8,22 +8,22 @@ A SNES emulator written in Rust.
 * Super Mario World (works pretty well)
 * Super Metroid (Intro looks good, gameplay is a bit broken)
 * Link to the Past (Intro is a bit messy, gameplay seems ok)
-* Final Fantasy 2 (IV) (Mostly fine, some issues with masking. In actual gameplay there seem to be issues switching between mode 1 (gameplay) and mode 0 (menu))
-* Final Fantasy 3 (VI) (Intro is completely corrupted & broken).
-* Earthbound (Pattern memory is incorrect - I suspect this is due to me creating too small BG pattern caches)
+* Final Fantasy 2 (IV) (Regressed. There is some sort of corrupted overlay (I think BG3 in Mode 1))
+* Final Fantasy 3 (VI) (Title looks ok, reads out of bounds after)
+* Earthbound (Works pretty well)
 * Super Castlevania IV (Works well up until BCD is needed)
 * Super Mario Kart (breaks immediately because of BCD)
 * Mortal Kombat (developer intro plays and then it freezes - it used to get a bit further I think?)
-* SimCity (intro and menus work ok, in-game menu is blank. The in-game menu used to work (colour math issues?))
-* Super Mario All-Stars (title screen is ok, menu is broken (BG pattern cache issue again?) and actual games seem unresponsive)
+* SimCity (works pretty well. gameplay tutorial intro is a bit messy)
+* Super Mario All-Stars (graphics look ok but game is unresponsive)
 * Aladdin (intro works, title screen is a bit glitchy, gameplay responds but then stops after a short while)
-* Zombies Ate My Neighbors! (intro is kinda broken, as is the menu, gameplay seems ok)
-* Mega Man X (first screen shows up ok, then freezes. This used to show the whole intro (before the last commit))
+* Zombies Ate My Neighbors! (works pretty well)
+* Mega Man X (first screen shows up ok, then freezes. This used to show the whole intro (before commit ~#100)
 * Tetris & Dr. Mario (shows an anti-piracy screen!)
-* Super Ghouls 'n Ghosts (Intro and title seem fine. Actual gameplay looks a bit corrupted (either priority issues or pattern issues))
+* Super Ghouls 'n Ghosts (Intro and title seem fine. Actual gameplay looks a bit corrupted (BG3 in mode 1 issues again I suspect))
 * Kirby's Dreamland 3 (Unrecognised ROM config)
 * Kirby's Super Star (Unrecognised ROM config)
-* Donkey Kong Country (intro mostly looks fine, title screen is broken, gameplay doesn't show sprites)
+* Donkey Kong Country (intro and title screen look good, gameplay doesn't show sprites (but some issues are resolved otherwise))
 * Donkey Kong Country 2 (the same as above and eventually breaks due to BCD!)
 * Chrono Trigger (uses interlacing and breaks anyway due to BCD)
 * Pilotwings (uses interlacing)
@@ -34,11 +34,8 @@ A SNES emulator written in Rust.
 ##### Video
 - Mode 2, 4 and 6 Offset change per column
 - Interlacing
-- Performance: don't use current BG cache method
-- Correctness: use full range for pattern memory
 - Improve dirtiness detection in VRAM / move cache creation to CPU side
 - Test Modes 5 and 6 more extensively.
-- Screen brightness mode
 - Some issues with things being one scanline "off".
 
 ##### Audio
