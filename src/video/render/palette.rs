@@ -42,6 +42,10 @@ impl PaletteMem {
         }
     }
 
+    pub fn get_zero_colour(&self) -> Colour {
+        self.colours[0]
+    }
+
     pub fn get_bg_colour(&self, which: usize) -> Colour {
         self.colours[which]
     }

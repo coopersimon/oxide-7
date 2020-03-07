@@ -24,7 +24,7 @@ pub struct VRAM {
     port_control:   PortControl,
     byte_addr:      u16,
 
-    borders:        Vec<(u16, bool)>
+    pattern_regions:    Vec<((u16, u16), bool)>
 }
 
 impl VRAM {
@@ -35,7 +35,7 @@ impl VRAM {
             port_control:   PortControl::default(),
             byte_addr:      0,
 
-            borders:        Vec::new()
+            pattern_regions:    Vec::new()
         }
     }
 
@@ -106,7 +106,7 @@ impl VRAM {
 
     // Check if a region is dirty.
     pub fn dirty_range(&self, start_addr: u16) -> bool {
-        if let Some((_, dirty)) = self.borders.iter().find(|(b, _)| *b == start_addr) {
+        if let Some((_, dirty)) = self.pattern_regions.iter().find(|((b, _), _)| *b == start_addr) {
             *dirty
         } else {
             false
@@ -115,15 +115,14 @@ impl VRAM {
 
     // Reset the dirty range once reading is finished.
     pub fn reset_dirty_range(&mut self) {
-        for (_, dirty) in self.borders.iter_mut() {
+        for (_, dirty) in self.pattern_regions.iter_mut() {
             *dirty = false;
         }
     }
 
-    // Set the borders of each region of VRAM.
-    // Incoming vec must be ordered!
-    pub fn set_borders(&mut self, borders: &[u16]) {
-        self.borders = borders.iter().map(|b| (*b, true)).collect::<Vec<_>>();
+    // Set the borders of each region of VRAM pattern memory.
+    pub fn set_pattern_regions(&mut self, regions: Vec<(u16, u16)>) {
+        self.pattern_regions = regions.iter().cloned().map(|r| (r, true)).collect::<Vec<_>>();
     }
 }
 
@@ -144,8 +143,10 @@ impl VRAM {
     // Set a region to be dirty.
     #[inline]
     fn set_dirty(&mut self, addr: u16) {
-        if let Some((_, dirty)) = self.borders.iter_mut().rev().find(|(a, _)| addr >= *a) {
-            *dirty = true;
+        for ((start, end), dirty) in self.pattern_regions.iter_mut() {
+            if (addr >= *start) && (addr <= *end) {
+                *dirty = true;
+            }
         }
     }
 }

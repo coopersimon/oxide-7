@@ -202,7 +202,7 @@ impl VideoMem {
         self.vram.reset_dirty_range();
     }
 
-    pub fn vram_set_borders(&mut self, borders: &[u16]) {
-        self.vram.set_borders(borders);
+    pub fn vram_set_pattern_regions(&mut self, regions: Vec<(u16, u16)>) {
+        self.vram.set_pattern_regions(regions);
     }
 }

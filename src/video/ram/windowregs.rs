@@ -1,7 +1,10 @@
 // Video registers for colour math and window settings.
-use crate::video::render::Colour;
-
 use bitflags::bitflags;
+
+use crate::video::{
+    BG,
+    render::Colour
+};
 
 bitflags! {
     #[derive(Default)]
@@ -221,7 +224,7 @@ impl WindowRegisters {
 
     // Sets the input bool slice to false if the associated pixel shouldn't be shown.
     // Assumes an input of true bools.
-    pub fn bg_window(&self, bg: usize, screen: Screen, window_line: &mut [bool]) {
+    pub fn bg_window(&self, bg: BG, screen: Screen, window_line: &mut [bool]) {
         if self.enable_bg(bg, screen) {                 // Check if this bg is enabled for the screen.
             if self.enable_masking_bg(bg, screen) {     // Check if masking is enabled for this background.
                 for (x, w) in window_line.iter_mut().enumerate() {
@@ -273,7 +276,7 @@ impl WindowRegisters {
     }
 
     // Combine colours.
-    pub fn calc_colour_math_bg(&self, main: Colour, sub: Colour, bg: usize, x: u8) -> Colour {
+    pub fn calc_colour_math_bg(&self, main: Colour, sub: Colour, bg: BG, x: u8) -> Colour {
         if self.enable_bg_colour_math(bg) {
             self.do_colour_math(main, sub, x)
         } else {
@@ -303,7 +306,7 @@ impl WindowRegisters {
 // internal helpers
 impl WindowRegisters {
     // Returns true if the bg pixel specified is inside the window
-    fn show_masked_bg_pixel(&self, bg: usize, x: u8) -> bool {
+    fn show_masked_bg_pixel(&self, bg: BG, x: u8) -> bool {
         let enable_1 = self.enable_window_1_bg(bg);
         let enable_2 = self.enable_window_2_bg(bg);
         match (enable_1, enable_2) {
@@ -372,21 +375,19 @@ impl WindowRegisters {
     }
 
     // Returns true if layer is enabled for the screen
-    fn enable_bg(&self, bg: usize, screen: Screen) -> bool {
+    fn enable_bg(&self, bg: BG, screen: Screen) -> bool {
         match screen {
             Screen::Main => match bg {
-                0 => self.main_screen_desg.contains(LayerDesignation::BG1),
-                1 => self.main_screen_desg.contains(LayerDesignation::BG2),
-                2 => self.main_screen_desg.contains(LayerDesignation::BG3),
-                3 => self.main_screen_desg.contains(LayerDesignation::BG4),
-                _ => unreachable!()
+                BG::_1 => self.main_screen_desg.contains(LayerDesignation::BG1),
+                BG::_2 => self.main_screen_desg.contains(LayerDesignation::BG2),
+                BG::_3 => self.main_screen_desg.contains(LayerDesignation::BG3),
+                BG::_4 => self.main_screen_desg.contains(LayerDesignation::BG4),
             },
             Screen::Sub => match bg {
-                0 => self.sub_screen_desg.contains(LayerDesignation::BG1),
-                1 => self.sub_screen_desg.contains(LayerDesignation::BG2),
-                2 => self.sub_screen_desg.contains(LayerDesignation::BG3),
-                3 => self.sub_screen_desg.contains(LayerDesignation::BG4),
-                _ => unreachable!()
+                BG::_1 => self.sub_screen_desg.contains(LayerDesignation::BG1),
+                BG::_2 => self.sub_screen_desg.contains(LayerDesignation::BG2),
+                BG::_3 => self.sub_screen_desg.contains(LayerDesignation::BG3),
+                BG::_4 => self.sub_screen_desg.contains(LayerDesignation::BG4),
             }
         }
     }
@@ -398,21 +399,19 @@ impl WindowRegisters {
     }
 
     // Returns true if masking is enabled for the BG
-    fn enable_masking_bg(&self, bg: usize, screen: Screen) -> bool {
+    fn enable_masking_bg(&self, bg: BG, screen: Screen) -> bool {
         match screen {
             Screen::Main => match bg {
-                0 => self.main_mask_desg.contains(LayerDesignation::BG1),
-                1 => self.main_mask_desg.contains(LayerDesignation::BG2),
-                2 => self.main_mask_desg.contains(LayerDesignation::BG3),
-                3 => self.main_mask_desg.contains(LayerDesignation::BG4),
-                _ => unreachable!()
+                BG::_1 => self.main_mask_desg.contains(LayerDesignation::BG1),
+                BG::_2 => self.main_mask_desg.contains(LayerDesignation::BG2),
+                BG::_3 => self.main_mask_desg.contains(LayerDesignation::BG3),
+                BG::_4 => self.main_mask_desg.contains(LayerDesignation::BG4),
             },
             Screen::Sub => match bg {
-                0 => self.sub_mask_desg.contains(LayerDesignation::BG1),
-                1 => self.sub_mask_desg.contains(LayerDesignation::BG2),
-                2 => self.sub_mask_desg.contains(LayerDesignation::BG3),
-                3 => self.sub_mask_desg.contains(LayerDesignation::BG4),
-                _ => unreachable!()
+                BG::_1 => self.sub_mask_desg.contains(LayerDesignation::BG1),
+                BG::_2 => self.sub_mask_desg.contains(LayerDesignation::BG2),
+                BG::_3 => self.sub_mask_desg.contains(LayerDesignation::BG3),
+                BG::_4 => self.sub_mask_desg.contains(LayerDesignation::BG4),
             }
         }
     }
@@ -425,13 +424,12 @@ impl WindowRegisters {
     }
 
     // Returns true if window 1 is enabled for layer
-    fn enable_window_1_bg(&self, bg: usize) -> bool {
+    fn enable_window_1_bg(&self, bg: BG) -> bool {
         match bg {
-            0 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_1_ENABLE_LO),
-            1 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_1_ENABLE_HI),
-            2 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_1_ENABLE_LO),
-            3 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_1_ENABLE_HI),
-            _ => unreachable!()
+            BG::_1 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_1_ENABLE_LO),
+            BG::_2 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_1_ENABLE_HI),
+            BG::_3 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_1_ENABLE_LO),
+            BG::_4 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_1_ENABLE_HI),
         }
     }
     fn enable_window_1_obj(&self) -> bool {
@@ -442,13 +440,12 @@ impl WindowRegisters {
     }
 
     // Returns true if window 2 is enabled for layer
-    fn enable_window_2_bg(&self, bg: usize) -> bool {
+    fn enable_window_2_bg(&self, bg: BG) -> bool {
         match bg {
-            0 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_2_ENABLE_LO),
-            1 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_2_ENABLE_HI),
-            2 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_2_ENABLE_LO),
-            3 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_2_ENABLE_HI),
-            _ => unreachable!()
+            BG::_1 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_2_ENABLE_LO),
+            BG::_2 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_2_ENABLE_HI),
+            BG::_3 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_2_ENABLE_LO),
+            BG::_4 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_2_ENABLE_HI),
         }
     }
     fn enable_window_2_obj(&self) -> bool {
@@ -459,13 +456,12 @@ impl WindowRegisters {
     }
 
     // Returns true if window 1 should be inverted for layer
-    fn invert_window_1_bg(&self, bg: usize) -> bool {
+    fn invert_window_1_bg(&self, bg: BG) -> bool {
         match bg {
-            0 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_1_INVERT_LO),
-            1 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_1_INVERT_HI),
-            2 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_1_INVERT_LO),
-            3 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_1_INVERT_HI),
-            _ => unreachable!()
+            BG::_1 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_1_INVERT_LO),
+            BG::_2 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_1_INVERT_HI),
+            BG::_3 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_1_INVERT_LO),
+            BG::_4 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_1_INVERT_HI),
         }
     }
     fn invert_window_1_obj(&self) -> bool {
@@ -476,13 +472,12 @@ impl WindowRegisters {
     }
 
     // Returns true if window 2 should be inverted for layer
-    fn invert_window_2_bg(&self, bg: usize) -> bool {
+    fn invert_window_2_bg(&self, bg: BG) -> bool {
         match bg {
-            0 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_2_INVERT_LO),
-            1 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_2_INVERT_HI),
-            2 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_2_INVERT_LO),
-            3 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_2_INVERT_HI),
-            _ => unreachable!()
+            BG::_1 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_2_INVERT_LO),
+            BG::_2 => self.mask_bg1_2.contains(WindowMaskSettings::WINDOW_2_INVERT_HI),
+            BG::_3 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_2_INVERT_LO),
+            BG::_4 => self.mask_bg3_4.contains(WindowMaskSettings::WINDOW_2_INVERT_HI),
         }
     }
     fn invert_window_2_obj(&self) -> bool {
@@ -501,13 +496,12 @@ impl WindowRegisters {
     }
 
     // Returns the window operation for the layer
-    fn window_op_bg(&self, bg: usize) -> u8 {
+    fn window_op_bg(&self, bg: BG) -> u8 {
         match bg {
-            0 => (self.mask_logic_bg & BGMaskLogic::BG_1_OP).bits(),
-            1 => (self.mask_logic_bg & BGMaskLogic::BG_2_OP).bits() >> 2,
-            2 => (self.mask_logic_bg & BGMaskLogic::BG_3_OP).bits() >> 4,
-            3 => (self.mask_logic_bg & BGMaskLogic::BG_4_OP).bits() >> 6,
-            _ => unreachable!()
+            BG::_1 => (self.mask_logic_bg & BGMaskLogic::BG_1_OP).bits(),
+            BG::_2 => (self.mask_logic_bg & BGMaskLogic::BG_2_OP).bits() >> 2,
+            BG::_3 => (self.mask_logic_bg & BGMaskLogic::BG_3_OP).bits() >> 4,
+            BG::_4 => (self.mask_logic_bg & BGMaskLogic::BG_4_OP).bits() >> 6,
         }
     }
     fn window_op_obj(&self) -> u8 {
@@ -517,13 +511,12 @@ impl WindowRegisters {
         (self.mask_logic_obj_col & ObjColMaskLogic::COL_OP).bits() >> 2
     }
 
-    fn enable_bg_colour_math(&self, bg: usize) -> bool {
+    fn enable_bg_colour_math(&self, bg: BG) -> bool {
         match bg {
-            0 => self.colour_math_desg.contains(ColourMathDesignation::BG1),
-            1 => self.colour_math_desg.contains(ColourMathDesignation::BG2),
-            2 => self.colour_math_desg.contains(ColourMathDesignation::BG3),
-            3 => self.colour_math_desg.contains(ColourMathDesignation::BG4),
-            _ => unreachable!()
+            BG::_1 => self.colour_math_desg.contains(ColourMathDesignation::BG1),
+            BG::_2 => self.colour_math_desg.contains(ColourMathDesignation::BG2),
+            BG::_3 => self.colour_math_desg.contains(ColourMathDesignation::BG3),
+            BG::_4 => self.colour_math_desg.contains(ColourMathDesignation::BG4),
         }
     }
 

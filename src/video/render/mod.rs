@@ -1,6 +1,6 @@
 // Tools for communicating with the renderer (and its thread on certain platforms).
 
-mod bgcache;
+//mod bgcache;
 mod patternmem;
 mod drawing;
 mod palette;

@@ -5,6 +5,8 @@ use fixed::types::I8F8;
 
 use std::collections::BTreeSet;
 
+use crate::video::BG;
+
 bitflags! {
     #[derive(Default)]
     pub struct ObjectSettings: u8 {
@@ -289,6 +291,7 @@ impl Registers {
         self.mode7_prev = data;
     }
 
+    // Getters (CPU side)
     pub fn read_mult_result_lo(&self) -> u8 {
         let result = (self.mode7_matrix_a as i32) * (hi!(self.mode7_matrix_b) as i32);
         lo24!(result as u32, u8)
@@ -303,8 +306,11 @@ impl Registers {
         let result = (self.mode7_matrix_a as i32) * (hi!(self.mode7_matrix_b) as i32);
         hi24!(result as u32)
     }
+}
 
-    // Getters for the renderer.
+// Getters for the renderer.
+impl Registers {
+
     pub fn get_screen_display(&self) -> u8 {
         self.screen_display
     }
@@ -340,75 +346,94 @@ impl Registers {
         (base << 14) + (table << 13)
     }
 
-    pub fn get_bg_settings(&self, bg: usize) -> BGReg {
+    pub fn get_bg_settings(&self, bg: BG) -> BGReg {
         match bg {
-            0 => self.bg1_settings,
-            1 => self.bg2_settings,
-            2 => self.bg3_settings,
-            3 => self.bg4_settings,
-            _ => unreachable!()
+            BG::_1 => self.bg1_settings,
+            BG::_2 => self.bg2_settings,
+            BG::_3 => self.bg3_settings,
+            BG::_4 => self.bg4_settings,
         }
     }
 
     // TODO: use less magic numbers in the following.
-    pub fn bg_pattern_addr(&self, bg: usize) -> u16 {
+    pub fn bg_pattern_addr(&self, bg: BG) -> u16 {
         match bg {
-            0 => ((self.bg12_char_addr & 0xF) as u16) << 13,
-            1 => ((self.bg12_char_addr & 0xF0) as u16) << 9,
-            2 => ((self.bg34_char_addr & 0xF) as u16) << 13,
-            3 => ((self.bg34_char_addr & 0xF0) as u16) << 9,
-            _ => unreachable!()
+            BG::_1 => ((self.bg12_char_addr & 0xF) as u16) << 13,
+            BG::_2 => ((self.bg12_char_addr & 0xF0) as u16) << 9,
+            BG::_3 => ((self.bg34_char_addr & 0xF) as u16) << 13,
+            BG::_4 => ((self.bg34_char_addr & 0xF0) as u16) << 9,
         }
     }
 
-    pub fn bg_map_addr(&self, bg: usize) -> u16 {
+    pub fn bg_map_addr(&self, bg: BG) -> u16 {
         match bg {
-            0 => ((self.bg1_settings & BGReg::ADDR).bits() as u16) << 9,
-            1 => ((self.bg2_settings & BGReg::ADDR).bits() as u16) << 9,
-            2 => ((self.bg3_settings & BGReg::ADDR).bits() as u16) << 9,
-            3 => ((self.bg4_settings & BGReg::ADDR).bits() as u16) << 9,
-            _ => unreachable!()
+            BG::_1 => ((self.bg1_settings & BGReg::ADDR).bits() as u16) << 9,
+            BG::_2 => ((self.bg2_settings & BGReg::ADDR).bits() as u16) << 9,
+            BG::_3 => ((self.bg3_settings & BGReg::ADDR).bits() as u16) << 9,
+            BG::_4 => ((self.bg4_settings & BGReg::ADDR).bits() as u16) << 9,
         }
     }
 
-    pub fn bg_large_tiles(&self, bg: usize) -> bool {
-        match bg {
-            0 => self.bg_mode.contains(BGMode::BG1_TILE_SIZE),
-            1 => self.bg_mode.contains(BGMode::BG2_TILE_SIZE),
-            2 => self.bg_mode.contains(BGMode::BG3_TILE_SIZE),
-            3 => self.bg_mode.contains(BGMode::BG4_TILE_SIZE),
-            _ => unreachable!()
+    pub fn bg_size_mask(&self, bg: BG) -> (usize, usize) {
+        let large_tiles = self.bg_large_tiles(bg);
+        let map_mirror = MapMirror::from(self.get_bg_settings(bg));
+        match (map_mirror, large_tiles) {
+            (MapMirror::None, false)    => (255, 255),
+            (MapMirror::X, false)       => (511, 255),
+            (MapMirror::Y, false)       => (255, 511),
+            (MapMirror::Both, false)    => (511, 511),
+            (MapMirror::None, true)     => (511, 511),
+            (MapMirror::X, true)        => (1023, 511),
+            (MapMirror::Y, true)        => (511, 1023),
+            (MapMirror::Both, true)     => (1023, 1023),
         }
     }
 
-    pub fn get_bg_scroll_x(&self, bg: usize) -> usize {
+    // Get size of the background in tiles.
+    pub fn bg_size_tiles(&self, bg: BG) -> (usize, usize) {
+        let map_mirror = MapMirror::from(self.get_bg_settings(bg));
+        match map_mirror {
+            MapMirror::None => (32, 32),
+            MapMirror::X    => (64, 32),
+            MapMirror::Y    => (32, 64),
+            MapMirror::Both => (64, 64),
+        }
+    }
+
+    pub fn bg_large_tiles(&self, bg: BG) -> bool {
+        match bg {
+            BG::_1 => self.bg_mode.contains(BGMode::BG1_TILE_SIZE),
+            BG::_2 => self.bg_mode.contains(BGMode::BG2_TILE_SIZE),
+            BG::_3 => self.bg_mode.contains(BGMode::BG3_TILE_SIZE),
+            BG::_4 => self.bg_mode.contains(BGMode::BG4_TILE_SIZE),
+        }
+    }
+
+    pub fn get_bg_scroll_x(&self, bg: BG) -> usize {
         (match bg {
-            0 => self.bg1_scroll_x & BG_SCROLL_MASK,
-            1 => self.bg2_scroll_x & BG_SCROLL_MASK,
-            2 => self.bg3_scroll_x & BG_SCROLL_MASK,
-            3 => self.bg4_scroll_x & BG_SCROLL_MASK,
-            _ => unreachable!()
+            BG::_1 => self.bg1_scroll_x & BG_SCROLL_MASK,
+            BG::_2 => self.bg2_scroll_x & BG_SCROLL_MASK,
+            BG::_3 => self.bg3_scroll_x & BG_SCROLL_MASK,
+            BG::_4 => self.bg4_scroll_x & BG_SCROLL_MASK,
         }) as usize
     }
 
-    pub fn get_bg_scroll_y(&self, bg: usize) -> usize {
+    pub fn get_bg_scroll_y(&self, bg: BG) -> usize {
         (match bg {
-            0 => self.bg1_scroll_y & BG_SCROLL_MASK,
-            1 => self.bg2_scroll_y & BG_SCROLL_MASK,
-            2 => self.bg3_scroll_y & BG_SCROLL_MASK,
-            3 => self.bg4_scroll_y & BG_SCROLL_MASK,
-            _ => unreachable!()
+            BG::_1 => self.bg1_scroll_y & BG_SCROLL_MASK,
+            BG::_2 => self.bg2_scroll_y & BG_SCROLL_MASK,
+            BG::_3 => self.bg3_scroll_y & BG_SCROLL_MASK,
+            BG::_4 => self.bg4_scroll_y & BG_SCROLL_MASK,
         }) as usize
     }
 
-    pub fn bg_mosaic_enabled(&self, bg: usize) -> bool {
+    pub fn bg_mosaic_enabled(&self, bg: BG) -> bool {
         let empty_mask = (self.mosaic_settings & Mosaic::PIXEL_SIZE).is_empty();
         match bg {
-            0 => self.mosaic_settings.contains(Mosaic::BG1_ENABLE) && !empty_mask,
-            1 => self.mosaic_settings.contains(Mosaic::BG2_ENABLE) && !empty_mask,
-            2 => self.mosaic_settings.contains(Mosaic::BG3_ENABLE) && !empty_mask,
-            3 => self.mosaic_settings.contains(Mosaic::BG4_ENABLE) && !empty_mask,
-            _ => unreachable!()
+            BG::_1 => self.mosaic_settings.contains(Mosaic::BG1_ENABLE) && !empty_mask,
+            BG::_2 => self.mosaic_settings.contains(Mosaic::BG2_ENABLE) && !empty_mask,
+            BG::_3 => self.mosaic_settings.contains(Mosaic::BG3_ENABLE) && !empty_mask,
+            BG::_4 => self.mosaic_settings.contains(Mosaic::BG4_ENABLE) && !empty_mask,
         }
     }
 
@@ -458,7 +483,7 @@ impl Registers {
 }
 
 // More complex methods called from renderer.
-impl Registers {
+/*impl Registers {
     // Get height of pattern table from start address, in tiles.
     pub fn get_pattern_table_height(&self, pattern_addr: u16, bits_per_pixel: u32) -> u32 {
         let borders = self.get_vram_borders();  // TODO: call this from outside.
@@ -527,6 +552,79 @@ impl Registers {
                 borders.insert(start_addr + (SUB_MAP_SIZE * 2));
                 borders.insert(start_addr + (SUB_MAP_SIZE * 3));
             },
+        }
+    }
+}*/
+
+impl Registers {
+    // Get ranges of VRAM in which patterns exist.
+    pub fn get_vram_pattern_regions(&self) -> Vec<(u16, u16)> {
+        const ROW_HEIGHT_2BPP: u16 = 16 * 16;
+        const ROW_HEIGHT_4BPP: u16 = 16 * 32;
+
+        let mode = self.get_mode();
+        let mut regions = Vec::new();
+
+        let obj0_pattern_start = self.obj0_pattern_addr();
+        let obj0_pattern_end = std::cmp::max(obj0_pattern_start - 1 + (16 * ROW_HEIGHT_4BPP), std::u16::MAX);
+        regions.push((obj0_pattern_start, obj0_pattern_end));
+        let objn_pattern_start = self.objn_pattern_addr();
+        let objn_pattern_end = std::cmp::max(objn_pattern_start - 1 + (16 * ROW_HEIGHT_4BPP), std::u16::MAX);
+        regions.push((objn_pattern_start, objn_pattern_end));
+
+        let bg1_pattern_start = self.bg_pattern_addr(BG::_1);
+        let bg1_pattern_end = match mode {
+            0 => std::cmp::max(bg1_pattern_start - 1 + (64 * ROW_HEIGHT_2BPP), std::u16::MAX),
+            1 | 2 | 5 | 6 => std::cmp::max(bg1_pattern_start - 1 + (64 * ROW_HEIGHT_4BPP), std::u16::MAX),
+            3 | 4 => std::u16::MAX,
+            _ => bg1_pattern_start,
+        };
+        regions.push((bg1_pattern_start, bg1_pattern_end));
+
+        if mode < 6 {
+            let bg2_pattern_start = self.bg_pattern_addr(BG::_2);
+            let bg2_pattern_end = match mode {
+                0 | 4 | 5 => std::cmp::max(bg2_pattern_start - 1 + (64 * ROW_HEIGHT_2BPP), std::u16::MAX),
+                _ => std::cmp::max(bg2_pattern_start - 1 + (64 * ROW_HEIGHT_4BPP), std::u16::MAX),
+            };
+            regions.push((bg2_pattern_start, bg2_pattern_end));
+        }
+
+        if mode < 2 {
+            let bg3_pattern_start = self.bg_pattern_addr(BG::_3);
+            let bg3_pattern_end = std::cmp::max(bg3_pattern_start - 1 + (64 * ROW_HEIGHT_2BPP), std::u16::MAX);
+            regions.push((bg3_pattern_start, bg3_pattern_end));
+        }
+
+        if mode == 0 {
+            let bg4_pattern_start = self.bg_pattern_addr(BG::_4);
+            let bg4_pattern_end = std::cmp::max(bg4_pattern_start - 1 + (64 * ROW_HEIGHT_2BPP), std::u16::MAX);
+            regions.push((bg4_pattern_start, bg4_pattern_end));
+        }
+
+        regions
+    }
+
+    pub fn get_pattern_table_height(&self, bg: BG) -> u16 {
+        const TILE_SIZE_2BPP: u16 = 16;
+        const TILE_SIZE_4BPP: u16 = 32;
+        const TILE_SIZE_8BPP: u16 = 64;
+
+        let max_space = 0x10000 - (self.bg_pattern_addr(bg) as u32);
+        let rows = (max_space / 16) as u16;
+        match bg {
+            BG::_1 => match self.get_mode() {
+                0 => std::cmp::min(64, rows / TILE_SIZE_2BPP),
+                1 | 2 | 5 | 6 => std::cmp::min(64, rows / TILE_SIZE_4BPP),
+                3 | 4 => std::cmp::min(64, rows / TILE_SIZE_8BPP),
+                _ => 0
+            },
+            BG::_2 => match self.get_mode() {
+                0 | 4 | 5 => std::cmp::min(64, rows / TILE_SIZE_2BPP),
+                _ => std::cmp::min(64, rows / TILE_SIZE_4BPP),
+            },
+            BG::_3 => std::cmp::min(64, rows / TILE_SIZE_2BPP),
+            BG::_4 => std::cmp::min(64, rows / TILE_SIZE_2BPP),
         }
     }
 }

@@ -64,6 +64,22 @@ enum PPUState {
     VBlank              // Vertical blanking period.
 }
 
+// Background (for use by child modules)
+#[derive(Clone, Copy)]
+pub enum BG {
+    _1,
+    _2,
+    _3,
+    _4
+}
+
+impl BG {
+    fn all() -> &'static [BG; 4] {
+        const BGS: [BG; 4] = [BG::_1, BG::_2, BG::_3, BG::_4];
+        &BGS
+    }
+}
+
 pub struct PPU {
     state:          PPUState,
 

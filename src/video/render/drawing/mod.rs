@@ -1,6 +1,10 @@
-// Drawing.
+// Actually drawing the image!
+
+mod lines;
+mod types;
 
 use crate::video::{
+    BG,
     VideoMem,
     ram::{
         BGReg,
@@ -17,23 +21,28 @@ use crate::video::{
             BitsPerPixel,
             PatternMem
         },
-        bgcache::{
+        /*bgcache::{
             BGCache,
             BGData,
             TileAttributes
-        },
+        },*/
         palette::PaletteMem
     }
+};
+
+use types::*;
+use lines::{
+    BGData,
+    TileAttributes
 };
 
 const SCREEN_WIDTH: usize = 256;
 
 pub struct Renderer {
-    // caches...
     mode: VideoMode,
 
     bg_pattern_mem: [PatternMem; 4],
-    bg_cache: [BGCache; 4],
+    //bg_cache: [BGCache; 4],
 
     obj_pattern_mem: [PatternMem; 2],
 
@@ -51,12 +60,12 @@ impl Renderer {
                 PatternMem::new(BitsPerPixel::_2),
                 PatternMem::new(BitsPerPixel::_2)
             ],
-            bg_cache: [
+            /*bg_cache: [
                 BGCache::new(BGReg::default(), false, false),
                 BGCache::new(BGReg::default(), false, false),
                 BGCache::new(BGReg::default(), false, false),
                 BGCache::new(BGReg::default(), false, false),
-            ],
+            ],*/
 
             obj_pattern_mem: [
                 PatternMem::new(BitsPerPixel::_4),
@@ -90,12 +99,12 @@ impl Renderer {
             self.switch_mode(stored_mode);
         }
 
-        let mut recreate_borders = false;
+        let mut recreate_regions = false;
         let num_bgs = self.num_bgs();
 
         // Check background mem locations
         let regs = mem.get_bg_registers();
-        for (bg, (bg_pattern, cache)) in self.bg_pattern_mem.iter_mut().zip(self.bg_cache.iter_mut()).take(num_bgs).enumerate() {
+        /*for ((bg_pattern, cache), bg) in self.bg_pattern_mem.iter_mut().zip(self.bg_cache.iter_mut()).take(num_bgs).zip(BG::all().iter().cloned()) {
             if bg_pattern.get_start_addr() != regs.bg_pattern_addr(bg) {
                 let height = regs.get_pattern_table_height(regs.bg_pattern_addr(bg), bg_pattern.get_bits_per_pixel() as u32);
                 bg_pattern.set_addr(regs.bg_pattern_addr(bg), height as u16);    // TODO: figure out this u32, u16 mess
@@ -105,32 +114,37 @@ impl Renderer {
                 *cache = BGCache::new(regs.get_bg_settings(bg), regs.bg_large_tiles(bg), regs.use_wide_tiles());
                 recreate_borders = true;
             }
+        }*/
+        for (bg_pattern, bg) in self.bg_pattern_mem.iter_mut().take(num_bgs).zip(BG::all().iter().cloned()) {
+            if bg_pattern.get_start_addr() != regs.bg_pattern_addr(bg) {
+                let height = regs.get_pattern_table_height(bg);
+                bg_pattern.set_addr(regs.bg_pattern_addr(bg), height as u16);    // TODO: figure out this u32, u16 mess
+                recreate_regions = true;
+            }
         }
 
         // Check OAM dirtiness.
         //self.obj_mem.check_and_set_obj_settings(regs.get_object_settings());
         if self.obj_pattern_mem[0].get_start_addr() != regs.obj0_pattern_addr() {
             self.obj_pattern_mem[0].set_addr_obj(regs.obj0_pattern_addr());
-            recreate_borders = true;
+            recreate_regions = true;
         }
         if self.obj_pattern_mem[1].get_start_addr() != regs.objn_pattern_addr() {
             self.obj_pattern_mem[1].set_addr_obj(regs.objn_pattern_addr());
-            recreate_borders = true;
+            recreate_regions = true;
         }
 
         // If borders have changed, reset in vram.
-        if recreate_borders {
-            let borders = regs.get_vram_borders();
-            mem.vram_set_borders(&borders);
+        if recreate_regions {
+            let pattern_regions = regs.get_vram_pattern_regions();
+            mem.vram_set_pattern_regions(pattern_regions);
         }
 
         // If vram is dirty:
-        for (bg_pattern, cache) in self.bg_pattern_mem.iter_mut().zip(self.bg_cache.iter_mut()).take(num_bgs) {
-            let tiles_changed = if mem.vram_is_dirty(bg_pattern.get_start_addr()) {
+        for bg_pattern in self.bg_pattern_mem.iter_mut().take(num_bgs) {
+            if mem.vram_is_dirty(bg_pattern.get_start_addr()) {
                 bg_pattern.make_tiles(mem.get_vram());
-                true
-            } else { false };
-            cache.construct(&bg_pattern, &mem, tiles_changed);
+            }
         }
 
         for obj_pattern in self.obj_pattern_mem.iter_mut() {
@@ -225,6 +239,15 @@ impl Renderer {
             _ => 2
         }
     }
+
+    fn get_pattern_mem(&self, bg: BG) -> &PatternMem {
+        match bg {
+            BG::_1 => &self.bg_pattern_mem[0],
+            BG::_2 => &self.bg_pattern_mem[1],
+            BG::_3 => &self.bg_pattern_mem[2],
+            BG::_4 => &self.bg_pattern_mem[3],
+        }
+    }
 }
 
 // Drawing modes
@@ -246,13 +269,13 @@ impl Renderer {
             self.write_hires_pixel(out, main, sub);
         } else {
             let colour = match main {
-                Pixel::BG1(c) => window_regs.calc_colour_math_bg(c, sub, 0, x),
-                Pixel::BG2(c) => window_regs.calc_colour_math_bg(c, sub, 1, x),
-                Pixel::BG3(c) => window_regs.calc_colour_math_bg(c, sub, 2, x),
-                Pixel::BG4(c) => window_regs.calc_colour_math_bg(c, sub, 3, x),
+                Pixel::BG1(c) => window_regs.calc_colour_math_bg(c, sub, BG::_1, x),
+                Pixel::BG2(c) => window_regs.calc_colour_math_bg(c, sub, BG::_2, x),
+                Pixel::BG3(c) => window_regs.calc_colour_math_bg(c, sub, BG::_3, x),
+                Pixel::BG4(c) => window_regs.calc_colour_math_bg(c, sub, BG::_4, x),
                 Pixel::ObjHi(c) => window_regs.calc_colour_math_obj(c, sub, x),
                 Pixel::ObjLo(c) => c,
-                Pixel::None => window_regs.calc_colour_math_backdrop(self.palettes.get_bg_colour(0), sub, x),
+                Pixel::None => window_regs.calc_colour_math_backdrop(self.palettes.get_zero_colour(), sub, x),
             };
 
             out[0] = colour.r;
@@ -273,16 +296,16 @@ impl Renderer {
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
         let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 0, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
+        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
         let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 1, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
+        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
         let mut main_bg3_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg3_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 2, &mut main_bg3_pixels, &mut sub_bg3_pixels, y);
+        self.draw_bg_to_line(mem, BG::_3, &mut main_bg3_pixels, &mut sub_bg3_pixels, y);
         let mut main_bg4_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg4_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 3, &mut main_bg4_pixels, &mut sub_bg4_pixels, y);
+        self.draw_bg_to_line(mem, BG::_4, &mut main_bg4_pixels, &mut sub_bg4_pixels, y);
 
         for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
             let main = {
@@ -318,13 +341,13 @@ impl Renderer {
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
         let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 0, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
+        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
         let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 1, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
+        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
         let mut main_bg3_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg3_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 2, &mut main_bg3_pixels, &mut sub_bg3_pixels, y);
+        self.draw_bg_to_line(mem, BG::_3, &mut main_bg3_pixels, &mut sub_bg3_pixels, y);
 
         for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
             let main = {
@@ -358,10 +381,10 @@ impl Renderer {
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
         let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 0, &mut main_bg1_pixels, &mut sub_bg1_pixels, y); // TODO: draw offset bg to line
+        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y); // TODO: draw offset bg to line
         let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 1, &mut main_bg2_pixels, &mut sub_bg2_pixels, y); // TODO: draw offset bg to line
+        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y); // TODO: draw offset bg to line
 
         for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
             let main = {
@@ -393,10 +416,10 @@ impl Renderer {
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
         let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 0, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
+        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
         let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 1, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
+        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
 
         for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
             let main = {
@@ -428,10 +451,10 @@ impl Renderer {
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
         let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 0, &mut main_bg1_pixels, &mut sub_bg1_pixels, y); // TODO: draw offset bg to line
+        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y); // TODO: draw offset bg to line
         let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 1, &mut main_bg2_pixels, &mut sub_bg2_pixels, y); // TODO: draw offset bg to line
+        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y); // TODO: draw offset bg to line
 
         for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
             let main = {
@@ -463,10 +486,10 @@ impl Renderer {
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
         let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 0, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
+        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
         let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 1, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
+        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
 
         for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
             let main = {
@@ -498,7 +521,7 @@ impl Renderer {
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
         let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
         let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
-        self.draw_bg_to_line(mem, 0, &mut main_bg1_pixels, &mut sub_bg1_pixels, y); // TODO: draw offset bg to line
+        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y); // TODO: draw offset bg to line
 
         for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
             let main = {
@@ -558,68 +581,7 @@ impl Renderer {
     }
 }
 
-// Drawing types
-#[derive(Clone, Copy)]
-struct SpriteColour {
-    colour:     Colour, // The colour of the sprite
-    col_math:   bool    // Should it participate in colour math
-}
-
-#[derive(Clone, Copy)]
-enum SpritePixel {
-    Prio3(SpriteColour),
-    Prio2(SpriteColour),
-    Prio1(SpriteColour),
-    Prio0(SpriteColour),
-    Masked,
-    None
-}
-
-impl SpritePixel {
-    #[inline]
-    fn is_masked(&self) -> bool {
-        match self {
-            SpritePixel::Masked => true,
-            _ => false
-        }
-    }
-
-    fn pixel(&self) -> Pixel {
-        match self {
-            SpritePixel::Prio3(c) => if c.col_math {Pixel::ObjHi(c.colour)} else {Pixel::ObjLo(c.colour)},
-            SpritePixel::Prio2(c) => if c.col_math {Pixel::ObjHi(c.colour)} else {Pixel::ObjLo(c.colour)},
-            SpritePixel::Prio1(c) => if c.col_math {Pixel::ObjHi(c.colour)} else {Pixel::ObjLo(c.colour)},
-            SpritePixel::Prio0(c) => if c.col_math {Pixel::ObjHi(c.colour)} else {Pixel::ObjLo(c.colour)},
-            _ => panic!("Don't call this on pixels with no colour value.")
-        }
-    }
-}
-
-enum Pixel {
-    BG1(Colour),
-    BG2(Colour),
-    BG3(Colour),
-    BG4(Colour),
-    ObjHi(Colour),  // Uses object palette 4-7, uses colour math
-    ObjLo(Colour),  // Uses object palette 0-3, doesn't use colmath
-    None
-}
-
-impl Pixel {
-    fn any(self) -> Option<Colour> {
-        match self {
-            Pixel::BG1(c) => Some(c),
-            Pixel::BG2(c) => Some(c),
-            Pixel::BG3(c) => Some(c),
-            Pixel::BG4(c) => Some(c),
-            Pixel::ObjHi(c) => Some(c),
-            Pixel::ObjLo(c) => Some(c),
-            Pixel::None => None
-        }
-    }
-}
-
-// Generic drawing
+// Generic drawing utils.
 impl Renderer {
     // TODO: lots of cleanup here
     fn draw_sprites_to_line(&self, mem: &VideoMem, main_line: &mut [SpritePixel], sub_line: &mut [SpritePixel], y: u8) {
@@ -689,7 +651,7 @@ impl Renderer {
         });
     }
 
-    fn draw_bg_to_line(&self, mem: &VideoMem, bg: usize, main_line: &mut [BGData], sub_line: &mut [BGData], y: usize) {
+    fn draw_bg_to_line(&self, mem: &VideoMem, bg: BG, main_line: &mut [BGData], sub_line: &mut [BGData], y: usize) {
         let regs = mem.get_bg_registers();
         let window_regs = mem.get_window_registers();
         // TODO: separate mosaic stuff?
@@ -701,11 +663,10 @@ impl Renderer {
         let mut x_mosaic_offset = 0;
 
         let y_mosaic_offset = y % (mosaic_amount + 1);
-        let bg_y = (y + regs.get_bg_scroll_y(bg) - y_mosaic_offset) & self.bg_cache[bg].mask_y();
-        let bg_row = self.bg_cache[bg].ref_row(bg_y);
-
-        let x_offset = regs.get_bg_scroll_x(bg);
-        let mask_x = self.bg_cache[bg].mask_x();
+        let (_, mask_y) = regs.bg_size_mask(bg);
+        let bg_y = (y + regs.get_bg_scroll_y(bg) - y_mosaic_offset) & mask_y;
+        let mut bg_row = [BGData::default(); SCREEN_WIDTH];
+        self.get_row(self.get_pattern_mem(bg), mem, bg, bg_y, &mut bg_row);    // TODO: merge these functions together?
 
         let mut main_window = [true; SCREEN_WIDTH];
         window_regs.bg_window(bg, Screen::Main, &mut main_window);
@@ -713,7 +674,7 @@ impl Renderer {
         window_regs.bg_window(bg, Screen::Sub, &mut sub_window);
 
         for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
-            let bg_x = (x + x_offset - x_mosaic_offset) & mask_x;
+            let bg_x = x - x_mosaic_offset;
             if x_mosaic_offset == mosaic_amount {
                 x_mosaic_offset = 0;
             } else {
@@ -734,9 +695,9 @@ impl Renderer {
         let window_regs = mem.get_window_registers();
 
         let mut main_window = [true; SCREEN_WIDTH];
-        window_regs.bg_window(0, Screen::Main, &mut main_window);
+        window_regs.bg_window(BG::_1, Screen::Main, &mut main_window);
         let mut sub_window = [true; SCREEN_WIDTH];
-        window_regs.bg_window(0, Screen::Sub, &mut sub_window);
+        window_regs.bg_window(BG::_1, Screen::Sub, &mut sub_window);
 
         for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
             let (bg_x, bg_y) = regs.calc_mode_7(x as i16, y as i16);
@@ -762,7 +723,7 @@ impl Renderer {
             if let (Some(x_val), Some(y_val)) = (lookup_x, lookup_y) {
                 let m7x = if regs.mode_7_flip_x() {1023 - x_val} else {x_val};
                 let m7y = if regs.mode_7_flip_y() {1023 - y_val} else {y_val};
-                let pix = get_mode_7_pixel(vram, m7x, m7y);
+                let pix = get_mode_7_texel(vram, m7x, m7y);
                 let pix_out = if pix == 0 {None} else {Some(pix)};
 
                 if main_window[x] { // If pixel shows through main window.
@@ -781,16 +742,16 @@ impl Renderer {
         let window_regs = mem.get_window_registers();
 
         let mut main_window = [true; SCREEN_WIDTH];
-        window_regs.bg_window(0, Screen::Main, &mut main_window);
+        window_regs.bg_window(BG::_2, Screen::Main, &mut main_window);
         let mut sub_window = [true; SCREEN_WIDTH];
-        window_regs.bg_window(0, Screen::Sub, &mut sub_window);
+        window_regs.bg_window(BG::_2, Screen::Sub, &mut sub_window);
 
         let bg_y = y + (regs.get_mode7_scroll_y() as usize) % 1024;
 
         for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
             let bg_x = x + (regs.get_mode7_scroll_x() as usize) % 1024;
             // TODO: does this use reflect ?
-            let pix = get_mode_7_pixel(vram, bg_x, bg_y);
+            let pix = get_mode_7_texel(vram, bg_x, bg_y);
             if main_window[x] { // If pixel shows through main window.
                 *main = pix;
             }
@@ -844,7 +805,10 @@ impl Renderer {
     fn make_mode7_bg2_pixel(&self, texel: u8) -> Colour {
         self.palettes.get_bg_colour((texel & 0x7F) as usize)
     }
+}
 
+// Mode priority evaluation.
+impl Renderer {
     fn eval_mode_0(&self, sprite_pix: SpritePixel, bg1: BGData, bg2: BGData, bg3: BGData, bg4: BGData) -> Pixel {
         const BG1_PALETTE_OFFSET: u8 = 0;
         const BG2_PALETTE_OFFSET: u8 = 32;
@@ -1038,6 +1002,7 @@ impl Renderer {
     }
 }
 
+#[inline]
 fn sprite_size_lookup(size: u8) -> ((i16, u8), (i16, u8)) {
     match size {
         0 => ((8, 8), (16, 16)),
@@ -1052,10 +1017,10 @@ fn sprite_size_lookup(size: u8) -> ((i16, u8), (i16, u8)) {
     }
 }
 
-// Lookup mode 7 pixel using background coords.
+// Lookup mode 7 texel using background coords.
 // X and Y must be in range 0-1023.
 #[inline]
-fn get_mode_7_pixel(vram: &[u8], x: usize, y: usize) -> u8 {
+fn get_mode_7_texel(vram: &[u8], x: usize, y: usize) -> u8 {
     // Find tile num.
     let tile_x = x / 8;
     let tile_y = y / 8;
@@ -1063,11 +1028,11 @@ fn get_mode_7_pixel(vram: &[u8], x: usize, y: usize) -> u8 {
     let tile_num = vram[tile * 2] as usize;
 
     // Find pixel in tile.
-    let pix_x = x % 8;
-    let pix_y = y % 8;
-    let pix_num = (pix_y * 8) + pix_x;
+    let tex_x = x % 8;
+    let tex_y = y % 8;
+    let tex_num = (tex_y * 8) + tex_x;
     
     // Lookup pixel in vram.
     let tile_offset = tile_num * 128;
-    vram[tile_offset + (pix_num * 2) + 1]
+    vram[tile_offset + (tex_num * 2) + 1]
 }
