@@ -763,12 +763,13 @@ impl Renderer {
                 let m7x = if regs.mode_7_flip_x() {1023 - x_val} else {x_val};
                 let m7y = if regs.mode_7_flip_y() {1023 - y_val} else {y_val};
                 let pix = get_mode_7_pixel(vram, m7x, m7y);
+                let pix_out = if pix == 0 {None} else {Some(pix)};
 
                 if main_window[x] { // If pixel shows through main window.
-                    *main = Some(pix);
+                    *main = pix_out;
                 }
                 if sub_window[x] {  // If pixel shows through sub window.
-                    *sub = Some(pix);
+                    *sub = pix_out;
                 }
             }
         }
@@ -1029,7 +1030,7 @@ impl Renderer {
             Pixel::BG1(self.make_mode7_bg1_pixel(texel, direct_col))
         } else if let SpritePixel::Prio0(_) = sprite_pix {
             sprite_pix.pixel()
-        } else if ext_bg {
+        } else if ext_bg && bg2 != 0 {
             Pixel::BG2(self.make_mode7_bg2_pixel(bg2))
         } else {
             Pixel::None
