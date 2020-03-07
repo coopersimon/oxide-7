@@ -69,17 +69,6 @@ impl SNES {
         frame.copy_from_slice(&(*frame_in));
     }
 
-    // Step the device by one CPU cycle.
-    pub fn step(&mut self) -> bool {
-        // When NMI is triggered, disable rendering of new frames.
-        if self.cpu.step() {
-            self.cpu.enable_rendering(false);
-            true
-        } else {
-            false
-        }
-    }
-
     // Re-enable rendering of frames.
     pub fn enable_rendering(&mut self) {
         self.cpu.enable_rendering(true);
@@ -121,5 +110,25 @@ impl SNES {
     // Get the instruction at the current PC, with the next 3 bytes for context.
     pub fn get_instr(&mut self) -> [u8; 4] {
         self.cpu.get_instr()
+    }
+
+    pub fn start_frame(&mut self) {
+        self.cpu.start_frame(self.frame.clone());
+    }
+
+    // Step the device by one CPU cycle.
+    pub fn step(&mut self) -> bool {
+        // When NMI is triggered, disable rendering of new frames.
+        if self.cpu.step() {
+            self.cpu.enable_rendering(false);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn show_frame(&mut self, frame: &mut [u8]) {
+        let frame_in = self.frame.lock().unwrap();
+        frame.copy_from_slice(&(*frame_in));
     }
 }

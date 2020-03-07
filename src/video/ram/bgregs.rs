@@ -129,6 +129,9 @@ pub struct Registers {
         bg4_scroll_y:       u16,
 
         mode7_settings:     Mode7Settings,
+        mode7_prev:         u8, // The last written value to a mode 7 register.
+        mode7_scroll_x:     u16,
+        mode7_scroll_y:     u16,
         mode7_matrix_a:     u16,
         mode7_matrix_b:     u16,
         mode7_matrix_c:     u16,
@@ -163,6 +166,9 @@ impl Registers {
             bg4_scroll_y:       0,
 
             mode7_settings:     Mode7Settings::default(),
+            mode7_prev:         0,
+            mode7_scroll_x:     0,
+            mode7_scroll_y:     0,
             mode7_matrix_a:     0,
             mode7_matrix_b:     0,
             mode7_matrix_c:     0,
@@ -191,10 +197,14 @@ impl Registers {
 
     pub fn set_bg1_scroll_x(&mut self, data: u8) {
         self.bg1_scroll_x = make16!(data, hi!(self.bg1_scroll_x));
+        self.mode7_scroll_x = make16!(data, self.mode7_prev);
+        self.mode7_prev = data;
     }
 
     pub fn set_bg1_scroll_y(&mut self, data: u8) {
         self.bg1_scroll_y = make16!(data, hi!(self.bg1_scroll_y));
+        self.mode7_scroll_y = make16!(data, self.mode7_prev);
+        self.mode7_prev = data;
     }
 
     pub fn set_bg2_scroll_x(&mut self, data: u8) {
@@ -250,27 +260,48 @@ impl Registers {
     }
 
     pub fn set_mode7_matrix_a(&mut self, data: u8) {
-        self.mode7_matrix_a = make16!(data, hi!(self.mode7_matrix_a));
+        self.mode7_matrix_a = make16!(data, self.mode7_prev);
+        self.mode7_prev = data;
     }
 
     pub fn set_mode7_matrix_b(&mut self, data: u8) {
-        self.mode7_matrix_b = make16!(data, hi!(self.mode7_matrix_b));
+        self.mode7_matrix_b = make16!(data, self.mode7_prev);
+        self.mode7_prev = data;
     }
 
     pub fn set_mode7_matrix_c(&mut self, data: u8) {
-        self.mode7_matrix_c = make16!(data, hi!(self.mode7_matrix_c));
+        self.mode7_matrix_c = make16!(data, self.mode7_prev);
+        self.mode7_prev = data;
     }
 
     pub fn set_mode7_matrix_d(&mut self, data: u8) {
-        self.mode7_matrix_d = make16!(data, hi!(self.mode7_matrix_d));
+        self.mode7_matrix_d = make16!(data, self.mode7_prev);
+        self.mode7_prev = data;
     }
 
     pub fn set_mode7_centre_x(&mut self, data: u8) {
-        self.mode7_centre_x = make16!(data, hi!(self.mode7_centre_x));
+        self.mode7_centre_x = make16!(data, self.mode7_prev);
+        self.mode7_prev = data;
     }
 
     pub fn set_mode7_centre_y(&mut self, data: u8) {
-        self.mode7_centre_y = make16!(data, hi!(self.mode7_centre_y));
+        self.mode7_centre_y = make16!(data, self.mode7_prev);
+        self.mode7_prev = data;
+    }
+
+    pub fn read_mult_result_lo(&self) -> u8 {
+        let result = (self.mode7_matrix_a as i32) * (hi!(self.mode7_matrix_b) as i32);
+        lo24!(result as u32, u8)
+    }
+
+    pub fn read_mult_result_mid(&self) -> u8 {
+        let result = (self.mode7_matrix_a as i32) * (hi!(self.mode7_matrix_b) as i32);
+        mid24!(result as u32)
+    }
+
+    pub fn read_mult_result_hi(&self) -> u8 {
+        let result = (self.mode7_matrix_a as i32) * (hi!(self.mode7_matrix_b) as i32);
+        hi24!(result as u32)
     }
 
     // Getters for the renderer.
@@ -400,11 +431,11 @@ impl Registers {
     }
 
     pub fn get_mode7_scroll_x(&self) -> i16 {
-        (self.bg1_scroll_x & MODE_7_SCROLL_MASK) as i16
+        self.mode7_scroll_x as i16  // TODO: sign extend 13th bit and ignore top 3 (same for centre_x)
     }
 
     pub fn get_mode7_scroll_y(&self) -> i16 {
-        (self.bg1_scroll_y & MODE_7_SCROLL_MASK) as i16
+        self.mode7_scroll_y as i16  // TODO: sign extend 13th bit and ignore top 3 (same for centre_y)
     }
 
     // Returns the extend setting.

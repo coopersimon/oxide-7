@@ -1,11 +1,5 @@
 // Common utils
-
-// Interrupts that can be triggered from devices.
-#[derive(Clone, Copy, Debug)]
-pub enum Interrupt {
-    NMI,
-    IRQ
-}
+use bitflags::bitflags;
 
 /**** BIT MACROS ****/
 // Single bit selection.
@@ -159,4 +153,15 @@ macro_rules! lo32 {
     ($val:expr) => {
         lo24!($val, u16)
     };
+}
+
+// Interrupts that can be triggered from devices.
+bitflags! {
+    #[derive(Default)]
+    pub struct Interrupt: u8 {
+        const NMI   = bit!(0);  // Indicates that V-Blank and NMI have occurred.
+        const IRQ   = bit!(1);  // Indicates that an IRQ was triggered.
+
+        const VBLANK = bit!(2); // Indicates that V-Blank without NMI happened.
+    }
 }

@@ -33,7 +33,7 @@ pub struct CPU {
 
     // Status
     halt:   bool,
-    int:    Option<Interrupt>,  // Pending interrupts
+    int:    Interrupt,  // Pending interrupts
 
     // Memory
     mem:    MemBus
@@ -59,7 +59,7 @@ impl CPU {
             pc:     make16!(start_pc_hi, start_pc_lo),
 
             halt:   false,
-            int:    None,
+            int:    Interrupt::default(),
 
             mem:    bus
         }
@@ -67,23 +67,22 @@ impl CPU {
 
     // A single step of the CPU.
     // Executes an instruction and clocks other components.
-    // Returns true if an NMI interrupt was triggered (V-Blank).
+    // Returns true if V-Blank occurred.
     pub fn step(&mut self) -> bool {
         // Check for interrupts. TODO: allow multiple interrupts to trigger
-        if let Some(int) = self.int {
-            match int {
-                Interrupt::NMI => {
-                    self.trigger_interrupt(if self.is_e_set() {int::NMI_VECTOR_EMU} else {int::NMI_VECTOR});
-                    self.int = None;
-                    self.halt = false;
-                    return true;
-                },
-                Interrupt::IRQ => if !self.p.contains(PFlags::I) {
-                    self.trigger_interrupt(if self.is_e_set() {int::IRQ_VECTOR_EMU} else {int::IRQ_VECTOR})
-                }
+        if self.int.contains(Interrupt::NMI) {
+            self.trigger_interrupt(if self.is_e_set() {int::NMI_VECTOR_EMU} else {int::NMI_VECTOR});
+            self.int.remove(Interrupt::NMI | Interrupt::VBLANK);
+            self.halt = false;
+            return true;
+        } else if self.int.contains(Interrupt::VBLANK) {
+            self.int.remove(Interrupt::VBLANK);
+            return true;
+        } else if self.int.contains(Interrupt::IRQ) {
+            if !self.p.contains(PFlags::I) {
+                self.trigger_interrupt(if self.is_e_set() {int::IRQ_VECTOR_EMU} else {int::IRQ_VECTOR})
             }
-
-            self.int = None;
+            self.int.remove(Interrupt::IRQ);
             self.halt = false;
         } else if !self.halt {
             self.execute_instruction();
@@ -419,8 +418,7 @@ impl CPU {
 
     // Clock
     fn clock_inc(&mut self, cycles: usize) {
-        // TODO: H-blank? More than one interrupt set?
-        self.int = self.mem.clock(cycles);
+        self.int.insert(self.mem.clock(cycles));
     }
 }
 

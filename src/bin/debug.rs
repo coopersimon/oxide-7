@@ -11,6 +11,7 @@ macro_rules! make24 {
 
 pub fn debug_mode(snes: &mut SNES) {
     // Debug mode.
+    snes.start_frame();
     println!("Debug mode.");
     println!("Enter 'h' for help.");
     let mut breaks = std::collections::BTreeSet::new();
@@ -158,5 +159,7 @@ fn step_and_trace(snes: &mut SNES, stack_trace: &mut Vec<u32>, print: bool) {
         println!("${:06X}: ${:02X} ({:02X} {:02X} {:02X})", pc, instr[0], instr[1], instr[2], instr[3]);
     }
 
-    snes.step();
+    if snes.step() {
+        snes.start_frame();
+    }
 }

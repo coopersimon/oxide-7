@@ -212,6 +212,9 @@ impl WindowRegisters {
     pub fn set_video_select(&mut self, data: u8) {
         self.video_select = VideoSelect::from_bits_truncate(data);
         //println!("Video sel: {:X}", data);
+        if self.video_select.contains(VideoSelect::SCREEN_INTERLACE) {
+            panic!("Interlace enabled!")
+        }
     }
 
     // Getters - renderer side

@@ -121,8 +121,8 @@ pub struct RenderThread {
 
 impl RenderThread {
     pub fn new(mem: super::VRamRef) -> Self {
-        let (send_msg, recv_msg) = bounded(1);
-        let (send_reply, recv_reply) = bounded(1);
+        let (send_msg, recv_msg) = bounded(224);
+        let (send_reply, recv_reply) = bounded(224);
 
         std::thread::spawn(move || {
             use RendererMessage::*;

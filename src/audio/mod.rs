@@ -12,7 +12,7 @@ use std::sync::{
 };
 
 use crossbeam_channel::{
-    bounded,
+    unbounded,
     Sender
 };
 
@@ -30,7 +30,7 @@ pub struct APU {
 
 impl APU {
     pub fn new() -> Self {
-        let (command_tx, command_rx) = bounded(1);
+        let (command_tx, command_rx) = unbounded();
 
         let ports = [Arc::new(Mutex::new(0)), Arc::new(Mutex::new(0)), Arc::new(Mutex::new(0)), Arc::new(Mutex::new(0))];
 

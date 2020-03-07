@@ -391,33 +391,32 @@ impl SPC {
         let op2 = self.read_op(op2_mode);
         let (op1, op1_addr) = self.read_op_and_addr(op1_mode);
 
-        let result = op1.wrapping_add(op2).wrapping_add(self.carry());
-
-        let full_wraparound = (result == op1) && (op2 != 0);
-        self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
-        self.ps.set(PSFlags::V, ((result as i8) < (op1 as i8)) || full_wraparound);
-        self.ps.set(PSFlags::H, true);  // TODO
-        self.ps.set(PSFlags::Z, result == 0);
-        self.ps.set(PSFlags::C, (result < op1) || full_wraparound);
+        let result = self.arith(op1 as u16, op2 as u16);
 
         self.write_op(op1_addr, result);
     }
 
-    // op1 = op1 + op2 + C
+    // op1 = op1 - op2 - 1 + C
     fn sbc(&mut self, op1_mode: DataMode, op2_mode: DataMode) {
         let op2 = self.read_op(op2_mode);
         let (op1, op1_addr) = self.read_op_and_addr(op1_mode);
 
-        let result = op1.wrapping_sub(op2).wrapping_sub(1).wrapping_add(self.carry());
-
-        let full_wraparound = (result == op1) && (op2 != 0);
-        self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
-        self.ps.set(PSFlags::V, ((result as i8) > (op1 as i8)) || full_wraparound);
-        self.ps.set(PSFlags::H, true);  // TODO
-        self.ps.set(PSFlags::Z, result == 0);
-        self.ps.set(PSFlags::C, (result > op1) || full_wraparound);
+        let result = self.arith(op1 as u16, !(op2 as u16));
 
         self.write_op(op1_addr, result);
+    }
+
+    fn arith(&mut self, op1: u16, op2: u16) -> u8 {
+        let result = op1.wrapping_add(op2).wrapping_add(self.carry());
+        let final_result = lo!(result);
+
+        self.ps.set(PSFlags::N, test_bit!(result, 7));
+        self.ps.set(PSFlags::V, test_bit!(!(op1 ^ op2) & (op1 ^ result), 7));
+        self.ps.set(PSFlags::H, test_bit!((op1 & 0xF) + (op2 & 0xF) + self.carry(), 4));
+        self.ps.set(PSFlags::Z, final_result == 0);
+        self.ps.set(PSFlags::C, test_bit!(result, 8));
+
+        final_result
     }
 
     // 16-bit add
@@ -449,6 +448,19 @@ impl SPC {
 
         self.set_ya(result);
     }
+
+    /*fn arithw(&mut self, op1: u16, op2: u16) -> u8 {
+        let result = op1.wrapping_add(op2).wrapping_add(self.carry());
+        let final_result = lo!(result);
+
+        self.ps.set(PSFlags::N, test_bit!(result, 7));
+        self.ps.set(PSFlags::V, test_bit!(!(op1 ^ op2) & (op1 ^ result), 7));
+        self.ps.set(PSFlags::H, test_bit!((op1 & 0xF) + (op2 & 0xF) + self.carry(), 4));
+        self.ps.set(PSFlags::Z, final_result == 0);
+        self.ps.set(PSFlags::C, test_bit!(result, 8));
+
+        final_result
+    }*/
 
     fn mul(&mut self) {
         let result = (self.a as u16).wrapping_mul(self.y as u16);
@@ -579,7 +591,7 @@ impl SPC {
 
     fn rol(&mut self, op_mode: DataMode) {
         let (op, write_mode) = self.read_op_and_addr(op_mode);
-        let result = (op << 1) | self.carry();
+        let result = (op << 1) | (self.carry() as u8);
 
         self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
         self.ps.set(PSFlags::Z, result == 0);
@@ -591,7 +603,7 @@ impl SPC {
     fn ror(&mut self, op_mode: DataMode) {
         let (op, write_mode) = self.read_op_and_addr(op_mode);
         let carry = self.carry() << 7;
-        let result = (op >> 1) | carry;
+        let result = (op >> 1) | (carry as u8);
 
         self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
         self.ps.set(PSFlags::Z, result == 0);
@@ -954,16 +966,20 @@ impl SPC {
         if ((self.a & 0xF) > 0x9) || self.ps.contains(PSFlags::H) {
             self.a += 0x6;
         }
+        self.ps.set(PSFlags::N, test_bit!(self.a, 7, u8));
+        self.ps.set(PSFlags::Z, self.a == 0);
     }
 
     fn das(&mut self) {
-        if (self.a > 0x99) || self.ps.contains(PSFlags::C) {
+        if self.ps.contains(PSFlags::C) {
             self.a -= 0x60;
-            self.ps.insert(PSFlags::C);
+            //self.ps.insert(PSFlags::C);
         }
-        if ((self.a & 0xF) > 0x9) || self.ps.contains(PSFlags::H) {
+        if self.ps.contains(PSFlags::H) {
             self.a -= 0x6;
         }
+        self.ps.set(PSFlags::N, test_bit!(self.a, 7, u8));
+        self.ps.set(PSFlags::Z, self.a == 0);
     }
 
     fn xcn(&mut self) {
@@ -1001,8 +1017,8 @@ impl SPC {
 // Misc helper functions
 impl SPC {
     #[inline]
-    fn carry(&self) -> u8 {
-        (self.ps & PSFlags::C).bits()
+    fn carry(&self) -> u16 {
+        (self.ps & PSFlags::C).bits() as u16
     }
 
     #[inline]

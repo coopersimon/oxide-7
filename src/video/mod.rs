@@ -44,13 +44,14 @@ bitflags! {
 // Signal from the PPU.
 #[derive(PartialEq)]
 pub enum PPUSignal {
-    None,       // No signal.
-    NMI,        // NMI triggered by entering V-blank period.
-    IRQ,        // IRQ triggered by X or Y coord.
-    VBlank,     // V-blank period entered without NMI.
-    HBlank,     // H-Blank period entered.
-    Delay,      // Delay CPU by 40 cycles in middle of scanline.
-    FrameStart, // Frame begin. Reset HDMA.
+    None,           // No signal.
+    Int(Interrupt), // Interrupt(s) or VBlank triggered:
+        //NMI triggered by entering V-blank period.
+        //IRQ triggered by X or Y coord.
+        //V-Blank period entered without NMI.
+    HBlank,         // H-Blank period entered.
+    Delay,          // Delay CPU by 40 cycles in middle of scanline.
+    FrameStart,     // Frame begin. Reset HDMA.
 }
 
 // PPU internal state
@@ -261,11 +262,7 @@ impl PPU {
                     }
                 }
 
-                if self.int_enable.contains(IntEnable::ENABLE_NMI) {
-                    self.trigger_interrupt(Interrupt::NMI)
-                } else {
-                    PPUSignal::VBlank
-                }
+                self.trigger_interrupt(Interrupt::NMI)
             },
             PPUState::HBlankRight => {
                 self.toggle_hblank(true);
@@ -288,16 +285,21 @@ impl PPU {
     }
 
     // Set the appropriate bit and return the appropriate signal.
+    // TODO: allow triggering of multiple interrupts
+    // TODO: handle this better in general
     fn trigger_interrupt(&mut self, int: Interrupt) -> PPUSignal {
-        match int {
-            Interrupt::NMI => {
-                self.nmi_flag |= bit!(7);
-                PPUSignal::NMI
-            },
-            Interrupt::IRQ => {
-                self.irq_flag |= bit!(7);
-                PPUSignal::IRQ
-            },
+        if int.contains(Interrupt::NMI) {
+            self.nmi_flag |= bit!(7);
+            if self.int_enable.contains(IntEnable::ENABLE_NMI) {
+                PPUSignal::Int(Interrupt::NMI)
+            } else {
+                PPUSignal::Int(Interrupt::VBLANK)
+            }
+        } else if int.contains(Interrupt::IRQ) {
+            self.irq_flag |= bit!(7);
+            PPUSignal::Int(Interrupt::IRQ)
+        } else {
+            PPUSignal::None
         }
     }
 

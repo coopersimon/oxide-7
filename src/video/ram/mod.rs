@@ -52,7 +52,9 @@ impl VideoMem {
 
     pub fn read(&mut self, addr: u8) -> u8 {
         match addr {
-            0x34..=0x37 => 0, // Mult result
+            0x34 => self.bgregs.read_mult_result_lo(),
+            0x35 => self.bgregs.read_mult_result_mid(),
+            0x36 => self.bgregs.read_mult_result_hi(),
             0x38 => self.oam.read(),
             0x39 => self.vram.read_lo(),
             0x3A => self.vram.read_hi(),

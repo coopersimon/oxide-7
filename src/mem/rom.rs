@@ -143,12 +143,12 @@ impl Cart for HiROM {
         let internal_bank = bank % 0x80;
 
         match internal_bank {
-            0x00..=0x3F if addr >= 0x8000 => (self.rom.read(internal_bank, addr % 0x8000), if bank < 0x80 {timing::SLOW_MEM_ACCESS} else {self.rom_speed}),
+            0x00..=0x3F if addr >= 0x8000 => (self.rom.read(internal_bank, addr), if bank < 0x80 {timing::SLOW_MEM_ACCESS} else {self.rom_speed}),
             0x20..=0x3F if addr >= 0x6000 => {
                 let ram_bank = ((internal_bank - 0x20) as u32) * HIROM_RAM_BANK_SIZE;
                 (self.ram.read(ram_bank + (addr as u32 - 0x6000)), timing::SLOW_MEM_ACCESS)
             },
-            0x40..=0x7F => (self.rom.read(internal_bank % 0x40, addr % 0x8000), if bank < 0x80 {timing::SLOW_MEM_ACCESS} else {self.rom_speed}),
+            0x40..=0x7F => (self.rom.read(internal_bank % 0x40, addr), if bank < 0x80 {timing::SLOW_MEM_ACCESS} else {self.rom_speed}),
             _ => (0, timing::SLOW_MEM_ACCESS)
         }
     }

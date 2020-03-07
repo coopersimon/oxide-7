@@ -158,30 +158,27 @@ impl MemBus {
     }
 
     // Clock the PPU and APU, and handle any signals coming from the PPU.
-    pub fn clock(&mut self, cycles: usize) -> Option<Interrupt> {
+    pub fn clock(&mut self, cycles: usize) -> Interrupt {
         self.bus_b.clock_apu(cycles);
 
         match self.bus_b.ppu.clock(cycles) {
-            PPUSignal::NMI => {
-                self.joypads.prepare_read();
-                Some(Interrupt::NMI)
-            },
-            PPUSignal::IRQ => Some(Interrupt::IRQ),
-            PPUSignal::VBlank => {
-                self.joypads.prepare_read();
-                None
-            },
+            PPUSignal::Int(i) => {
+                if i.intersects(Interrupt::NMI | Interrupt::VBLANK) {
+                    self.joypads.prepare_read();
+                }
+                i
+            }
             PPUSignal::HBlank => {
                 if self.hdma_active != 0 {
                     self.hdma_transfer();
                 }
-                None
+                Interrupt::default()
             },
             PPUSignal::Delay => {
                 self.bus_b.clock_apu(PAUSE_LEN);
                 match self.bus_b.ppu.clock(PAUSE_LEN) {
-                    PPUSignal::IRQ => Some(Interrupt::IRQ), // This is the only one that should happen here.
-                    PPUSignal::None => None,
+                    PPUSignal::Int(i) if i == Interrupt::IRQ => i, // This is the only one that should happen here.
+                    PPUSignal::None => Interrupt::default(),
                     _ => unreachable!(),
                 }
             },
@@ -192,9 +189,9 @@ impl MemBus {
                         self.dma_channels[chan].start_hdma();
                     }
                 }
-                None
+                Interrupt::default()
             },
-            PPUSignal::None => None
+            PPUSignal::None => Interrupt::default()
         }
     }
 
@@ -449,14 +446,16 @@ impl MemBus {
 }
 
 // Amount of cycles to wait before telling the APU to clock.
-const APU_CYCLE_BATCH: usize = 100;
+const APU_CYCLE_BATCH: usize = 50;
 
 // Address Bus B, used for hardware registers.
 struct AddrBusB {
     ppu:        PPU,
     apu:        APU,
 
-    apu_cycle_count:    usize
+    apu_cycle_count:    usize,
+
+    open_bus:   u8
 }
 
 impl AddrBusB {
@@ -465,7 +464,9 @@ impl AddrBusB {
             ppu: PPU::new(),
             apu: APU::new(),
 
-            apu_cycle_count:    0
+            apu_cycle_count:    0,
+
+            open_bus:   0,
         }
     }
 
@@ -480,7 +481,7 @@ impl AddrBusB {
                 3   => self.apu.read_port_3(),
                 _   => unreachable!(),
             },
-            _ => 0//unreachable!("Reading from open bus: {:X}", addr)
+            _ => self.open_bus//unreachable!("Reading from open bus: {:X}", addr)
         }
     }
 
@@ -494,8 +495,10 @@ impl AddrBusB {
                 3   => self.apu.write_port_3(data),
                 _   => unreachable!(),
             },
+            0x34..=0x3F => {},
             _ => {}//panic!("Tried to write silly shit: {:X} to {:X}", data, addr),
         }
+        self.open_bus = data;
     }
 
     // Increase APU cycle count and send message if threshold is reached.
