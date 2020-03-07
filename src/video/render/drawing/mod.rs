@@ -104,17 +104,6 @@ impl Renderer {
 
         // Check background mem locations
         let regs = mem.get_bg_registers();
-        /*for ((bg_pattern, cache), bg) in self.bg_pattern_mem.iter_mut().zip(self.bg_cache.iter_mut()).take(num_bgs).zip(BG::all().iter().cloned()) {
-            if bg_pattern.get_start_addr() != regs.bg_pattern_addr(bg) {
-                let height = regs.get_pattern_table_height(regs.bg_pattern_addr(bg), bg_pattern.get_bits_per_pixel() as u32);
-                bg_pattern.set_addr(regs.bg_pattern_addr(bg), height as u16);    // TODO: figure out this u32, u16 mess
-                recreate_borders = true;
-            }
-            if cache.check_if_valid(regs.get_bg_settings(bg), regs.bg_large_tiles(bg), regs.use_wide_tiles()) {
-                *cache = BGCache::new(regs.get_bg_settings(bg), regs.bg_large_tiles(bg), regs.use_wide_tiles());
-                recreate_borders = true;
-            }
-        }*/
         for (bg_pattern, bg) in self.bg_pattern_mem.iter_mut().take(num_bgs).zip(BG::all().iter().cloned()) {
             if bg_pattern.get_start_addr() != regs.bg_pattern_addr(bg) {
                 let height = regs.get_pattern_table_height(bg);
@@ -140,20 +129,24 @@ impl Renderer {
             mem.vram_set_pattern_regions(pattern_regions);
         }
 
+        let mut read = Vec::new();
+
         // If vram is dirty:
         for bg_pattern in self.bg_pattern_mem.iter_mut().take(num_bgs) {
             if mem.vram_is_dirty(bg_pattern.get_start_addr()) {
+                read.push(bg_pattern.get_start_addr());
                 bg_pattern.make_tiles(mem.get_vram());
             }
         }
 
         for obj_pattern in self.obj_pattern_mem.iter_mut() {
             if mem.vram_is_dirty(obj_pattern.get_start_addr()) {
+                read.push(obj_pattern.get_start_addr());
                 obj_pattern.make_tiles(mem.get_vram());
             }
         }
 
-        mem.vram_reset_dirty_range();
+        mem.vram_reset_dirty_range(&read);
 
         // Check CGRAM dirtiness
         if mem.is_cgram_bg_dirty() {
@@ -236,7 +229,9 @@ impl Renderer {
         match self.mode {
             _0 => 4,
             _1 => 3,
-            _ => 2
+            _2 | _3 | _4 | _5 => 2,
+            _6 => 1,
+            _7 => 0,
         }
     }
 
@@ -846,7 +841,7 @@ impl Renderer {
 
     fn eval_mode_1(&self, bg3_hi: bool, sprite_pix: SpritePixel, bg1: BGData, bg2: BGData, bg3: BGData) -> Pixel {
         const BG3_PALETTE_OFFSET: u8 = 0;
-        if bg3_hi && bg3.texel != 0 {
+        if bg3_hi && bg3.texel != 0 && bg3.attrs.contains(TileAttributes::PRIORITY) {
             Pixel::BG3(self.make_2bpp_pixel(bg3, BG3_PALETTE_OFFSET))
         } else if let SpritePixel::Prio3(_) = sprite_pix {
             sprite_pix.pixel()

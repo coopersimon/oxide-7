@@ -114,9 +114,11 @@ impl VRAM {
     }
 
     // Reset the dirty range once reading is finished.
-    pub fn reset_dirty_range(&mut self) {
-        for (_, dirty) in self.pattern_regions.iter_mut() {
-            *dirty = false;
+    pub fn reset_dirty_range(&mut self, read: &[u16]) {
+        for ((start, _), dirty) in self.pattern_regions.iter_mut() {
+            if read.contains(start) {
+                *dirty = false;
+            }
         }
     }
 

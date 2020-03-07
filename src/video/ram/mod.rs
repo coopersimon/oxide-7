@@ -198,8 +198,8 @@ impl VideoMem {
         self.vram.dirty_range(start_addr)
     }
 
-    pub fn vram_reset_dirty_range(&mut self) {
-        self.vram.reset_dirty_range();
+    pub fn vram_reset_dirty_range(&mut self, read: &[u16]) {
+        self.vram.reset_dirty_range(read);
     }
 
     pub fn vram_set_pattern_regions(&mut self, regions: Vec<(u16, u16)>) {
