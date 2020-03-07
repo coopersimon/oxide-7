@@ -9,6 +9,14 @@ use crate::video::BG;
 
 bitflags! {
     #[derive(Default)]
+    pub struct ScreenDisplay: u8 {
+        const F_BLANK       = bit!(7);
+        const BRIGHTNESS    = bits![3, 2, 1, 0];
+    }
+}
+
+bitflags! {
+    #[derive(Default)]
     pub struct ObjectSettings: u8 {
         const SIZE      = bits![7, 6, 5];
         const SELECT    = bits![4, 3];
@@ -108,7 +116,7 @@ const SUB_MAP_SIZE: u16 = SUB_MAP_LEN * SUB_MAP_LEN * 2;
 
 pub struct Registers {
 
-        screen_display:     u8,
+        screen_display:     ScreenDisplay,
         object_settings:    ObjectSettings,
         bg_mode:            BGMode,
         mosaic_settings:    Mosaic,
@@ -145,7 +153,7 @@ pub struct Registers {
 impl Registers {
     pub fn new() -> Self {
         Registers {
-            screen_display:     0,
+            screen_display:     ScreenDisplay::default(),
             object_settings:    ObjectSettings::default(),
             bg_mode:            BGMode::default(),
             mosaic_settings:    Mosaic::default(),
@@ -182,7 +190,7 @@ impl Registers {
 
     // Setters (CPU side)
     pub fn set_screen_display(&mut self, data: u8) {
-        self.screen_display = data;
+        self.screen_display = ScreenDisplay::from_bits_truncate(data);
     }
 
     pub fn set_object_settings(&mut self, data: u8) {
@@ -311,8 +319,12 @@ impl Registers {
 // Getters for the renderer.
 impl Registers {
 
-    pub fn get_screen_display(&self) -> u8 {
-        self.screen_display
+    pub fn in_fblank(&self) -> bool {
+        self.screen_display.contains(ScreenDisplay::F_BLANK)
+    }
+
+    pub fn get_brightness(&self) -> u8 {
+        (self.screen_display & ScreenDisplay::BRIGHTNESS).bits()
     }
 
     pub fn get_mode(&self) -> u8 {
@@ -474,11 +486,6 @@ impl Registers {
 
     pub fn mode_7_flip_y(&self) -> bool {
         self.mode7_settings.contains(Mode7Settings::FLIP_Y)
-    }
-
-    // Other checks
-    pub fn in_fblank(&self) -> bool {
-        test_bit!(self.screen_display, 7, u8)
     }
 }
 

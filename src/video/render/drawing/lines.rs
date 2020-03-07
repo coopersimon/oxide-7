@@ -50,12 +50,10 @@ impl Renderer {
         let (tile_mask, tile_shift) = if regs.bg_large_tiles(bg) {(LARGE_TILE_MASK, LARGE_TILE_SHIFT)} else {(SMALL_TILE_MASK, SMALL_TILE_SHIFT)};  // TODO: wide tiles
         let map_size = regs.bg_size_tiles(bg);
         let wide_map = map_size.0 >= 32;
-        //let bg_shift = 9 - tile_shift; // The shift to work out what sub-map the tile is in.
 
         let start_addr = regs.bg_map_addr(bg) as usize;
 
         let (mask_x, _) = regs.bg_size_mask(bg);
-        //let pix_y = (y + regs.get_bg_scroll_y(bg)) & mask_y;    // Y pixel value in the expanded map.
         let tile_y = y & tile_mask;                         // Y index into tile.
         let map_y = y >> tile_shift;                        // Y index into VRAM.
         let hi_submap = map_y >= 32;                            // Hi submap: B, C or D.

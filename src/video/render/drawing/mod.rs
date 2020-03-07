@@ -7,7 +7,6 @@ use crate::video::{
     BG,
     VideoMem,
     ram::{
-        BGReg,
         Mode7Extend,
         ObjectSettings,
         Screen,
@@ -21,11 +20,6 @@ use crate::video::{
             BitsPerPixel,
             PatternMem
         },
-        /*bgcache::{
-            BGCache,
-            BGData,
-            TileAttributes
-        },*/
         palette::PaletteMem
     }
 };
@@ -42,8 +36,6 @@ pub struct Renderer {
     mode: VideoMode,
 
     bg_pattern_mem: [PatternMem; 4],
-    //bg_cache: [BGCache; 4],
-
     obj_pattern_mem: [PatternMem; 2],
 
     palettes: PaletteMem
@@ -60,12 +52,6 @@ impl Renderer {
                 PatternMem::new(BitsPerPixel::_2),
                 PatternMem::new(BitsPerPixel::_2)
             ],
-            /*bg_cache: [
-                BGCache::new(BGReg::default(), false, false),
-                BGCache::new(BGReg::default(), false, false),
-                BGCache::new(BGReg::default(), false, false),
-                BGCache::new(BGReg::default(), false, false),
-            ],*/
 
             obj_pattern_mem: [
                 PatternMem::new(BitsPerPixel::_4),
@@ -218,8 +204,6 @@ impl Renderer {
                 }
             },
             _7 => {}
-                //panic!("Mode 7 not supported!");
-            //}
         }
     }
 
@@ -245,23 +229,30 @@ impl Renderer {
     }
 }
 
+// Apply brightness to colour component.
+macro_rules! apply_brightness {
+    ($col:expr, $brightness:expr) => {
+        (($col as usize) * ($brightness as usize) / 0xF) as u8
+    };
+}
+
 // Drawing modes
 impl Renderer {
     #[inline]
-    fn write_hires_pixel(&self, out: &mut [u8], main: Pixel, sub: Colour) {
+    fn write_hires_pixel(&self, out: &mut [u8], main: Pixel, sub: Colour, brightness: u8) {
         let main_col = main.any().unwrap_or(self.palettes.get_bg_colour(0));
-        out[0] = sub.r;
-        out[1] = sub.g;
-        out[2] = sub.b;
-        out[4] = main_col.r;
-        out[5] = main_col.g;
-        out[6] = main_col.b;
+        out[0] = apply_brightness!(sub.r, brightness);
+        out[1] = apply_brightness!(sub.g, brightness);
+        out[2] = apply_brightness!(sub.b, brightness);
+        out[4] = apply_brightness!(main_col.r, brightness);
+        out[5] = apply_brightness!(main_col.g, brightness);
+        out[6] = apply_brightness!(main_col.b, brightness);
     }
 
     #[inline]
-    fn write_pixel(&self, window_regs: &WindowRegisters, out: &mut [u8], main: Pixel, sub: Colour, x: u8) {
+    fn write_pixel(&self, window_regs: &WindowRegisters, out: &mut [u8], main: Pixel, sub: Colour, brightness: u8, x: u8) {
         if window_regs.use_pseudo_hires() {
-            self.write_hires_pixel(out, main, sub);
+            self.write_hires_pixel(out, main, sub, brightness);
         } else {
             let colour = match main {
                 Pixel::BG1(c) => window_regs.calc_colour_math_bg(c, sub, BG::_1, x),
@@ -273,16 +264,21 @@ impl Renderer {
                 Pixel::None => window_regs.calc_colour_math_backdrop(self.palettes.get_zero_colour(), sub, x),
             };
 
-            out[0] = colour.r;
-            out[1] = colour.g;
-            out[2] = colour.b;
-            out[4] = colour.r;
-            out[5] = colour.g;
-            out[6] = colour.b;
+            let r = apply_brightness!(colour.r, brightness);
+            let g = apply_brightness!(colour.g, brightness);
+            let b = apply_brightness!(colour.b, brightness);
+
+            out[0] = r;
+            out[1] = g;
+            out[2] = b;
+            out[4] = r;
+            out[5] = g;
+            out[6] = b;
         }
     }
 
     fn draw_line_mode_0(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
+        let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
         let target_start = y * SCREEN_WIDTH;
 
@@ -323,11 +319,12 @@ impl Renderer {
                 window_regs.get_fixed_colour()
             };
 
-            self.write_pixel(window_regs, out, main, sub, x as u8);
+            self.write_pixel(window_regs, out, main, sub, brightness, x as u8);
         }
     }
 
     fn draw_line_mode_1(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
+        let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
         let target_start = y * SCREEN_WIDTH;
 
@@ -363,11 +360,12 @@ impl Renderer {
                 window_regs.get_fixed_colour()
             };
 
-            self.write_pixel(window_regs, out, main, sub, x as u8);
+            self.write_pixel(window_regs, out, main, sub, brightness, x as u8);
         }
     }
 
     fn draw_line_mode_2(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
+        let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
         let target_start = y * SCREEN_WIDTH;
 
@@ -398,11 +396,12 @@ impl Renderer {
                 window_regs.get_fixed_colour()
             };
 
-            self.write_pixel(window_regs, out, main, sub, x as u8);
+            self.write_pixel(window_regs, out, main, sub, brightness, x as u8);
         }
     }
 
     fn draw_line_mode_3(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
+        let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
         let target_start = y * SCREEN_WIDTH;
 
@@ -433,11 +432,12 @@ impl Renderer {
                 window_regs.get_fixed_colour()
             };
 
-            self.write_pixel(window_regs, out, main, sub, x as u8);
+            self.write_pixel(window_regs, out, main, sub, brightness, x as u8);
         }
     }
 
     fn draw_line_mode_4(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
+        let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
         let target_start = y * SCREEN_WIDTH;
 
@@ -468,11 +468,12 @@ impl Renderer {
                 window_regs.get_fixed_colour()
             };
 
-            self.write_pixel(window_regs, out, main, sub, x as u8);
+            self.write_pixel(window_regs, out, main, sub, brightness, x as u8);
         }
     }
 
     fn draw_line_mode_5(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
+        let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
         let target_start = y * SCREEN_WIDTH;
 
@@ -503,11 +504,12 @@ impl Renderer {
                 window_regs.get_fixed_colour()
             };
 
-            self.write_hires_pixel(out, main, sub);
+            self.write_hires_pixel(out, main, sub, brightness);
         }
     }
 
     fn draw_line_mode_6(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
+        let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
         let target_start = y * SCREEN_WIDTH;
 
@@ -533,11 +535,12 @@ impl Renderer {
                 window_regs.get_fixed_colour()
             };
 
-            self.write_hires_pixel(out, main, sub);
+            self.write_hires_pixel(out, main, sub, brightness);
         }
     }
 
     fn draw_line_mode_7(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
+        let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
         let target_start = y * SCREEN_WIDTH;
 
@@ -571,7 +574,7 @@ impl Renderer {
                 window_regs.get_fixed_colour()
             };
 
-            self.write_pixel(window_regs, out, main, sub, x as u8);
+            self.write_pixel(window_regs, out, main, sub, brightness, x as u8);
         }
     }
 }
