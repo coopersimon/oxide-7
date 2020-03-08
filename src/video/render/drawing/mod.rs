@@ -148,7 +148,7 @@ impl Renderer {
     fn switch_mode(&mut self, mode: VideoMode) {
         use VideoMode::*;
 
-        println!("Switching mode to {:?}", mode);
+        //println!("Switching mode to {:?}", mode);
 
         self.mode = mode;
         match mode {

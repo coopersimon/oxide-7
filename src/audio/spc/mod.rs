@@ -473,15 +473,23 @@ impl SPC {
     }
 
     fn div(&mut self) {
-        let ya = self.get_ya();
-        let result = lo!(ya.wrapping_div(self.x as u16));
-        let modulo = lo!(ya % (self.x as u16));
+        if self.x == 0 {
+            self.ps.insert(PSFlags::N | PSFlags::V);
 
-        self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
-        self.ps.set(PSFlags::Z, result == 0);
+            self.y = 0;
+            self.a = 0xFF;
+        } else {
+            let ya = self.get_ya();
+            let result = lo!(ya.wrapping_div(self.x as u16));
+            let modulo = lo!(ya % (self.x as u16));
 
-        self.y = modulo;
-        self.a = result;
+            self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
+            //self.ps.set(PSFlags::V, test_bit!(!(op1 ^ op2) & (op1 ^ result), 7)); // TODO
+            self.ps.set(PSFlags::Z, result == 0);
+
+            self.y = modulo;
+            self.a = result;
+        }
     }
 
     fn inc(&mut self, op_mode: DataMode) {
