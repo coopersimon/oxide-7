@@ -260,7 +260,7 @@ impl WindowRegisters {
         self.colour_add_select.contains(ColourAddSelect::USE_SUB)
     }
 
-    // Returns true if direct colour mode should be used for modes 3 and 4 8bpp backgrounds.
+    // Returns true if direct colour mode should be used for modes 3, 4 and 7 8bpp backgrounds.
     pub fn use_direct_colour(&self) -> bool {
         self.colour_add_select.contains(ColourAddSelect::DIRECT_COL)
     }
@@ -369,7 +369,7 @@ impl WindowRegisters {
                 self.test_inside_window_2(x) != self.invert_window_2_col()
             },
             (false, false) => { // No windows enabled for colour
-                true
+                false
             }
         }
     }
@@ -567,7 +567,7 @@ impl WindowRegisters {
                 let i_r = main_col.r as u16 + sub.r as u16;
                 let i_g = main_col.g as u16 + sub.g as u16;
                 let i_b = main_col.b as u16 + sub.b as u16;
-                (i_r | (i_r >> 8), i_g | (i_g >> 8), i_b | (i_b >> 8))
+                (i_r, i_g, i_b)
             } else {
                 let i_r = main_col.r as i16 - sub.r as i16;
                 let i_g = main_col.g as i16 - sub.g as i16;
