@@ -401,14 +401,14 @@ impl Registers {
         }
     }
 
-    // Get size of the background in tiles.
-    pub fn bg_size_tiles(&self, bg: BG) -> (usize, usize) {
+    // If this returns true, the background specified is "wide" (64 tiles). If false it is 32 tiles wide.
+    pub fn bg_wide_map(&self, bg: BG) -> bool {
         let map_mirror = MapMirror::from(self.get_bg_settings(bg));
         match map_mirror {
-            MapMirror::None => (32, 32),
-            MapMirror::X    => (64, 32),
-            MapMirror::Y    => (32, 64),
-            MapMirror::Both => (64, 64),
+            MapMirror::None |
+            MapMirror::Y    => false,
+            MapMirror::X |
+            MapMirror::Both => true,
         }
     }
 

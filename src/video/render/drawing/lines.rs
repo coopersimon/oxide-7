@@ -48,8 +48,7 @@ impl Renderer {
         // The mask determines which parts of the coords are used to index into the tile.
         // The shift determines which parts of the coords are used to look for the tile num in VRAM.
         let (tile_mask, tile_shift) = if regs.bg_large_tiles(bg) {(LARGE_TILE_MASK, LARGE_TILE_SHIFT)} else {(SMALL_TILE_MASK, SMALL_TILE_SHIFT)};  // TODO: wide tiles
-        let map_size = regs.bg_size_tiles(bg);
-        let wide_map = map_size.0 >= 32;
+        let wide_map = regs.bg_wide_map(bg);
 
         let start_addr = regs.bg_map_addr(bg) as usize;
 
