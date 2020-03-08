@@ -11,11 +11,11 @@ A SNES emulator written in Rust.
 * Final Fantasy 2 (IV) (Regressed. There is some sort of corrupted overlay (I think BG3 in Mode 1))
 * Final Fantasy 3 (VI) (Title looks ok, reads out of bounds after)
 * Earthbound (Works pretty well)
-* Super Castlevania IV (Works well up until BCD is needed)
-* Super Mario Kart (breaks immediately because of BCD)
+* Super Castlevania IV (Works pretty well then tries to divide by 0 (???))
+* Super Mario Kart (shows initial nintendo logo then freezes.)
 * Mortal Kombat (developer intro plays and then it freezes - it used to get a bit further I think?)
 * SimCity (works pretty well. gameplay tutorial intro is a bit messy)
-* Super Mario All-Stars (graphics look ok but game is unresponsive)
+* Super Mario All-Stars (mostly works. game select menu is unresponsive for some reason.)
 * Aladdin (intro works, title screen is a bit glitchy, gameplay responds but then stops after a short while)
 * Zombies Ate My Neighbors! (works pretty well)
 * Mega Man X (first screen shows up ok, then freezes. This used to show the whole intro (before commit ~#100)
@@ -24,10 +24,10 @@ A SNES emulator written in Rust.
 * Kirby's Dreamland 3 (Unrecognised ROM config)
 * Kirby's Super Star (Unrecognised ROM config)
 * Donkey Kong Country (intro and title screen look good, gameplay doesn't show sprites (but some issues are resolved otherwise))
-* Donkey Kong Country 2 (the same as above and eventually breaks due to BCD!)
-* Chrono Trigger (uses interlacing and breaks anyway due to BCD)
+* Donkey Kong Country 2 (the same as above and eventually breaks due to audio not returning what it expects (this seems like a regression?))
+* Chrono Trigger (uses interlacing)
 * Pilotwings (uses interlacing)
-* Super Baseball 2020 (intro and title look good, game breaks as soon as gameplay is about to begin due to BCD)
+* Super Baseball 2020 (works pretty well)
 
 ### TODO:
 
@@ -44,7 +44,7 @@ A SNES emulator written in Rust.
 - Audio output (DAC emulation)
 
 ##### System
-- BCD mode for ADC and SBC (lots of games actually use this)
+- Test - does BCD mode work? Also it could do with some cleanup.
 - Ensure timing is correct
 
 ### Style guide (?)

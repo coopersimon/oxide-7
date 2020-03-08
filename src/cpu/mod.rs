@@ -429,9 +429,7 @@ impl CPU {
         let op = self.read_op(data_mode, self.is_m_set());
 
         if self.p.contains(PFlags::D) {
-            panic!("BCD ADC is not supported.");
-            //let (c_4, c_8, c_12, c_16) = self.dec_arith(op);
-            //self.dec_add_adjust(c_4, c_8, c_12, c_16);
+            self.dec_add(op);
         } else {
             self.bin_arith(op);
         }
@@ -441,9 +439,7 @@ impl CPU {
         let op = self.read_op(data_mode, self.is_m_set());
 
         if self.p.contains(PFlags::D) {
-            panic!("BCD SBC is not supported.");
-            //let (c_4, c_8, c_12, c_16) = self.dec_arith(!op);
-            //self.dec_sub_adjust(c_4, c_8, c_12, c_16);
+            self.dec_sub(op);
         } else {
             self.bin_arith(!op);
         }
@@ -1101,114 +1097,102 @@ impl CPU {
         }
     }
 
-    // Decimal add/sub operation.
-    // Returns intermediate adjust values (lo -> hi)
-    fn dec_arith(&mut self, op: u16) -> (bool, bool, bool, bool) {
+    // Decimal add/sub operations.
+    // Ugly...
+    fn dec_add(&mut self, op: u16) {
         if self.is_m_set() {
             let acc = lo!(self.a) as u16;
             let add_op = lo!(op) as u16;
-            let result = acc.wrapping_add(add_op).wrapping_add(self.carry());
-            let carry_4 = test_bit!((acc & 0xF) + (add_op & 0xF) + self.carry(), 4);
-            let carry_8 = test_bit!(result, 8);
+            let mut nybble_lo = (acc & 0xF).wrapping_add(add_op & 0xF).wrapping_add(self.carry());
+            if nybble_lo > 0x9 {
+                nybble_lo = ((nybble_lo + 0x6) & 0xF) + 0x10; // TODO: check if this can be simplified
+            }
+            let nybble_hi = (acc & 0xF0).wrapping_add(add_op & 0xF0).wrapping_add(nybble_lo);
+            let result = if nybble_hi > 0x99 {
+                nybble_hi.wrapping_add(0x60)
+            } else {nybble_hi};
+
+            self.p.set(PFlags::N, test_bit!(result, 7));
+            // V..?
+            self.p.set(PFlags::Z, lo!(result) == 0);
+            self.p.set(PFlags::C, test_bit!(result, 8));
 
             self.a = set_lo!(self.a, lo!(result));
-
-            (carry_4 || (result & 0xF) > 0x9,
-            carry_8 || (result & 0xFF) > 0x99,
-            false,
-            false)
         } else {
             let acc = self.a as u32;
             let add_op = op as u32;
-            let result = acc.wrapping_add(add_op).wrapping_add(self.carry() as u32);
-            let carry_4 = test_bit!((self.a & 0xF) + (op & 0xF) + self.carry(), 4);
-            let carry_8 = test_bit!((self.a & 0xFF) + (op & 0xFF) + self.carry(), 8);
-            let carry_12 = test_bit!((self.a & 0xFFF) + (op & 0xFFF) + self.carry(), 12);
-            let carry_16 = test_bit!(result, 16, u32);
+            let mut nybble_0 = (acc & 0xF) + (add_op & 0xF) + (self.carry() as u32);    // TODO: wrapping add
+            if nybble_0 > 0x9 {
+                nybble_0 = nybble_0 + 0x6;
+            }
+            let mut nybble_1 = (acc & 0xF0) + (add_op & 0xF0) + nybble_0;
+            if nybble_1 > 0x99 {
+                nybble_1 = nybble_1 + 0x60;
+            }
+            let mut nybble_2 = (acc & 0xF00) + (add_op & 0xF00) + nybble_1;
+            if nybble_2 > 0x999 {
+                nybble_2 = nybble_2 + 0x600;
+            }
+            let nybble_3 = (acc & 0xF000) + (add_op & 0xF000) + nybble_2;
+            let result = if nybble_3 > 0x9999 {
+                nybble_3 + 0x6000
+            } else {nybble_3};
+
+            self.p.set(PFlags::N, test_bit!(result, 15, u32));
+            // V..?
+            self.p.set(PFlags::Z, lo32!(result) == 0);
+            self.p.set(PFlags::C, test_bit!(result, 16, u32));
 
             self.a = lo32!(result);
-
-            (carry_4 || (result & 0xF) > 0x9,
-            carry_8 || (result & 0xFF) > 0x99,
-            carry_12 || (result & 0xFFF) > 0x999,
-            carry_16 || (result & 0xFFFF) > 0x9999)
         }
     }
 
-    fn dec_add_adjust(&mut self, c_4: bool, c_8: bool, c_12: bool, c_16: bool) {
-        let mut acc = if self.is_m_set() {
-            lo!(self.a) as u32
+    fn dec_sub(&mut self, op: u16) {
+        if self.is_m_set() {
+            let acc = lo!(self.a) as u16;
+            let sub_op = lo!(op) as u16;
+            let mut nybble_lo = (acc & 0xF).wrapping_sub(sub_op & 0xF).wrapping_add(self.carry()).wrapping_sub(1) as i16;
+            if nybble_lo < 0 {
+                nybble_lo = ((nybble_lo - 0x6) & 0xF) - 0x10;
+            }
+            let nybble_hi = (acc & 0xF0).wrapping_sub(sub_op & 0xF0).wrapping_add(nybble_lo as u16) as i16;
+            let result = if nybble_hi < 0 {
+                nybble_hi.wrapping_sub(0x60)
+            } else {nybble_hi} as u16;
+
+            self.p.set(PFlags::N, test_bit!(result, 7));    // this might always be 0
+            // V..?
+            self.p.set(PFlags::Z, lo!(result) == 0);
+            self.p.set(PFlags::C, test_bit!(result, 8));
+
+            self.a = set_lo!(self.a, lo!(result));
         } else {
-            self.a as u32
-        };
+            let acc = self.a as u32;
+            let sub_op = op as u32;
+            let mut nybble_0 = (acc & 0xF).wrapping_sub(sub_op & 0xF).wrapping_add(self.carry() as u32).wrapping_sub(1) as i32;
+            if nybble_0 < 0 {
+                nybble_0 = ((nybble_0 - 0x6) & 0xF) - 0x10;
+            }
+            let mut nybble_1 = (acc & 0xF0).wrapping_sub(sub_op & 0xF0).wrapping_add(nybble_0 as u32) as i32;
+            if nybble_1 < 0 {
+                nybble_1 = ((nybble_1 - 0x60) & 0xFF) - 0x100;  // ? also: simplify?
+            }
+            let mut nybble_2 = (acc & 0xF00).wrapping_sub(sub_op & 0xF00).wrapping_add(nybble_1 as u32) as i32;
+            if nybble_2 < 0 {
+                nybble_2 = ((nybble_2 - 0x600) & 0xFFF) - 0x1000;  // ? also: simplify?
+            }
+            let nybble_3 = (acc & 0xF000).wrapping_sub(sub_op & 0xF000).wrapping_add(nybble_2 as u32) as i32;
+            let result = if nybble_3 < 0 {
+                nybble_3.wrapping_sub(0x6000)
+            } else {nybble_3} as u32;
 
-        if c_4 {
-            acc = acc.wrapping_add(0x6);
-        }
-        if c_8 {
-            acc = acc.wrapping_add(0x60);
-        }
-        if c_12 {
-            acc = acc.wrapping_add(0x600);
-        }
-        if c_16 {
-            acc = acc.wrapping_add(0x6000);
-        }
+            self.p.set(PFlags::N, test_bit!(result, 15, u32));    // this might always be 0
+            // V..?
+            self.p.set(PFlags::Z, lo32!(result) == 0);
+            self.p.set(PFlags::C, test_bit!(result, 16, u32));
 
-        let result = lo32!(acc);
-
-        self.a = if self.is_m_set() {
-            let result8 = lo!(result);
-            self.p.set(PFlags::N, test_bit!(result8, 7, u8));
-            //self.p.set(PFlags::V, test_bit!(!(acc ^ op) & (acc ^ result), 7));
-            self.p.set(PFlags::Z, result8 == 0);
-            self.p.set(PFlags::C, c_8);
-            set_lo!(self.a, result8)
-        } else {
-            self.p.set(PFlags::N, test_bit!(result, 15));
-            //self.p.set(PFlags::V, test_bit!(!(acc ^ op) & (acc ^ result), 7));
-            self.p.set(PFlags::Z, result == 0);
-            self.p.set(PFlags::C, c_16);
-            result
-        };
-    }
-
-    fn dec_sub_adjust(&mut self, c_4: bool, c_8: bool, c_12: bool, c_16: bool) {
-        let mut acc = if self.is_m_set() {
-            lo!(self.a) as u32
-        } else {
-            self.a as u32
-        };
-
-        if c_4 {
-            acc = acc.wrapping_sub(0x6);
+            self.a = lo32!(result);
         }
-        if c_8 {
-            acc = acc.wrapping_sub(0x60);
-        }
-        if c_12 {
-            acc = acc.wrapping_sub(0x600);
-        }
-        if c_16 {
-            acc = acc.wrapping_sub(0x6000);
-        }
-
-        let result = lo32!(acc);
-
-        self.a = if self.is_m_set() {
-            let result8 = lo!(result);
-            self.p.set(PFlags::N, test_bit!(result8, 7, u8));
-            //self.p.set(PFlags::V, test_bit!(!(acc ^ op) & (acc ^ result), 7));
-            self.p.set(PFlags::Z, result8 == 0);
-            self.p.set(PFlags::C, c_8);
-            set_lo!(self.a, result8)
-        } else {
-            self.p.set(PFlags::N, test_bit!(result, 15));
-            //self.p.set(PFlags::V, test_bit!(!(acc ^ op) & (acc ^ result), 7));
-            self.p.set(PFlags::Z, result == 0);
-            self.p.set(PFlags::C, c_16);
-            result
-        };
     }
 
     // Compare register with operand, and set flags accordingly.
