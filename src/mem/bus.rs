@@ -136,7 +136,7 @@ impl MemBus {
 
                 0x4000..=0x4015 |
                 0x4017..=0x41FF => XSLOW_MEM_ACCESS,
-                0x4016          => {self.joypads.latch_all(); XSLOW_MEM_ACCESS},
+                0x4016          => {self.joypads.latch_all(data); XSLOW_MEM_ACCESS},
 
                 0x4200..=0x420d => {self.write_reg(offset, data); FAST_MEM_ACCESS},
 

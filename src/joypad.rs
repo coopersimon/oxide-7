@@ -29,6 +29,7 @@ pub struct JoypadMem {
 
     counter:    bool,       // Reg 4200 bit 0
     ready:      bool,       // Reg 4212 bit 0
+    strobe:     bool,       // Reg 4016 bit 0
 }
 
 impl JoypadMem {
@@ -40,6 +41,7 @@ impl JoypadMem {
 
             counter:        false,
             ready:          true,
+            strobe:         false,
         }
     }
 
@@ -77,9 +79,17 @@ impl JoypadMem {
     }
 
     // Call to latch all joypads.
-    pub fn latch_all(&mut self) {
-        for j in self.joypads.iter_mut() {
-            j.latch();
+    pub fn latch_all(&mut self, data: u8) {
+        // Write 1 to strobe.
+        if test_bit!(data, 0, u8) {
+            self.strobe = true;
+        } else {
+            if self.strobe {
+                for j in self.joypads.iter_mut() {
+                    j.latch();
+                }
+            }
+            self.strobe = false;
         }
     }
 
