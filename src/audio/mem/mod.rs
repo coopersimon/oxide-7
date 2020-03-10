@@ -10,6 +10,7 @@ use std::sync::{
 
 use crate::mem::RAM;
 use timer::Timer;
+use super::dsp::DSP;
 
 bitflags! {
     struct SPCControl: u8 {
@@ -43,7 +44,7 @@ pub struct SPCBus {
     // Registers
     control:        SPCControl,
     dsp_reg_addr:   u8,
-    dsp_reg_data:   u8,
+    dsp:            DSP,
 
     // Port data sent in from CPU.
     port_0_in:      u8,
@@ -71,7 +72,7 @@ impl SPCBus {
 
             control:        SPCControl::ROM_ENABLE | SPCControl::CLEAR_PORT_32 | SPCControl::CLEAR_PORT_10,
             dsp_reg_addr:   0,
-            dsp_reg_data:   0,
+            dsp:            DSP::new(),
 
             port_0_in:      0,
             port_1_in:      0,
@@ -94,7 +95,7 @@ impl SPCBus {
             0xF1 => 0,
 
             0xF2 => self.dsp_reg_addr,
-            0xF3 => self.dsp_reg_data,
+            0xF3 => self.dsp.read(self.dsp_reg_addr),
 
             0xF4 => self.port_0_in,
             0xF5 => self.port_1_in,
@@ -118,7 +119,7 @@ impl SPCBus {
             0xF1 => self.set_control(data),
 
             0xF2 => self.dsp_reg_addr = data,
-            0xF3 => self.dsp_reg_data = data,
+            0xF3 => self.dsp.write(self.dsp_reg_addr, data),
 
             0xF4 => *self.port_0_out.lock().unwrap() = data,
             0xF5 => *self.port_1_out.lock().unwrap() = data,
@@ -163,15 +164,20 @@ impl SPCBus {
     fn set_control(&mut self, data: u8) {
         let control = SPCControl::from_bits_truncate(data);
 
-        if control.contains(SPCControl::ENABLE_TIMER_0) {
+        /*if control.contains(SPCControl::ENABLE_TIMER_0) {
             self.timer_0.reset();
+        } else {
+            // stop timer
         }
         if control.contains(SPCControl::ENABLE_TIMER_1) {
             self.timer_1.reset();
         }
         if control.contains(SPCControl::ENABLE_TIMER_2) {
             self.timer_2.reset();
-        }
+        }*/
+        self.timer_0.reset();
+        self.timer_1.reset();
+        self.timer_2.reset();
 
         if control.contains(SPCControl::CLEAR_PORT_10) {
             self.port_0_in = 0;

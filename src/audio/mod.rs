@@ -1,6 +1,8 @@
 // APU
 // Consists of a CPU interface, the SPC-700 8-bit processor, and an 8-channel DSP.
 
+mod dsp;
+mod mem;
 mod spc;
 mod spcthread;
 

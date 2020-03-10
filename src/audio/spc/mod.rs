@@ -1,8 +1,7 @@
 // SPC-700 Audio processor
-mod mem;
 mod types;
 
-pub use mem::SPCBus;
+use super::mem::SPCBus;
 use types::*;
 
 pub struct SPC {

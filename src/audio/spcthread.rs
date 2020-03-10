@@ -9,9 +9,9 @@ use crossbeam_channel::Receiver;
 
 use std::thread;
 
-use super::spc::{
-    SPC,
-    SPCBus
+use super::{
+    spc::SPC,
+    mem::SPCBus
 };
 use crate::constants;
 
