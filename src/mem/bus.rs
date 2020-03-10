@@ -215,6 +215,7 @@ impl MemBus {
 impl MemBus {
     fn make_cart(cart_path: &str, save_path: &str) -> Box<dyn Cart> {
         let rom_file = File::open(cart_path).expect(&format!("Couldn't open file {}", cart_path));
+        let rom_size = rom_file.metadata().expect("Couldn't get metadata for file.").len();
 
         let mut reader = BufReader::new(rom_file);
         
@@ -224,7 +225,7 @@ impl MemBus {
         reader.seek(SeekFrom::Start(0x7FC0)).expect("Couldn't seek to cartridge header.");
         reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
 
-        if (buf[0x15] & 0x21) == 0x20 {
+        if /*(buf[0x15] & 0x21) == 0x20 && */(0x400 << buf[0x17]) == rom_size {
             let save_file_size = 0x400 << buf[0x18];    // TODO: check if there should be save data at all.
             let sram = SRAM::new(save_path, save_file_size).expect("Couldn't make save file.");
             return Box::new(LoROM::new(reader, sram/*, test_bit!(buf[0x15], 4, u8)*/));
@@ -234,7 +235,7 @@ impl MemBus {
         reader.seek(SeekFrom::Start(0xFFC0)).expect("Couldn't seek to cartridge header.");
         reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
 
-        if (buf[0x15] & 0x21) == 0x21 {
+        if /*(buf[0x15] & 0x21) == 0x21 && */(0x400 << buf[0x17]) == rom_size {
             let save_file_size = 0x400 << buf[0x18];    // TODO: check if there should be save data at all.
             let sram = SRAM::new(save_path, save_file_size).expect("Couldn't make save file.");
             return Box::new(HiROM::new(reader, sram/*, test_bit!(buf[0x15], 4, u8)*/));

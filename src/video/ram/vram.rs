@@ -6,7 +6,7 @@ bitflags! {
     #[derive(Default)]
     struct PortControl: u8 {
         const INC =      bit!(7);
-        const REMAP =    bits![3, 2]; // TODO
+        const REMAP =    bits![3, 2];
         const INC_RATE = bits![1, 0];
     }
 }
@@ -41,9 +41,6 @@ impl VRAM {
 
     pub fn set_port_control(&mut self, data: u8) {
         self.port_control = PortControl::from_bits_truncate(data);
-        if self.port_control.contains(PortControl::REMAP) {
-            panic!("Remap VRAM not implemented!");
-        }
     }
 
     pub fn set_addr_lo(&mut self, addr: u8) {
@@ -59,7 +56,7 @@ impl VRAM {
     }
 
     pub fn read_lo(&mut self) -> u8 {
-        let ret = self.data[self.byte_addr as usize];
+        let ret = self.data[self.remap_addr() as usize];
 
         if !self.port_control.contains(PortControl::INC) {
             self.inc_addr();
@@ -69,7 +66,7 @@ impl VRAM {
     }
 
     pub fn read_hi(&mut self) -> u8 {
-        let ret = self.data[self.byte_addr.wrapping_add(1) as usize];
+        let ret = self.data[self.remap_addr().wrapping_add(1) as usize];
 
         if self.port_control.contains(PortControl::INC) {
             self.inc_addr();
@@ -79,9 +76,10 @@ impl VRAM {
     }
 
     pub fn write_lo(&mut self, data: u8) {
-        self.data[self.byte_addr as usize] = data;
+        let addr = self.remap_addr();
+        self.data[addr as usize] = data;
 
-        self.set_dirty(self.byte_addr);
+        self.set_dirty(addr);
 
         if !self.port_control.contains(PortControl::INC) {
             self.inc_addr();
@@ -89,7 +87,7 @@ impl VRAM {
     }
 
     pub fn write_hi(&mut self, data: u8) {
-        let addr = self.byte_addr.wrapping_add(1);
+        let addr = self.remap_addr().wrapping_add(1);
         self.data[addr as usize] = data;
 
         self.set_dirty(addr);
@@ -149,6 +147,32 @@ impl VRAM {
             if (addr >= *start) && (addr <= *end) {
                 *dirty = true;
             }
+        }
+    }
+
+    #[inline]
+    fn remap_addr(&self) -> u16 {
+        match (self.port_control & PortControl::REMAP).bits() >> 2 {
+            0 => self.byte_addr,
+            1 => {
+                let upper = self.byte_addr & 0xFE00;
+                let middle = (self.byte_addr & 0x01C0) >> 6;
+                let lower = (self.byte_addr & 0x003F) << 3;
+                upper | lower | middle
+            },
+            2 => {
+                let upper = self.byte_addr & 0xFC00;
+                let middle = (self.byte_addr & 0x0380) >> 7;
+                let lower = (self.byte_addr & 0x007F) << 3;
+                upper | lower | middle
+            },
+            3 => {
+                let upper = self.byte_addr & 0xF800;
+                let middle = (self.byte_addr & 0x0700) >> 8;
+                let lower = (self.byte_addr & 0x00FF) << 3;
+                upper | lower | middle
+            },
+            _ => unreachable!()
         }
     }
 }

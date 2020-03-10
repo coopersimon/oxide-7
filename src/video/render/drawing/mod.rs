@@ -662,7 +662,7 @@ impl Renderer {
 
         let y_mosaic_offset = y % (mosaic_amount + 1);
         let (_, mask_y) = regs.bg_size_mask(bg);
-        let bg_y = (y + regs.get_bg_scroll_y(bg) - y_mosaic_offset) & mask_y;
+        let bg_y = (y - y_mosaic_offset + regs.get_bg_scroll_y(bg)) & mask_y;
         let mut bg_row = [BGData::default(); SCREEN_WIDTH];
         self.get_row(self.get_pattern_mem(bg), mem, bg, bg_y, &mut bg_row);    // TODO: merge these functions together?
 
