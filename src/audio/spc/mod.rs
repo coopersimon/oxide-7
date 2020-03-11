@@ -291,15 +291,15 @@ impl SPC {
 
             0x9F => self.xcn(),
 
-            0xAE => self.a = self.stack_pop(),
-            0x8E => self.ps = PSFlags::from_bits_truncate(self.stack_pop()),
-            0xCE => self.x = self.stack_pop(),
-            0xEE => self.y = self.stack_pop(),
+            0xAE => self.a = self.pop(),
+            0x8E => self.ps = PSFlags::from_bits_truncate(self.pop()),
+            0xCE => self.x = self.pop(),
+            0xEE => self.y = self.pop(),
 
-            0x2D => self.stack_push(self.a),
-            0x0D => self.stack_push(self.ps.bits()),
-            0x4D => self.stack_push(self.x),
-            0x6D => self.stack_push(self.y),
+            0x2D => self.push(self.a),
+            0x0D => self.push(self.ps.bits()),
+            0x4D => self.push(self.x),
+            0x6D => self.push(self.y),
 
             0x2F => self.branch_always(),
             0xF0 => self.branch_flag(PSFlags::Z, true),
@@ -358,7 +358,7 @@ impl SPC {
             0xF1 => self.tcall(0xC0),
 
             0x6F => self.ret(),
-            0x7F => self.ret1(),
+            0x7F => self.reti(),
 
             0x0F => self.brk(),
 
@@ -430,6 +430,8 @@ impl SPC {
         self.ps.set(PSFlags::Z, result == 0);
         self.ps.set(PSFlags::C, result < ya);
 
+        self.clock_inc(SPC_OP);
+
         self.set_ya(result);
     }
 
@@ -444,6 +446,8 @@ impl SPC {
         self.ps.set(PSFlags::H, true);  // TODO
         self.ps.set(PSFlags::Z, result == 0);
         self.ps.set(PSFlags::C, result > ya);
+
+        self.clock_inc(SPC_OP);
 
         self.set_ya(result);
     }
@@ -469,6 +473,8 @@ impl SPC {
 
         self.y = hi!(result);
         self.a = lo!(result);
+
+        self.clock_inc(SPC_OP * 8);
     }
 
     fn div(&mut self) {
@@ -489,6 +495,8 @@ impl SPC {
             self.y = modulo;
             self.a = result;
         }
+
+        self.clock_inc(SPC_OP * 11);
     }
 
     fn inc(&mut self, op_mode: DataMode) {
@@ -498,6 +506,10 @@ impl SPC {
 
         self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
         self.ps.set(PSFlags::Z, result == 0);
+
+        if write_mode.internal() {
+            self.clock_inc(SPC_OP);
+        }
 
         self.write_op(write_mode, result);
     }
@@ -509,6 +521,10 @@ impl SPC {
 
         self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
         self.ps.set(PSFlags::Z, result == 0);
+
+        if write_mode.internal() {
+            self.clock_inc(SPC_OP);
+        }
 
         self.write_op(write_mode, result);
     }
@@ -582,6 +598,10 @@ impl SPC {
         self.ps.set(PSFlags::Z, result == 0);
         self.ps.set(PSFlags::C, test_bit!(op, 7, u8));
 
+        if write_mode.internal() {
+            self.clock_inc(SPC_OP);
+        }
+
         self.write_op(write_mode, result);
     }
 
@@ -592,6 +612,10 @@ impl SPC {
         self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
         self.ps.set(PSFlags::Z, result == 0);
         self.ps.set(PSFlags::C, test_bit!(op, 0, u8));
+
+        if write_mode.internal() {
+            self.clock_inc(SPC_OP);
+        }
 
         self.write_op(write_mode, result);
     }
@@ -604,6 +628,10 @@ impl SPC {
         self.ps.set(PSFlags::Z, result == 0);
         self.ps.set(PSFlags::C, test_bit!(op, 7, u8));
 
+        if write_mode.internal() {
+            self.clock_inc(SPC_OP);
+        }
+
         self.write_op(write_mode, result);
     }
 
@@ -615,6 +643,10 @@ impl SPC {
         self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
         self.ps.set(PSFlags::Z, result == 0);
         self.ps.set(PSFlags::C, test_bit!(op, 0, u8));
+
+        if write_mode.internal() {
+            self.clock_inc(SPC_OP);
+        }
 
         self.write_op(write_mode, result);
     }
@@ -667,6 +699,8 @@ impl SPC {
         let op = data & 1;
 
         self.ps.set(PSFlags::C, (self.ps & PSFlags::C) != PSFlags::from_bits_truncate(op));
+
+        self.clock_inc(SPC_OP);
     }
 
     // C = C | m.b / C = C | !m.b
@@ -678,11 +712,14 @@ impl SPC {
         if op != 0 {
             self.ps.insert(PSFlags::C);
         }
+
+        self.clock_inc(SPC_OP);
     }
 
     // C = !C
     fn notc(&mut self) {
         self.ps.toggle(PSFlags::C);
+        self.clock_inc(SPC_OP * 2);
     }
 
     // C = m.b
@@ -703,15 +740,19 @@ impl SPC {
             self.read_data(addr) & !bit!(bit)
         };
 
+        self.clock_inc(SPC_OP);
+
         self.write_data(addr, data);
     }
 
     fn set_flag(&mut self, flag: PSFlags) {
         self.ps.insert(flag);
+        self.clock_inc(SPC_OP); // TODO: 2 cycles for EI
     }
 
     fn clear_flag(&mut self, flag: PSFlags) {
         self.ps.remove(flag);
+        self.clock_inc(SPC_OP); // TODO: 2 cycles for DI
     }
 
     fn cmp(&mut self, op1_mode: DataMode, op2_mode: DataMode) {
@@ -722,6 +763,8 @@ impl SPC {
         self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
         self.ps.set(PSFlags::Z, result == 0);
         self.ps.set(PSFlags::C, op1 >= op2);
+
+        self.clock_inc(SPC_OP); // TODO: check if this is _always_ needed
     }
 
     fn cmpw(&mut self) {
@@ -747,6 +790,8 @@ impl SPC {
         self.ps.set(PSFlags::N, test_bit!(flag_check, 7, u8));
         self.ps.set(PSFlags::Z, flag_check == 0);
 
+        self.clock_inc(SPC_OP);
+
         self.write_data(addr, result);
     }
 
@@ -760,6 +805,8 @@ impl SPC {
 
         self.ps.set(PSFlags::N, test_bit!(flag_check, 7, u8));
         self.ps.set(PSFlags::Z, flag_check == 0);
+
+        self.clock_inc(SPC_OP);
 
         self.write_data(addr, result);
     }
@@ -797,6 +844,8 @@ impl SPC {
     fn mov_x_sp(&mut self) {
         self.x = self.sp;
 
+        self.clock_inc(SPC_OP);
+
         self.ps.set(PSFlags::N, test_bit!(self.x, 7, u8));
         self.ps.set(PSFlags::Z, self.x == 0);
     }
@@ -804,6 +853,8 @@ impl SPC {
     // Move X into SP.
     fn mov_sp_x(&mut self) {
         self.sp = self.x;
+
+        self.clock_inc(SPC_OP);
     }
 
     // Load word into YA register, and set flags.
@@ -813,6 +864,8 @@ impl SPC {
         self.ps.set(PSFlags::N, test_bit!(data, 15));
         self.ps.set(PSFlags::Z, data == 0);
 
+        self.clock_inc(SPC_OP);
+
         self.set_ya(data);
     }
 
@@ -821,7 +874,19 @@ impl SPC {
         let addr = self.fetch();
         let ya = self.get_ya();
 
+        //self.clock_inc(SPC_OP);   // TODO - check
+
         self.write_op_16(addr, ya);
+    }
+
+    fn pop(&mut self) -> u8 {
+        self.clock_inc(SPC_OP * 2);
+        self.stack_pop()
+    }
+
+    fn push(&mut self, data: u8) {
+        self.clock_inc(SPC_OP * 2);
+        self.stack_push(data);
     }
 }
 
@@ -830,6 +895,8 @@ impl SPC {
     // Branch using relative offset.
     fn branch(&mut self, rel: i16) {
         self.pc = self.pc.wrapping_add(rel as u16);
+
+        self.clock_inc(SPC_OP * 2);
     }
 
     // Always branch.
@@ -855,6 +922,8 @@ impl SPC {
 
         let imm = (self.fetch() as i8) as i16;
 
+        self.clock_inc(SPC_OP);
+
         if test_bit!(data, bit_num, u8) == set {
             self.branch(imm);
         }
@@ -866,6 +935,8 @@ impl SPC {
         let data = self.read_data(addr);
 
         let imm = (self.fetch() as i8) as i16;
+
+        self.clock_inc(SPC_OP);
 
         if data != self.a {
             self.branch(imm);
@@ -922,6 +993,8 @@ impl SPC {
         self.stack_push(hi!(self.pc));
         self.stack_push(lo!(self.pc));
 
+        self.clock_inc(SPC_OP * 3);
+
         self.pc = new_pc;
     }
 
@@ -932,6 +1005,8 @@ impl SPC {
         self.stack_push(hi!(self.pc));
         self.stack_push(lo!(self.pc));
 
+        self.clock_inc(SPC_OP * 2);
+
         self.pc = set_lo!(U_PAGE, new_pc_lo);
     }
 
@@ -940,7 +1015,13 @@ impl SPC {
         self.stack_push(hi!(self.pc));
         self.stack_push(lo!(self.pc));
 
-        self.pc = set_lo!(U_PAGE, addr_lo);
+        self.clock_inc(SPC_OP * 3);
+
+        let addr = set_lo!(U_PAGE, addr_lo);
+        let pc_lo = self.read_data(addr);
+        let pc_hi = self.read_data(addr.wrapping_add(1));
+
+        self.pc = make16!(pc_hi, pc_lo);
     }
 
     // Return.
@@ -948,16 +1029,20 @@ impl SPC {
         let pc_lo = self.stack_pop();
         let pc_hi = self.stack_pop();
 
+        self.clock_inc(SPC_OP * 2);
+
         self.pc = make16!(pc_hi, pc_lo);
     }
 
     // Return from interrupt.
-    fn ret1(&mut self) {
+    fn reti(&mut self) {
         let ps = self.stack_pop();
         self.ps = PSFlags::from_bits_truncate(ps);
 
         let pc_lo = self.stack_pop();
         let pc_hi = self.stack_pop();
+
+        self.clock_inc(SPC_OP * 2);
 
         self.pc = make16!(pc_hi, pc_lo);
     }
@@ -975,6 +1060,8 @@ impl SPC {
         }
         self.ps.set(PSFlags::N, test_bit!(self.a, 7, u8));
         self.ps.set(PSFlags::Z, self.a == 0);
+
+        self.clock_inc(SPC_OP);
     }
 
     fn das(&mut self) {
@@ -987,6 +1074,8 @@ impl SPC {
         }
         self.ps.set(PSFlags::N, test_bit!(self.a, 7, u8));
         self.ps.set(PSFlags::Z, self.a == 0);
+
+        self.clock_inc(SPC_OP);
     }
 
     fn xcn(&mut self) {
@@ -997,6 +1086,8 @@ impl SPC {
 
         self.ps.set(PSFlags::N, test_bit!(self.a, 7, u8));
         self.ps.set(PSFlags::Z, self.a == 0);
+
+        self.clock_inc(SPC_OP * 4);
     }
 
     fn nop(&mut self) {
@@ -1005,10 +1096,12 @@ impl SPC {
 
     fn sleep(&mut self) {
         // TODO
+        panic!("Unsupported SPC instruction: SLEEP");
     }
 
     fn stop(&mut self) {
         // TODO
+        panic!("Unsupported SPC instruction: STOP");
     }
 
     fn brk(&mut self) {
@@ -1018,6 +1111,13 @@ impl SPC {
 
         self.ps.insert(PSFlags::B);
         self.ps.remove(PSFlags::I);
+
+        self.clock_inc(SPC_OP * 2);
+
+        let pc_lo = self.read_data(0xFFDE);
+        let pc_hi = self.read_data(0xFFDE);
+
+        self.pc = make16!(pc_hi, pc_lo);
     }
 }
 
@@ -1170,7 +1270,8 @@ impl SPC {
     }
 
     // (X)
-    fn x_indirect(&self) -> u16 {
+    fn x_indirect(&mut self) -> u16 {
+        self.clock_inc(SPC_OP);
         self.direct_page(self.x)
     }
 
@@ -1183,6 +1284,7 @@ impl SPC {
     fn x_indirect_inc(&mut self) -> u16 {
         let addr = self.direct_page(self.x);
         self.x = self.x.wrapping_add(1);
+        self.clock_inc(SPC_OP);
         addr
     }
 
@@ -1197,12 +1299,16 @@ impl SPC {
     fn direct_x(&mut self) -> u16 {
         let addr_lo = self.fetch().wrapping_add(self.x);
 
+        self.clock_inc(SPC_OP);
+
         self.direct_page(addr_lo)
     }
 
     // dp+Y
     fn direct_y(&mut self) -> u16 {
         let addr_lo = self.fetch().wrapping_add(self.y);
+
+        self.clock_inc(SPC_OP);
 
         self.direct_page(addr_lo)
     }
@@ -1220,6 +1326,8 @@ impl SPC {
         let addr_lo = self.fetch();
         let addr_hi = self.fetch();
 
+        self.clock_inc(SPC_OP);
+
         make16!(addr_hi, addr_lo).wrapping_add(self.x as u16)
     }
 
@@ -1227,6 +1335,8 @@ impl SPC {
     fn absolute_y(&mut self) -> u16 {
         let addr_lo = self.fetch();
         let addr_hi = self.fetch();
+
+        self.clock_inc(SPC_OP);
 
         make16!(addr_hi, addr_lo).wrapping_add(self.y as u16)
     }
@@ -1247,6 +1357,8 @@ impl SPC {
         
         let ptr_lo = self.read_data(addr);
         let ptr_hi = self.read_data(addr.wrapping_add(1));  // TODO: wrap in page?
+
+        self.clock_inc(SPC_OP);
 
         make16!(ptr_hi, ptr_lo).wrapping_add(self.y as u16)
     }

@@ -25,6 +25,18 @@ pub enum DataMode {
     Known(u16)      // Data in memory with known address
 }
 
+impl DataMode {
+    // Some instructions (namely: inc, dec, asl, lsr, rol, and ror) have an extra internal cycle when operating on a register.
+    // This method returns true if the data mode is internal.
+    pub fn internal(&self) -> bool {
+        use DataMode::*;
+        match self {
+            Acc | X | Y => true,
+            _ => false,
+        }
+    }
+}
+
 pub enum AddrMode {
     XIndir,     // (X)
     YIndir,     // (Y)
