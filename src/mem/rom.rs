@@ -72,12 +72,12 @@ pub struct LoROM {
 }
 
 impl LoROM {
-    pub fn new(cart_file: BufReader<File>, sram: SRAM/*, fast: bool*/) -> Self {
+    pub fn new(cart_file: BufReader<File>, sram: SRAM, fast: bool) -> Self {
         LoROM {
             rom: ROM::new(cart_file, 0x8000),
             ram: sram,
 
-            rom_speed: timing::SLOW_MEM_ACCESS
+            rom_speed: if fast {timing::FAST_MEM_ACCESS} else {timing::SLOW_MEM_ACCESS}
         }
     }
 }
@@ -128,12 +128,12 @@ pub struct HiROM {
 }
 
 impl HiROM {
-    pub fn new(cart_file: BufReader<File>, sram: SRAM/*, fast: bool*/) -> Self {
+    pub fn new(cart_file: BufReader<File>, sram: SRAM, fast: bool) -> Self {
         HiROM {
             rom: ROM::new(cart_file, 0x10000),
             ram: sram,
 
-            rom_speed: timing::SLOW_MEM_ACCESS
+            rom_speed: if fast {timing::FAST_MEM_ACCESS} else {timing::SLOW_MEM_ACCESS}
         }
     }
 }

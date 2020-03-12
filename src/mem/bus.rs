@@ -225,20 +225,20 @@ impl MemBus {
         reader.seek(SeekFrom::Start(0x7FC0)).expect("Couldn't seek to cartridge header.");
         reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
 
-        if /*(buf[0x15] & 0x21) == 0x20 && */(0x400 << buf[0x17]) == rom_size {
-            let save_file_size = 0x400 << buf[0x18];    // TODO: check if there should be save data at all.
+        if (buf[0x15] & 0xE9) == 0x20/* && (0x400 << buf[0x17]) == rom_size*/ {
+            let save_file_size = std::cmp::min(0x400 << buf[0x18], 1024 * 512);    // TODO: check if there should be save data at all.
             let sram = SRAM::new(save_path, save_file_size).expect("Couldn't make save file.");
-            return Box::new(LoROM::new(reader, sram/*, test_bit!(buf[0x15], 4, u8)*/));
+            return Box::new(LoROM::new(reader, sram, (buf[0x15] & 0x30) == 0x30));
         }
 
         // Check for HiROM
         reader.seek(SeekFrom::Start(0xFFC0)).expect("Couldn't seek to cartridge header.");
         reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
 
-        if /*(buf[0x15] & 0x21) == 0x21 && */(0x400 << buf[0x17]) == rom_size {
-            let save_file_size = 0x400 << buf[0x18];    // TODO: check if there should be save data at all.
+        if (buf[0x15] & 0xE9) == 0x21/* || (0x400 << buf[0x17]) == rom_size*/ {
+            let save_file_size = std::cmp::min(0x400 << buf[0x18], 1024 * 256);    // TODO: check if there should be save data at all.
             let sram = SRAM::new(save_path, save_file_size).expect("Couldn't make save file.");
-            return Box::new(HiROM::new(reader, sram/*, test_bit!(buf[0x15], 4, u8)*/));
+            return Box::new(HiROM::new(reader, sram, (buf[0x15] & 0x30) == 0x30));
         } else {
             panic!("Unrecognised ROM: {:X}", buf[0x15]);
         }
@@ -447,7 +447,7 @@ impl MemBus {
 }
 
 // Amount of cycles to wait before telling the APU to clock.
-const APU_CYCLE_BATCH: usize = 50;
+const APU_CYCLE_BATCH: usize = 10;
 
 // Address Bus B, used for hardware registers.
 struct AddrBusB {
