@@ -136,13 +136,14 @@ impl RenderThread {
                     },
                     DrawLine(y) => {
                         let mut mem = mem.lock().unwrap();
+                        send_reply.send(()).unwrap();
                         if !mem.get_bg_registers().in_fblank() {
-                            send_reply.send(()).unwrap();
                             renderer.setup_caches(&mut mem);
                             let mut t = target.as_ref().unwrap().lock().unwrap();
                             renderer.draw_line(&mem, &mut t, y);
                         } else {
-                            send_reply.send(()).unwrap();
+                            let mut t = target.as_ref().unwrap().lock().unwrap();
+                            clear_line(&mut t, y);
                         }
                     }
                 }
@@ -169,5 +170,13 @@ impl RenderThread {
         self.receiver
             .recv()
             .expect("Draw line");
+    }
+}
+
+fn clear_line(target: &mut [u8], y: usize) {
+    use crate::constants::screen::H_RES;
+
+    for d in target.iter_mut().skip(y * H_RES * 8).take(H_RES * 8) {
+        *d = 0;
     }
 }

@@ -30,7 +30,7 @@ use lines::{
     TileAttributes
 };
 
-const SCREEN_WIDTH: usize = 256;
+use crate::constants::screen::H_RES;
 
 pub struct Renderer {
     mode: VideoMode,
@@ -280,25 +280,25 @@ impl Renderer {
     fn draw_line_mode_0(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
         let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
-        let target_start = y * SCREEN_WIDTH;
+        let target_start = y * H_RES;
 
-        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
-        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        let mut main_sprite_pixels = [SpritePixel::None; H_RES];
+        let mut sub_sprite_pixels = [SpritePixel::None; H_RES];
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
-        let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg1_pixels = [BGData::default(); H_RES];
+        let mut sub_bg1_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
-        let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg2_pixels = [BGData::default(); H_RES];
+        let mut sub_bg2_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
-        let mut main_bg3_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg3_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg3_pixels = [BGData::default(); H_RES];
+        let mut sub_bg3_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_3, &mut main_bg3_pixels, &mut sub_bg3_pixels, y);
-        let mut main_bg4_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg4_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg4_pixels = [BGData::default(); H_RES];
+        let mut sub_bg4_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_4, &mut main_bg4_pixels, &mut sub_bg4_pixels, y);
 
-        for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
+        for (x, out) in target.chunks_mut(8).skip(target_start).take(H_RES).enumerate() {
             let main = {
                 let sprite_pix = main_sprite_pixels[x];
                 let bg1_pix = main_bg1_pixels[x];
@@ -326,22 +326,22 @@ impl Renderer {
     fn draw_line_mode_1(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
         let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
-        let target_start = y * SCREEN_WIDTH;
+        let target_start = y * H_RES;
 
-        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
-        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        let mut main_sprite_pixels = [SpritePixel::None; H_RES];
+        let mut sub_sprite_pixels = [SpritePixel::None; H_RES];
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
-        let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg1_pixels = [BGData::default(); H_RES];
+        let mut sub_bg1_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
-        let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg2_pixels = [BGData::default(); H_RES];
+        let mut sub_bg2_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
-        let mut main_bg3_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg3_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg3_pixels = [BGData::default(); H_RES];
+        let mut sub_bg3_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_3, &mut main_bg3_pixels, &mut sub_bg3_pixels, y);
 
-        for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
+        for (x, out) in target.chunks_mut(8).skip(target_start).take(H_RES).enumerate() {
             let main = {
                 let sprite_pix = main_sprite_pixels[x];
                 let bg1_pix = main_bg1_pixels[x];
@@ -367,19 +367,19 @@ impl Renderer {
     fn draw_line_mode_2(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
         let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
-        let target_start = y * SCREEN_WIDTH;
+        let target_start = y * H_RES;
 
-        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
-        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        let mut main_sprite_pixels = [SpritePixel::None; H_RES];
+        let mut sub_sprite_pixels = [SpritePixel::None; H_RES];
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
-        let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg1_pixels = [BGData::default(); H_RES];
+        let mut sub_bg1_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y); // TODO: draw offset bg to line
-        let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg2_pixels = [BGData::default(); H_RES];
+        let mut sub_bg2_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y); // TODO: draw offset bg to line
 
-        for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
+        for (x, out) in target.chunks_mut(8).skip(target_start).take(H_RES).enumerate() {
             let main = {
                 let sprite_pix = main_sprite_pixels[x];
                 let bg1_pix = main_bg1_pixels[x];
@@ -403,19 +403,19 @@ impl Renderer {
     fn draw_line_mode_3(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
         let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
-        let target_start = y * SCREEN_WIDTH;
+        let target_start = y * H_RES;
 
-        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
-        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        let mut main_sprite_pixels = [SpritePixel::None; H_RES];
+        let mut sub_sprite_pixels = [SpritePixel::None; H_RES];
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
-        let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg1_pixels = [BGData::default(); H_RES];
+        let mut sub_bg1_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
-        let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg2_pixels = [BGData::default(); H_RES];
+        let mut sub_bg2_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
 
-        for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
+        for (x, out) in target.chunks_mut(8).skip(target_start).take(H_RES).enumerate() {
             let main = {
                 let sprite_pix = main_sprite_pixels[x];
                 let bg1_pix = main_bg1_pixels[x];
@@ -439,19 +439,19 @@ impl Renderer {
     fn draw_line_mode_4(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
         let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
-        let target_start = y * SCREEN_WIDTH;
+        let target_start = y * H_RES;
 
-        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
-        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        let mut main_sprite_pixels = [SpritePixel::None; H_RES];
+        let mut sub_sprite_pixels = [SpritePixel::None; H_RES];
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
-        let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg1_pixels = [BGData::default(); H_RES];
+        let mut sub_bg1_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y); // TODO: draw offset bg to line
-        let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg2_pixels = [BGData::default(); H_RES];
+        let mut sub_bg2_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y); // TODO: draw offset bg to line
 
-        for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
+        for (x, out) in target.chunks_mut(8).skip(target_start).take(H_RES).enumerate() {
             let main = {
                 let sprite_pix = main_sprite_pixels[x];
                 let bg1_pix = main_bg1_pixels[x];
@@ -475,19 +475,19 @@ impl Renderer {
     fn draw_line_mode_5(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
         let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
-        let target_start = y * SCREEN_WIDTH;
+        let target_start = y * H_RES;
 
-        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
-        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        let mut main_sprite_pixels = [SpritePixel::None; H_RES];
+        let mut sub_sprite_pixels = [SpritePixel::None; H_RES];
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
-        let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg1_pixels = [BGData::default(); H_RES];
+        let mut sub_bg1_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
-        let mut main_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg2_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg2_pixels = [BGData::default(); H_RES];
+        let mut sub_bg2_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
 
-        for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
+        for (x, out) in target.chunks_mut(8).skip(target_start).take(H_RES).enumerate() {
             let main = {
                 let sprite_pix = main_sprite_pixels[x];
                 let bg1_pix = main_bg1_pixels[x];
@@ -511,16 +511,16 @@ impl Renderer {
     fn draw_line_mode_6(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
         let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
-        let target_start = y * SCREEN_WIDTH;
+        let target_start = y * H_RES;
 
-        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
-        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        let mut main_sprite_pixels = [SpritePixel::None; H_RES];
+        let mut sub_sprite_pixels = [SpritePixel::None; H_RES];
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
-        let mut main_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
-        let mut sub_bg1_pixels = [BGData::default(); SCREEN_WIDTH];
+        let mut main_bg1_pixels = [BGData::default(); H_RES];
+        let mut sub_bg1_pixels = [BGData::default(); H_RES];
         self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y); // TODO: draw offset bg to line
 
-        for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
+        for (x, out) in target.chunks_mut(8).skip(target_start).take(H_RES).enumerate() {
             let main = {
                 let sprite_pix = main_sprite_pixels[x];
                 let bg1_pix = main_bg1_pixels[x];
@@ -542,22 +542,22 @@ impl Renderer {
     fn draw_line_mode_7(&self, mem: &VideoMem, target: &mut [u8], y: usize) {
         let brightness = mem.get_bg_registers().get_brightness();
         let window_regs = mem.get_window_registers();
-        let target_start = y * SCREEN_WIDTH;
+        let target_start = y * H_RES;
 
-        let mut main_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
-        let mut sub_sprite_pixels = [SpritePixel::None; SCREEN_WIDTH];
+        let mut main_sprite_pixels = [SpritePixel::None; H_RES];
+        let mut sub_sprite_pixels = [SpritePixel::None; H_RES];
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
-        let mut main_bg1_pixels = [None; SCREEN_WIDTH];
-        let mut sub_bg1_pixels = [None; SCREEN_WIDTH];
+        let mut main_bg1_pixels = [None; H_RES];
+        let mut sub_bg1_pixels = [None; H_RES];
         self.draw_mode7_bg1_to_line(mem, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
-        let mut main_bg2_pixels = [0_u8; SCREEN_WIDTH];
-        let mut sub_bg2_pixels = [0_u8; SCREEN_WIDTH];
+        let mut main_bg2_pixels = [0_u8; H_RES];
+        let mut sub_bg2_pixels = [0_u8; H_RES];
         let ext_bg = window_regs.use_ext_bg();
         if ext_bg {
             self.draw_mode7_bg2_to_line(mem, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
         }
 
-        for (x, out) in target.chunks_mut(8).skip(target_start).take(SCREEN_WIDTH).enumerate() {
+        for (x, out) in target.chunks_mut(8).skip(target_start).take(H_RES).enumerate() {
             let main = {
                 let sprite_pix = main_sprite_pixels[x];
                 let bg1_pix = main_bg1_pixels[x];
@@ -663,12 +663,12 @@ impl Renderer {
         let y_mosaic_offset = y % (mosaic_amount + 1);
         let (_, mask_y) = regs.bg_size_mask(bg);
         let bg_y = (y - y_mosaic_offset + regs.get_bg_scroll_y(bg)) & mask_y;
-        let mut bg_row = [BGData::default(); SCREEN_WIDTH];
+        let mut bg_row = [BGData::default(); H_RES];
         self.get_row(self.get_pattern_mem(bg), mem, bg, bg_y, &mut bg_row);    // TODO: merge these functions together?
 
-        let mut main_window = [true; SCREEN_WIDTH];
+        let mut main_window = [true; H_RES];
         window_regs.bg_window(bg, Screen::Main, &mut main_window);
-        let mut sub_window = [true; SCREEN_WIDTH];
+        let mut sub_window = [true; H_RES];
         window_regs.bg_window(bg, Screen::Sub, &mut sub_window);
 
         for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
@@ -692,9 +692,9 @@ impl Renderer {
         let regs = mem.get_bg_registers();
         let window_regs = mem.get_window_registers();
 
-        let mut main_window = [true; SCREEN_WIDTH];
+        let mut main_window = [true; H_RES];
         window_regs.bg_window(BG::_1, Screen::Main, &mut main_window);
-        let mut sub_window = [true; SCREEN_WIDTH];
+        let mut sub_window = [true; H_RES];
         window_regs.bg_window(BG::_1, Screen::Sub, &mut sub_window);
 
         for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
@@ -739,9 +739,9 @@ impl Renderer {
         let regs = mem.get_bg_registers();
         let window_regs = mem.get_window_registers();
 
-        let mut main_window = [true; SCREEN_WIDTH];
+        let mut main_window = [true; H_RES];
         window_regs.bg_window(BG::_2, Screen::Main, &mut main_window);
-        let mut sub_window = [true; SCREEN_WIDTH];
+        let mut sub_window = [true; H_RES];
         window_regs.bg_window(BG::_2, Screen::Sub, &mut sub_window);
 
         let bg_y = y + (regs.get_mode7_scroll_y() as usize) % 1024;
