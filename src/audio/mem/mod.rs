@@ -5,7 +5,10 @@ use bitflags::bitflags;
 
 use std::sync::{
     Arc,
-    Mutex
+    atomic::{
+        AtomicU8,
+        Ordering
+    }
 };
 
 use crate::mem::RAM;
@@ -37,34 +40,28 @@ const IPL_ROM: [u8; 64] = [
 ];
 
 pub struct SPCBus {
-    ram:        RAM,
+    ram:                RAM,
 
-    ipl_rom:    &'static [u8; 64],
+    ipl_rom:            &'static [u8; 64],
 
     // Registers
-    control:        SPCControl,
-    dsp_reg_addr:   u8,
-    dsp:            DSP,
+    control:            SPCControl,
+    dsp_reg_addr:       u8,
+    dsp:                DSP,
 
     // Port data sent in from CPU.
-    port_0_in:      u8,
-    port_1_in:      u8,
-    port_2_in:      u8,
-    port_3_in:      u8,
+    ports_cpu_to_apu:   [Arc<AtomicU8>; 4],
 
     // Port data sent out from APU.
-    port_0_out:     Arc<Mutex<u8>>,
-    port_1_out:     Arc<Mutex<u8>>,
-    port_2_out:     Arc<Mutex<u8>>,
-    port_3_out:     Arc<Mutex<u8>>,
+    ports_apu_to_cpu:   [Arc<AtomicU8>; 4],
 
-    timer_0:        Timer,
-    timer_1:        Timer,
-    timer_2:        Timer,
+    timer_0:            Timer,
+    timer_1:            Timer,
+    timer_2:            Timer,
 }
 
 impl SPCBus {
-    pub fn new(ports: [Arc<Mutex<u8>>; 4]) -> Self {
+    pub fn new(ports_cpu_to_apu: [Arc<AtomicU8>; 4], ports_apu_to_cpu: [Arc<AtomicU8>; 4]) -> Self {
         SPCBus {
             ram:        RAM::new(SPC_RAM_SIZE),
 
@@ -74,15 +71,8 @@ impl SPCBus {
             dsp_reg_addr:   0,
             dsp:            DSP::new(),
 
-            port_0_in:      0,
-            port_1_in:      0,
-            port_2_in:      0,
-            port_3_in:      0,
-
-            port_0_out:     ports[0].clone(),
-            port_1_out:     ports[1].clone(),
-            port_2_out:     ports[2].clone(),
-            port_3_out:     ports[3].clone(),
+            ports_cpu_to_apu:   ports_cpu_to_apu,
+            ports_apu_to_cpu:   ports_apu_to_cpu,
 
             timer_0:        Timer::new(128),
             timer_1:        Timer::new(128),
@@ -97,10 +87,26 @@ impl SPCBus {
             0xF2 => self.dsp_reg_addr,
             0xF3 => self.dsp.read(self.dsp_reg_addr),
 
-            0xF4 => self.port_0_in,
-            0xF5 => self.port_1_in,
-            0xF6 => self.port_2_in,
-            0xF7 => self.port_3_in,
+            0xF4 => {
+                let data = self.ports_cpu_to_apu[0].load(Ordering::SeqCst);
+                //println!("APU Read {:X} from {:X}", data, addr);
+                data
+            },
+            0xF5 => {
+                let data = self.ports_cpu_to_apu[1].load(Ordering::SeqCst);
+                //println!("APU Read {:X} from {:X}", data, addr);
+                data
+            },
+            0xF6 => {
+                let data = self.ports_cpu_to_apu[2].load(Ordering::SeqCst);
+                //println!("APU Read {:X} from {:X}", data, addr);
+                data
+            },
+            0xF7 => {
+                let data = self.ports_cpu_to_apu[3].load(Ordering::SeqCst);
+                //println!("APU Read {:X} from {:X}", data, addr);
+                data
+            },
 
             0xFA..=0xFC => 0,
 
@@ -121,10 +127,22 @@ impl SPCBus {
             0xF2 => self.dsp_reg_addr = data,
             0xF3 => self.dsp.write(self.dsp_reg_addr, data),
 
-            0xF4 => *self.port_0_out.lock().unwrap() = data,
-            0xF5 => *self.port_1_out.lock().unwrap() = data,
-            0xF6 => *self.port_2_out.lock().unwrap() = data,
-            0xF7 => *self.port_3_out.lock().unwrap() = data,
+            0xF4 => {
+                //println!("APU Write {:X} to {:X}", data, addr);
+                self.ports_apu_to_cpu[0].store(data, Ordering::SeqCst)
+            },
+            0xF5 => {
+                //println!("APU Write {:X} to {:X}", data, addr);
+                self.ports_apu_to_cpu[1].store(data, Ordering::SeqCst)
+            },
+            0xF6 => {
+                //println!("APU Write {:X} to {:X}", data, addr);
+                self.ports_apu_to_cpu[2].store(data, Ordering::SeqCst)
+            },
+            0xF7 => {
+                //println!("APU Write {:X} to {:X}", data, addr);
+                self.ports_apu_to_cpu[3].store(data, Ordering::SeqCst)
+            },
 
             0xFA => self.timer_0.write_timer_modulo(data),
             0xFB => self.timer_1.write_timer_modulo(data),
@@ -147,45 +165,23 @@ impl SPCBus {
             self.timer_2.clock(cycles);
         }
     }
-
-    // CPU-side write.
-    pub fn write_port(&mut self, port: usize, data: u8) {
-        match port {
-            0 => self.port_0_in = data,
-            1 => self.port_1_in = data,
-            2 => self.port_2_in = data,
-            3 => self.port_3_in = data,
-            _ => unreachable!()
-        }
-    }
 }
 
 impl SPCBus {
     fn set_control(&mut self, data: u8) {
         let control = SPCControl::from_bits_truncate(data);
 
-        /*if control.contains(SPCControl::ENABLE_TIMER_0) {
-            self.timer_0.reset();
-        } else {
-            // stop timer
-        }
-        if control.contains(SPCControl::ENABLE_TIMER_1) {
-            self.timer_1.reset();
-        }
-        if control.contains(SPCControl::ENABLE_TIMER_2) {
-            self.timer_2.reset();
-        }*/
         self.timer_0.reset();
         self.timer_1.reset();
         self.timer_2.reset();
 
         if control.contains(SPCControl::CLEAR_PORT_10) {
-            self.port_0_in = 0;
-            self.port_1_in = 0;
+            self.ports_cpu_to_apu[0].store(0, Ordering::SeqCst);
+            self.ports_cpu_to_apu[1].store(0, Ordering::SeqCst);
         }
         if control.contains(SPCControl::CLEAR_PORT_32) {
-            self.port_2_in = 0;
-            self.port_3_in = 0;
+            self.ports_cpu_to_apu[2].store(0, Ordering::SeqCst);
+            self.ports_cpu_to_apu[3].store(0, Ordering::SeqCst);
         }
 
         self.control = control;

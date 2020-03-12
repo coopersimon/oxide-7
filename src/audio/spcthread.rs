@@ -2,7 +2,7 @@
 
 use std::sync::{
     Arc,
-    Mutex
+    atomic::AtomicU8
 };
 
 use crossbeam_channel::Receiver;
@@ -19,12 +19,6 @@ const SPC_CLOCK_RATE: usize = 1024000;
 
 // Commands that can be sent to the SPC thread.
 pub enum SPCCommand {
-    // Write a value to the SPC-700.
-    Port0Write(u8),
-    Port1Write(u8),
-    Port2Write(u8),
-    Port3Write(u8),
-
     Clock(usize)    // Sends how many SNES master cycles have passed.
 }
 
@@ -33,9 +27,9 @@ pub struct SPCThread {
 }
 
 impl SPCThread {
-    pub fn new(rx: Receiver<SPCCommand>, ports: [Arc<Mutex<u8>>; 4]) -> Self {
+    pub fn new(rx: Receiver<SPCCommand>, ports_cpu_to_apu: [Arc<AtomicU8>; 4], ports_apu_to_cpu: [Arc<AtomicU8>; 4]) -> Self {
         let thread = thread::spawn(move || {
-            let bus = SPCBus::new(ports);
+            let bus = SPCBus::new(ports_cpu_to_apu, ports_apu_to_cpu);
             let mut spc = SPC::new(bus);
             let mut cycle_count = 0.0;
 
@@ -49,11 +43,6 @@ impl SPCThread {
                             cycle_count -= cycles_passed;
                         }
                     },
-
-                    SPCCommand::Port0Write(d) => spc.write_port(0, d),
-                    SPCCommand::Port1Write(d) => spc.write_port(1, d),
-                    SPCCommand::Port2Write(d) => spc.write_port(2, d),
-                    SPCCommand::Port3Write(d) => spc.write_port(3, d),
                 }
             }
         });

@@ -42,11 +42,6 @@ impl SPC {
         self.cycle_count = 0;
         cycles_passed
     }
-
-    // Write to memory port from extern.
-    pub fn write_port(&mut self, port: usize, data: u8) {
-        self.bus.write_port(port, data);
-    }
 }
 
 // Internal
@@ -378,6 +373,7 @@ impl SPC {
 
     fn fetch(&mut self) -> u8 {
         let data = self.read_data(self.pc);
+        //println!("SPC {:X} : #{:X}", self.pc, data);
         self.pc = self.pc.wrapping_add(1);
         data
     }
@@ -1105,6 +1101,7 @@ impl SPC {
     }
 
     fn brk(&mut self) {
+        panic!("BRK!");
         self.stack_push(hi!(self.pc));
         self.stack_push(lo!(self.pc));
         self.stack_push(self.ps.bits());
