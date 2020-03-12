@@ -161,20 +161,17 @@ impl PPU {
         self.cycle_count += cycles;
 
         let signal = match self.state {
-            VBlank if (self.scanline == 0) && (self.cycle_count >= timing::SCANLINE_OFFSET) => {
-                //self.renderer.draw_line(0);
-
+            VBlank if self.scanline == 0 => {
                 self.change_state(DrawingBeforePause);
                 PPUSignal::FrameStart
             },
-            HBlankLeft if self.cycle_count >= timing::SCANLINE_OFFSET => {
-                if self.scanline <= screen::V_RES {
-                    self.renderer.draw_line((self.scanline - 1) as usize);
-                    self.change_state(DrawingBeforePause)
-                } else {
-                    //self.renderer.frame_end();
-                    self.change_state(VBlank)
-                }
+            HBlankLeft if self.scanline > screen::V_RES => {
+                //self.renderer.frame_end();
+                self.change_state(VBlank)
+            },
+            HBlankLeft if (self.cycle_count >= timing::SCANLINE_OFFSET) && (self.scanline <= screen::V_RES) => {
+                self.renderer.draw_line((self.scanline - 1) as usize);
+                self.change_state(DrawingBeforePause)
             },
             DrawingBeforePause if self.cycle_count >= timing::PAUSE_START => {
                 self.change_state(DrawingAfterPause)
