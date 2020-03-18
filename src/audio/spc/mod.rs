@@ -4,6 +4,8 @@ mod types;
 use super::mem::SPCBus;
 use types::*;
 
+use std::collections::HashSet;
+
 pub struct SPC {
     a:      u8,         // Accumulator
     x:      u8,         // X-Index
@@ -416,47 +418,51 @@ impl SPC {
 
     // 16-bit add
     fn addw(&mut self) {
-        let ya = self.get_ya();
+        let ya = self.get_ya() as u32;
+        let op2 = self.read_op_16().0 as u32;
 
-        let result = ya.wrapping_add(self.read_op_16().0);
+        let result = ya.wrapping_add(op2);
+        let final_result = lo32!(result);
 
-        self.ps.set(PSFlags::N, test_bit!(result, 15));
-        self.ps.set(PSFlags::V, (result as i16) < (ya as i16));
-        self.ps.set(PSFlags::H, true);  // TODO
-        self.ps.set(PSFlags::Z, result == 0);
-        self.ps.set(PSFlags::C, result < ya);
+        self.ps.set(PSFlags::N, test_bit!(result, 15, u32));
+        self.ps.set(PSFlags::V, test_bit!(!(ya ^ op2) & (ya ^ result), 15, u32));
+        self.ps.set(PSFlags::H, test_bit!((ya & 0xFFF) + (op2 & 0xFFF), 12, u32));
+        self.ps.set(PSFlags::Z, final_result == 0);
+        self.ps.set(PSFlags::C, test_bit!(result, 16, u32));
 
         self.clock_inc(SPC_OP);
 
-        self.set_ya(result);
+        self.set_ya(final_result);
     }
 
     // 16-bit sub
     fn subw(&mut self) {
-        let ya = self.get_ya();
+        let ya = self.get_ya() as u32;
+        let op2 = self.read_op_16().0 as u32;
 
-        let result = ya.wrapping_sub(self.read_op_16().0);
+        let result = ya.wrapping_sub(op2);
+        let final_result = lo32!(result);
 
-        self.ps.set(PSFlags::N, test_bit!(result, 15));
-        self.ps.set(PSFlags::V, (result as i16) > (ya as i16));
-        self.ps.set(PSFlags::H, true);  // TODO
-        self.ps.set(PSFlags::Z, result == 0);
-        self.ps.set(PSFlags::C, result > ya);
+        self.ps.set(PSFlags::N, test_bit!(result, 15, u32));
+        self.ps.set(PSFlags::V, test_bit!(!(ya ^ op2) & (ya ^ result), 15, u32));
+        self.ps.set(PSFlags::H, test_bit!((ya & 0xFFF) + (op2 & 0xFFF), 12, u32));
+        self.ps.set(PSFlags::Z, final_result == 0);
+        self.ps.set(PSFlags::C, test_bit!(result, 16, u32));
 
         self.clock_inc(SPC_OP);
 
-        self.set_ya(result);
+        self.set_ya(final_result);
     }
 
-    /*fn arithw(&mut self, op1: u16, op2: u16) -> u8 {
-        let result = op1.wrapping_add(op2).wrapping_add(self.carry());
-        let final_result = lo!(result);
+    /*fn arithw(&mut self, op1: u32, op2: u32) -> u16 {
+        let result = op1.wrapping_add(op2).wrapping_add(self.carry() as u32);
+        let final_result = lo32!(result);
 
-        self.ps.set(PSFlags::N, test_bit!(result, 7));
-        self.ps.set(PSFlags::V, test_bit!(!(op1 ^ op2) & (op1 ^ result), 7));
-        self.ps.set(PSFlags::H, test_bit!((op1 & 0xF) + (op2 & 0xF) + self.carry(), 4));
+        self.ps.set(PSFlags::N, test_bit!(result, 15, u32));
+        self.ps.set(PSFlags::V, test_bit!(!(op1 ^ op2) & (op1 ^ result), 15, u32));
+        self.ps.set(PSFlags::H, test_bit!((op1 & 0xFFF) + (op2 & 0xFFF) + (self.carry() as u32), 12, u32));
         self.ps.set(PSFlags::Z, final_result == 0);
-        self.ps.set(PSFlags::C, test_bit!(result, 8));
+        self.ps.set(PSFlags::C, test_bit!(result, 16, u32));
 
         final_result
     }*/
@@ -939,7 +945,7 @@ impl SPC {
         }
     }
 
-    // Y-- and branch if 0.
+    // --Y and branch if not 0.
     fn dbnz_y(&mut self) {
         self.y = self.y.wrapping_sub(1);
 
@@ -950,7 +956,7 @@ impl SPC {
         }
     }
 
-    // (d)-- and branch if 0.
+    // --(d) and branch if not 0.
     fn dbnz_dir(&mut self) {
         let addr = self.direct();
         let data = self.read_data(addr).wrapping_sub(1);

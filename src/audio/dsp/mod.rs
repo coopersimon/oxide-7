@@ -2,7 +2,7 @@
 
 mod consts;
 mod voice;
-use voice::Voice;
+pub use voice::Voice;
 
 pub struct DSP {
     voices: [Voice; 8],

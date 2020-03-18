@@ -16,6 +16,7 @@ use super::{
 use crate::constants;
 
 const SPC_CLOCK_RATE: usize = 1024000;
+const SPC_RATIO: f64 = (SPC_CLOCK_RATE as f64) / (constants::timing::MASTER_HZ as f64); // Around 1/21
 
 // Commands that can be sent to the SPC thread.
 pub enum SPCCommand {
@@ -57,7 +58,8 @@ impl SPCThread {
 // SNES clock: 21_442_080 Hz
 // SPC clock: 1_024_000 Hz
 fn calc_cycles(master_cycles: usize) -> f64 {
-    let frac = (master_cycles as f64) / (constants::timing::MASTER_HZ as f64);
+    /*let frac = (master_cycles as f64) / (constants::timing::MASTER_HZ as f64);
 
-    frac * (SPC_CLOCK_RATE as f64)
+    frac * (SPC_CLOCK_RATE as f64)*/
+    (master_cycles as f64) * SPC_RATIO
 }

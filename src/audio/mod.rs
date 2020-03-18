@@ -2,6 +2,7 @@
 // Consists of a CPU interface, the SPC-700 8-bit processor, and an 8-channel DSP.
 
 mod dsp;
+mod generator;
 mod mem;
 mod spc;
 mod spcthread;
@@ -17,7 +18,7 @@ use std::sync::{
 };
 
 use crossbeam_channel::{
-    unbounded,
+    bounded,
     Sender
 };
 
@@ -33,7 +34,7 @@ pub struct APU {
 
 impl APU {
     pub fn new() -> Self {
-        let (command_tx, command_rx) = unbounded();
+        let (command_tx, command_rx) = bounded(10);
 
         let ports_cpu_to_apu = [Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0))];
         let ports_apu_to_cpu = [Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0))];
