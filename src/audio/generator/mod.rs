@@ -8,7 +8,7 @@ use crossbeam_channel::Receiver;
 use std::thread;
 
 use internal::InternalAudioGenerator;
-use types::*;
+pub use types::*;
 
 pub struct AudioGenerator {
     thread: thread::JoinHandle<()>

@@ -2,6 +2,7 @@
 mod timer;
 
 use bitflags::bitflags;
+use crossbeam_channel::Sender;
 
 use std::sync::{
     Arc,
@@ -13,7 +14,10 @@ use std::sync::{
 
 use crate::mem::RAM;
 use timer::Timer;
-use super::dsp::DSP;
+use super::{
+    dsp::DSP,
+    generator::AudioData
+};
 
 bitflags! {
     struct SPCControl: u8 {
@@ -61,7 +65,7 @@ pub struct SPCBus {
 }
 
 impl SPCBus {
-    pub fn new(ports_cpu_to_apu: [Arc<AtomicU8>; 4], ports_apu_to_cpu: [Arc<AtomicU8>; 4]) -> Self {
+    pub fn new(signal_tx: Sender<AudioData>, ports_cpu_to_apu: [Arc<AtomicU8>; 4], ports_apu_to_cpu: [Arc<AtomicU8>; 4]) -> Self {
         SPCBus {
             ram:        RAM::new(SPC_RAM_SIZE),
 
@@ -69,7 +73,7 @@ impl SPCBus {
 
             control:        SPCControl::ROM_ENABLE | SPCControl::CLEAR_PORT_32 | SPCControl::CLEAR_PORT_10,
             dsp_reg_addr:   0,
-            dsp:            DSP::new(),
+            dsp:            DSP::new(signal_tx),
 
             ports_cpu_to_apu:   ports_cpu_to_apu,
             ports_apu_to_cpu:   ports_apu_to_cpu,
@@ -164,6 +168,8 @@ impl SPCBus {
         if self.control.contains(SPCControl::ENABLE_TIMER_2) {
             self.timer_2.clock(cycles);
         }
+
+        self.dsp.clock(cycles);
     }
 }
 
@@ -176,10 +182,12 @@ impl SPCBus {
         self.timer_2.reset();
 
         if control.contains(SPCControl::CLEAR_PORT_10) {
+            //println!("APU reset ports 0 and 1");
             self.ports_cpu_to_apu[0].store(0, Ordering::SeqCst);
             self.ports_cpu_to_apu[1].store(0, Ordering::SeqCst);
         }
         if control.contains(SPCControl::CLEAR_PORT_32) {
+            //println!("APU reset ports 2 and 3");
             self.ports_cpu_to_apu[2].store(0, Ordering::SeqCst);
             self.ports_cpu_to_apu[3].store(0, Ordering::SeqCst);
         }

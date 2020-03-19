@@ -5,17 +5,21 @@ use std::sync::{
     atomic::AtomicU8
 };
 
-use crossbeam_channel::Receiver;
+use crossbeam_channel::{
+    Receiver,
+    Sender
+};
 
 use std::thread;
 
 use super::{
     spc::SPC,
-    mem::SPCBus
+    mem::SPCBus,
+    generator::AudioData
 };
 use crate::constants;
 
-const SPC_CLOCK_RATE: usize = 1024000;
+pub const SPC_CLOCK_RATE: usize = 1_024_000;
 const SPC_RATIO: f64 = (SPC_CLOCK_RATE as f64) / (constants::timing::MASTER_HZ as f64); // Around 1/21
 
 // Commands that can be sent to the SPC thread.
@@ -28,9 +32,9 @@ pub struct SPCThread {
 }
 
 impl SPCThread {
-    pub fn new(rx: Receiver<SPCCommand>, ports_cpu_to_apu: [Arc<AtomicU8>; 4], ports_apu_to_cpu: [Arc<AtomicU8>; 4]) -> Self {
+    pub fn new(rx: Receiver<SPCCommand>, signal_tx: Sender<AudioData>, ports_cpu_to_apu: [Arc<AtomicU8>; 4], ports_apu_to_cpu: [Arc<AtomicU8>; 4]) -> Self {
         let thread = thread::spawn(move || {
-            let bus = SPCBus::new(ports_cpu_to_apu, ports_apu_to_cpu);
+            let bus = SPCBus::new(signal_tx, ports_cpu_to_apu, ports_apu_to_cpu);
             let mut spc = SPC::new(bus);
             let mut cycle_count = 0.0;
 

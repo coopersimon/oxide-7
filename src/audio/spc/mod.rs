@@ -370,7 +370,6 @@ impl SPC {
         self.cycle_count += cycles;
 
         self.bus.clock(cycles);
-        // TODO: clock DSP?
     }
 
     fn fetch(&mut self) -> u8 {
