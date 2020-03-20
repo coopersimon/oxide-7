@@ -1,5 +1,6 @@
 // Digital signal processor
 
+mod brr;
 mod consts;
 mod voice;
 
@@ -7,7 +8,11 @@ use crossbeam_channel::Sender;
 
 pub use voice::Voice;
 
-use super::generator::AudioData;
+use super::generator::{
+    AudioData, VoiceData
+};
+
+use crate::mem::RAM;
 
 const VIDEO_FRAME_CYCLES: f32 = (super::spcthread::SPC_CLOCK_RATE as f32) / 60.0;
 
@@ -88,13 +93,13 @@ impl DSP {
         }
     }
 
-    pub fn write(&mut self, addr: u8, data: u8) {
+    pub fn write(&mut self, addr: u8, data: u8, ram: &RAM) {
         match addr {
             0x0C => self.regs.main_vol_left = data,
             0x1C => self.regs.main_vol_right = data,
             0x2C => self.regs.echo_vol_left = data,
             0x3C => self.regs.echo_vol_right = data,
-            0x4C => self.key_on(data),
+            0x4C => self.key_on(data, ram),
             0x5C => self.key_off(data),
             0x6C => self.regs.flags = data,
             0x7C => self.regs.endx = data,
@@ -115,11 +120,21 @@ impl DSP {
 }
 
 impl DSP {
-    fn key_on(&mut self, val: u8) {
+    fn key_on(&mut self, val: u8, ram: &RAM) {
         for v in 0..8 {
             if test_bit!(val, v, u8) {
+                let (sample, should_loop) = brr::decode_samples(0, ram);
+                let s_loop = if should_loop {
+                    let (s_loop, _) = brr::decode_samples(0, ram);
+                    s_loop
+                } else { Box::new([]) };
+
                 self.signal_tx.send(AudioData::VoiceKeyOn{
-                    data: self.voices[v],
+                    data: VoiceData {
+                        regs:   Box::new(self.voices[v]),
+                        sample: sample,
+                        s_loop: s_loop,
+                    },
                     num:  v,
                     time: self.cycle_count / VIDEO_FRAME_CYCLES
                 }).expect("Couldn't send key on signal to audio generator");

@@ -15,7 +15,7 @@ pub struct InternalAudioGenerator {
     receiver:   Receiver<AudioData>,
 
     // Data lists for each note
-    voice_data:   [VecDeque<(Option<Voice>, f32)>; 8],
+    voice_data:   [VecDeque<(Option<VoiceData>, f32)>; 8],
 
     // Signal generators
     voice_generators:   [VoiceGen; 8],
@@ -86,14 +86,14 @@ impl InternalAudioGenerator {
 }
 
 #[inline]
-fn process_command_buffer(gen: &mut VoiceGen, data: &mut VecDeque<(Option<Voice>, f32)>, buffer: &mut [i16]) {
+fn process_command_buffer(gen: &mut VoiceGen, data: &mut VecDeque<(Option<VoiceData>, f32)>, buffer: &mut [i16]) {
     // First note:
     let end_time = if data.len() > 0 {data[0].1} else {1.0};
     gen.generate_signal(buffer, 0.0, end_time);
 
     for i in 0..data.len() {
-        match data[i].0 {
-            Some(data) => gen.key_on(&data),
+        match &data[i].0 {
+            Some(data) => gen.key_on(data),
             None => gen.key_off()
         }
 

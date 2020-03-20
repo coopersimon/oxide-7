@@ -129,7 +129,7 @@ impl SPCBus {
             0xF1 => self.set_control(data),
 
             0xF2 => self.dsp_reg_addr = data,
-            0xF3 => self.dsp.write(self.dsp_reg_addr, data),
+            0xF3 => self.dsp.write(self.dsp_reg_addr, data, &self.ram),
 
             0xF4 => {
                 //println!("APU Write {:X} to {:X}", data, addr);

@@ -1,5 +1,6 @@
 // Generates audio samples for a single audio voice.
 use super::super::dsp::Voice;
+use super::types::VoiceData;
 
 #[derive(Default)]
 pub struct VoiceGen {
@@ -14,8 +15,8 @@ impl VoiceGen {
     }
 
     // Init sound from key on signal.
-    pub fn key_on(&mut self, data: &Voice) {
-
+    pub fn key_on(&mut self, data: &VoiceData) {
+        
     }
 
     // Turn sound off from key off signal.

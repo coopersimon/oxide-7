@@ -39,6 +39,28 @@ impl RAM {
     pub fn write(&mut self, addr: u32, data: u8) {
         self.data[addr as usize] = data;
     }
+
+    pub fn iter<'a>(&'a self, start: usize) -> RAMIter<'a> {
+        RAMIter {
+            ram: self,
+            read_head: start
+        }
+    }
+}
+
+pub struct RAMIter<'a> {
+    ram: &'a RAM,
+    read_head: usize
+}
+
+impl Iterator for RAMIter<'_> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let data = self.ram.data[self.read_head];
+        self.read_head = (self.read_head + 1) % self.ram.data.len();
+        Some(data)
+    }
 }
 
 // Save RAM.

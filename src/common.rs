@@ -42,6 +42,18 @@ macro_rules! test_bit {
 }
 
 /**** BYTE MACROS ****/
+macro_rules! lo_nybble {
+    ($val:expr) => {
+        $val & 0xF
+    };
+}
+
+macro_rules! hi_nybble {
+    ($val:expr) => {
+        $val >> 4
+    };
+}
+
 // Make a 16-bit value from two 8-bit values.
 macro_rules! make16 {
     ($hi:expr, $lo:expr) => {
