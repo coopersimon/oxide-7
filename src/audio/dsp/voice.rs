@@ -93,3 +93,11 @@ impl Voice {
         }
     }
 }
+
+// DSP
+impl Voice {
+    // Index into source directory.
+    pub fn dir_index(&self) -> u16 {
+        (self.src_num as u16) * 4
+    }
+}

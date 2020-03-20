@@ -123,9 +123,9 @@ impl DSP {
     fn key_on(&mut self, val: u8, ram: &RAM) {
         for v in 0..8 {
             if test_bit!(val, v, u8) {
-                let (sample, should_loop) = brr::decode_samples(0, ram);
+                let (sample, should_loop) = brr::decode_samples(self.get_sample_addr(v, ram), ram);
                 let s_loop = if should_loop {
-                    let (s_loop, _) = brr::decode_samples(0, ram);
+                    let (s_loop, _) = brr::decode_samples(self.get_loop_addr(v, ram), ram);
                     s_loop
                 } else { Box::new([]) };
 
@@ -151,5 +151,21 @@ impl DSP {
                 }).expect("Couldn't send key on signal to audio generator");
             }
         }
+    }
+
+    fn get_sample_addr(&self, voice_num: usize, ram: &RAM) -> u16 {
+        let dir_index = self.voices[voice_num].dir_index();
+        let source_dir_addr = make16!(self.regs.src_offset, 0).wrapping_add(dir_index) as u32;
+        let addr_lo = ram.read(source_dir_addr);
+        let addr_hi = ram.read(source_dir_addr + 1);
+        make16!(addr_hi, addr_lo)
+    }
+
+    fn get_loop_addr(&self, voice_num: usize, ram: &RAM) -> u16 {
+        let dir_index = self.voices[voice_num].dir_index();
+        let source_dir_addr = make16!(self.regs.src_offset, 0).wrapping_add(dir_index) as u32;
+        let addr_lo = ram.read(source_dir_addr + 2);
+        let addr_hi = ram.read(source_dir_addr + 3);
+        make16!(addr_hi, addr_lo)
     }
 }

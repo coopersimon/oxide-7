@@ -1116,8 +1116,8 @@ impl SPC {
 
         self.clock_inc(SPC_OP * 2);
 
-        let pc_hi = self.read_data(0xFFDE);
-        let pc_lo = self.read_data(0xFFDF);
+        let pc_lo = self.read_data(0xFFDE);
+        let pc_hi = self.read_data(0xFFDF);
 
         self.pc = make16!(pc_hi, pc_lo);
     }
