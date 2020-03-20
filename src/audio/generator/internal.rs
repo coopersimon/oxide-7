@@ -34,7 +34,16 @@ impl InternalAudioGenerator {
 
             voice_data:         Default::default(),
 
-            voice_generators:   Default::default(),
+            voice_generators:   [
+                VoiceGen::new(sample_rate),
+                VoiceGen::new(sample_rate),
+                VoiceGen::new(sample_rate),
+                VoiceGen::new(sample_rate),
+                VoiceGen::new(sample_rate),
+                VoiceGen::new(sample_rate),
+                VoiceGen::new(sample_rate),
+                VoiceGen::new(sample_rate),
+            ],
 
             buffers:    AudioBuffers::new(sample_rate / 60),
         }
@@ -88,12 +97,13 @@ impl InternalAudioGenerator {
 #[inline]
 fn process_command_buffer(gen: &mut VoiceGen, data: &mut VecDeque<(Option<VoiceData>, f32)>, buffer: &mut [i16]) {
     // First note:
-    let end_time = if data.len() > 0 {data[0].1} else {1.0};
+    let end_time = data.front().and_then(|(_, t)| Some(*t)).unwrap_or(1.0);
     gen.generate_signal(buffer, 0.0, end_time);
 
     for i in 0..data.len() {
-        match &data[i].0 {
-            Some(data) => gen.key_on(data),
+        let voice_data = std::mem::replace(&mut data[i].0, None);
+        match voice_data {
+            Some(data) => gen.key_on(data.clone()),
             None => gen.key_off()
         }
 

@@ -1,10 +1,11 @@
 // Types for use with generating audio.
 use super::super::dsp::Voice;
 
+#[derive(Clone)]
 pub struct VoiceData {
     pub regs:   Box<Voice>, // Register values
-    pub sample: Box<[i16]>, // Sample data
-    pub s_loop: Box<[i16]>, // Sample loop data
+    pub sample: Box<[f32]>, // Sample data
+    pub s_loop: Box<[f32]>, // Sample loop data
 }
 
 pub enum AudioData {

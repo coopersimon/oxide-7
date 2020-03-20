@@ -1,12 +1,11 @@
 // Digital signal processor
 
 mod brr;
-mod consts;
 mod voice;
 
 use crossbeam_channel::Sender;
 
-pub use voice::Voice;
+pub use voice::*;
 
 use super::generator::{
     AudioData, VoiceData
@@ -31,7 +30,6 @@ pub struct DSPRegisters {
     echo_feedback:  u8,
     pitch_mod:      u8,
 
-    noise_enable:   u8,
     echo_enable:    u8,
 
     src_offset:     u8,
@@ -81,7 +79,7 @@ impl DSP {
 
             0x0D => self.regs.echo_feedback,
             0x2D => self.regs.pitch_mod,
-            0x3D => self.regs.noise_enable,
+            //0x3D => ,
             0x4D => self.regs.echo_enable,
             0x5D => self.regs.src_offset,
             0x6D => self.regs.echo_offset,
@@ -106,7 +104,7 @@ impl DSP {
 
             0x0D => self.regs.echo_feedback = data,
             0x2D => self.regs.pitch_mod = data,
-            0x3D => self.regs.noise_enable = data,
+            0x3D => self.noise_enable(data),
             0x4D => self.regs.echo_enable = data,
             0x5D => self.regs.src_offset = data,
             0x6D => self.regs.echo_offset = data,
@@ -167,5 +165,11 @@ impl DSP {
         let addr_lo = ram.read(source_dir_addr + 2);
         let addr_hi = ram.read(source_dir_addr + 3);
         make16!(addr_hi, addr_lo)
+    }
+
+    fn noise_enable(&mut self, enable: u8) {
+        for i in 0..8 {
+            self.voices[i].enable_noise(test_bit!(enable, i, u8));
+        }
     }
 }

@@ -2,24 +2,11 @@
 
 use bitflags::bitflags;
 
-bitflags! {
-    #[derive(Default)]
-    pub struct ADSRLo: u8 {
-        const ENABLE = bit!(7);
-        const DECAY = bits![6, 5, 4];
-        const ATTACK = bits![3, 2, 1, 0];
-    }
-}
-
-bitflags! {
-    #[derive(Default)]
-    pub struct ADSRHi: u8 {
-        const SUSTAIN_LEVEL = bits![7, 6, 5];
-        const RELEASE = bits![4, 3, 2, 1, 0];
-    }
-}
+const AUDIO_FREQ: f64 = 32_000.0;
 
 const PITCH_MASK: u16 = 0x3FFF;
+const PITCH_FACTOR: usize = bit!(12) as usize;
+const PITCH_COEF: f64 = AUDIO_FREQ / (PITCH_FACTOR as f64);
 
 #[derive(Clone, Copy)]
 pub struct Voice {
@@ -30,10 +17,11 @@ pub struct Voice {
 
     src_num:    u8, // Lower byte of memory addr to use for sample.
 
-    adsr_lo:    ADSRLo,
-    adsr_hi:    ADSRHi,
+    adsr:       u16,
     gain:       u8,
     fir_coef:   u8,
+
+    noise:      bool,   // Should this voice generate noise
 
     // Read
     envx:       u8,
@@ -50,10 +38,11 @@ impl Voice {
 
             src_num:    0,
 
-            adsr_lo:    ADSRLo::default(),
-            adsr_hi:    ADSRHi::default(),
+            adsr:       0,
             gain:       0,
             fir_coef:   0,
+
+            noise:      false,
 
             envx:       0,
             outx:       0,
@@ -68,8 +57,8 @@ impl Voice {
             0x2 => lo!(self.pitch),
             0x3 => hi!(self.pitch),
             0x4 => self.src_num,
-            0x5 => self.adsr_lo.bits(),
-            0x6 => self.adsr_hi.bits(),
+            0x5 => lo!(self.adsr),
+            0x6 => hi!(self.adsr),
             0x7 => self.gain,
             0x8 => self.envx,
             0x9 => self.outx,
@@ -85,8 +74,8 @@ impl Voice {
             0x2 => self.pitch = set_lo!(self.pitch, data),
             0x3 => self.pitch = set_hi!(self.pitch, data),
             0x4 => self.src_num = data,
-            0x5 => self.adsr_lo = ADSRLo::from_bits_truncate(data),
-            0x6 => self.adsr_hi = ADSRHi::from_bits_truncate(data),
+            0x5 => self.adsr = set_lo!(self.adsr, data),
+            0x6 => self.adsr = set_hi!(self.adsr, data),
             0x7 => self.gain = data,
             0xF => self.fir_coef = data,
             _ => {},
@@ -99,5 +88,26 @@ impl Voice {
     // Index into source directory.
     pub fn dir_index(&self) -> u16 {
         (self.src_num as u16) * 4
+    }
+
+    pub fn enable_noise(&mut self, enable: bool) {
+        self.noise = enable;
+    }
+
+    pub fn is_noise_enabled(&self) -> bool {
+        self.noise
+    }
+
+    pub fn freq(&self) -> f64 {
+        let pitch = self.pitch & PITCH_MASK;
+        (pitch as f64) * PITCH_COEF
+    }
+
+    pub fn read_adsr(&self) -> u16 {
+        self.adsr
+    }
+
+    pub fn read_gain(&self) -> u8 {
+        self.gain
     }
 }

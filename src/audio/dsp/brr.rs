@@ -16,7 +16,7 @@ bitflags! {
 }
 
 impl BRRHead {
-    fn coef_a(&self) -> f64 {
+    fn coef_a(&self) -> f32 {
         match (*self & BRRHead::FILTER).bits() >> 2 {
             0 => 0.0,
             1 => 0.9375,
@@ -26,7 +26,7 @@ impl BRRHead {
         }
     }
 
-    fn coef_b(&self) -> f64 {
+    fn coef_b(&self) -> f32 {
         match (*self & BRRHead::FILTER).bits() >> 2 {
             0 => 0.0,
             1 => 0.0,
@@ -44,7 +44,7 @@ impl BRRHead {
 // Decode BRR samples. Returns a slice of 16-bit PCM,
 // and a bool that indicates whether the sample should loop or not.
 #[inline]
-pub fn decode_samples(start: u16, ram: &RAM) -> (Box<[i16]>, bool) {
+pub fn decode_samples(start: u16, ram: &RAM) -> (Box<[f32]>, bool) {
     let mut data = Vec::new();
     let mut should_loop = false;
     let mut last1 = 0.0;
@@ -56,13 +56,13 @@ pub fn decode_samples(start: u16, ram: &RAM) -> (Box<[i16]>, bool) {
         for d in sample_iter {
             let first = hi_nybble!(d);
             let samp = decompress_sample(head, first, last1, last2);
-            data.push(samp as i16);
+            data.push(samp);
             last2 = last1;
             last1 = samp;
 
             let second = lo_nybble!(d);
             let samp = decompress_sample(head, second, last1, last2);
-            data.push(samp as i16);
+            data.push(samp);
             last2 = last1;
             last1 = samp;
         }
@@ -75,8 +75,23 @@ pub fn decode_samples(start: u16, ram: &RAM) -> (Box<[i16]>, bool) {
     (data.into_boxed_slice(), should_loop)
 }
 
+macro_rules! clamp {
+    ($val:expr, $min:expr, $max:expr) => {
+        if $val < $min {
+            $min
+        } else if $val > $max {
+            $max
+        } else {
+            $val
+        }
+    };
+}
+
 #[inline]
-fn decompress_sample(head: BRRHead, encoded: u8, last1: f64, last2: f64) -> f64 {
-    let base = (encoded << head.shift()) as f64;
-    base + (last1 * head.coef_a()) + (last2 * head.coef_b())
+fn decompress_sample(head: BRRHead, encoded: u8, last1: f32, last2: f32) -> f32 {
+    const MAX: f32 = std::i16::MAX as f32;
+    const MIN: f32 = std::i16::MIN as f32;
+    let base = (encoded << head.shift()) as f32;
+    let samp = base + (last1 * head.coef_a()) + (last2 * head.coef_b());
+    clamp!(samp, MIN, MAX)
 }

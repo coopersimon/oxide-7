@@ -1,4 +1,5 @@
 // The thread that deals with outputting audio.
+mod adsr;
 mod internal;
 mod types;
 mod voicegen;
