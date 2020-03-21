@@ -75,6 +75,7 @@ pub fn decode_samples(start: u16, ram: &RAM) -> (Box<[f32]>, bool) {
     (data.into_boxed_slice(), should_loop)
 }
 
+// Clamp val between min and max.
 macro_rules! clamp {
     ($val:expr, $min:expr, $max:expr) => {
         if $val < $min {
@@ -87,10 +88,22 @@ macro_rules! clamp {
     };
 }
 
+// Sign extend a 4-bit signed value to 8 bits.
+macro_rules! sign_extend {
+    ($val:expr) => {
+        if test_bit!($val, 3, u8) {
+            ($val | 0xF0) as i8
+        } else {
+            $val as i8
+        }
+    };
+}
+
 #[inline]
 fn decompress_sample(head: BRRHead, encoded: u8, last1: f32, last2: f32) -> f32 {
     const MAX: f32 = std::i16::MAX as f32;
     const MIN: f32 = std::i16::MIN as f32;
+    let unpacked = sign_extend!(encoded) as i16;
     let base = (encoded << head.shift()) as f32;
     let samp = base + (last1 * head.coef_a()) + (last2 * head.coef_b());
     clamp!(samp, MIN, MAX)

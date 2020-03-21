@@ -1,5 +1,5 @@
 // Generates audio samples for a single audio voice.
-use super::adsr::ADSRSettings;
+use super::envelope::*;
 use super::types::VoiceData;
 
 enum Status {
@@ -41,7 +41,7 @@ impl VoiceGen {
             freq_step:      0.0,
             freq_counter:   0.0,
 
-            envelope:       Envelope::new(0, 0),
+            envelope:       Envelope::new(0, 0, sample_rate as f64),
 
             noise:          false,
             status:         Status::Off
@@ -57,7 +57,7 @@ impl VoiceGen {
         self.freq_step = self.sample_rate / data.regs.freq();
         self.freq_counter = 0.0;
 
-        self.envelope = Envelope::new(data.regs.read_adsr(), data.regs.read_gain());
+        self.envelope = Envelope::new(data.regs.read_adsr(), data.regs.read_gain(), self.sample_rate);
 
         self.noise = data.regs.is_noise_enabled();    // TODO: maybe this should be set separately.
 
@@ -74,33 +74,19 @@ impl VoiceGen {
         let take = (buffer.len() as f32 * end_time) as usize;
         let skip = (buffer.len() as f32 * start_time) as usize;
 
-        for i in buffer.iter_mut().take(take).skip(skip) {
+        for s in buffer.iter_mut().take(take).skip(skip) {
             if !self.noise {
                 let sample = match self.source {
                     SampleSource::Samp(i) => self.sample[i],
                     SampleSource::Loop(i) => self.s_loop[i],
                 };
-                
+                // TODO: pitch mod
+                let mult = sample * self.envelope.next().unwrap_or(0.0);
+                *s = mult as i16;
             } else {
                 // TODO
-                *i = 0;
+                *s = 0;
             }
-        }
-    }
-}
-
-// ADSR
-
-struct Envelope {
-    adsr:   ADSRSettings,
-    gain:   u8,
-}
-
-impl Envelope {
-    fn new(adsr: u16, gain: u8) -> Self {
-        Envelope {
-            adsr:   ADSRSettings::from_bits_truncate(adsr),
-            gain:   gain,
         }
     }
 }

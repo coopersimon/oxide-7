@@ -25,6 +25,12 @@ macro_rules! bits {
     };
 }
 
+macro_rules! bits16 {
+    [ $($bit_num:expr),* ] => {
+        $(bit!($bit_num, u16))|*
+    };
+}
+
 // Check if a bit is set.
 macro_rules! test_bit {
     ($val:expr, $bit_num:expr) => {
