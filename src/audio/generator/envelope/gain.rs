@@ -27,10 +27,10 @@ impl GainSettings {
         } else {
             let param = (*self & GainSettings::GAIN_PARAM).bits();
             match (*self & GainSettings::GAIN_MODE).bits() {    // TODO: what should "none" do here? Off or Static(1.0)?
-                LINEAR_INCREASE     => stepFactor(param, sample_rate).map_or(EnvelopeState::Static(0.0), |v| EnvelopeState::LinearIncrease(v)),
-                BENT_LINE_INCREASE  => stepFactor(param, sample_rate).map_or(EnvelopeState::Static(0.0), |v| EnvelopeState::BentLineIncrease(v)),
-                LINEAR_DECREASE     => stepFactor(param, sample_rate).map_or(EnvelopeState::Static(1.0), |v| EnvelopeState::LinearDecrease(v)),
-                EXP_DECREASE        => stepFactor(param, sample_rate).map_or(EnvelopeState::Static(1.0), |v| EnvelopeState::ExpDecrease(v)),
+                LINEAR_INCREASE     => step_factor(param, sample_rate).map_or(EnvelopeState::Static(0.0), |v| EnvelopeState::LinearIncrease(v)),
+                BENT_LINE_INCREASE  => step_factor(param, sample_rate).map_or(EnvelopeState::Static(0.0), |v| EnvelopeState::BentLineIncrease(v)),
+                LINEAR_DECREASE     => step_factor(param, sample_rate).map_or(EnvelopeState::Static(1.0), |v| EnvelopeState::LinearDecrease(v)),
+                EXP_DECREASE        => step_factor(param, sample_rate).map_or(EnvelopeState::Static(1.0), |v| EnvelopeState::ExpDecrease(v)),
                 _ => unreachable!()
             }
         }
@@ -44,7 +44,7 @@ impl GainSettings {
 // nSamples / nSteps = stepDuration
 // so: factor * sampleRate = stepDuration
 
-pub fn stepFactor(param: u8, sample_rate: f64) -> Option<f64> {
+pub fn step_factor(param: u8, sample_rate: f64) -> Option<f64> {
     match param {
         0x00 => None,
         0x01 => Some(0.064),

@@ -2,12 +2,6 @@
 use super::envelope::*;
 use super::types::VoiceData;
 
-enum Status {
-    On,
-    Fade(u8),
-    Off
-}
-
 enum SampleSource {
     Samp(usize),
     Loop(usize)
@@ -26,7 +20,10 @@ pub struct VoiceGen {
     envelope:       Envelope,
 
     noise:          bool,
-    status:         Status
+    enable:         bool,
+
+    vol_left:       f32,    // 0 -> 1
+    vol_right:      f32,
 }
 
 impl VoiceGen {
@@ -44,7 +41,10 @@ impl VoiceGen {
             envelope:       Envelope::new(0, 0, sample_rate as f64),
 
             noise:          false,
-            status:         Status::Off
+            enable:         false,
+
+            vol_left:       0.0,
+            vol_right:      0.0,
         }
     }
 
@@ -59,34 +59,106 @@ impl VoiceGen {
 
         self.envelope = Envelope::new(data.regs.read_adsr(), data.regs.read_gain(), self.sample_rate);
 
+        self.enable = true;
         self.noise = data.regs.is_noise_enabled();    // TODO: maybe this should be set separately.
 
-        self.status = Status::On;
+        self.vol_left = data.regs.read_left_vol();
+        self.vol_right = data.regs.read_right_vol();
     }
 
     // Turn sound off from key off signal.
     pub fn key_off(&mut self) {
-        self.status = Status::Fade(255);
+        if self.enable {
+            self.envelope.off(0.008 * self.sample_rate);
+        }
     }
 
-    // Generates the sound and inserts it into the buffer at the fractions provided.
-    pub fn generate_signal(&mut self, buffer: &mut [i16], start_time: f32, end_time: f32) {
-        let take = (buffer.len() as f32 * end_time) as usize;
-        let skip = (buffer.len() as f32 * start_time) as usize;
-
-        for s in buffer.iter_mut().take(take).skip(skip) {
+    pub fn next(&mut self, p_mod: i16) -> i16 {
+        if self.enable {
             if !self.noise {
                 let sample = match self.source {
                     SampleSource::Samp(i) => self.sample[i],
                     SampleSource::Loop(i) => self.s_loop[i],
                 };
+                self.step_freq();
                 // TODO: pitch mod
-                let mult = sample * self.envelope.next().unwrap_or(0.0);
-                *s = mult as i16;
+                match self.envelope.next() {
+                    Some(gain) => (gain * sample) as i16,
+                    None => {
+                        self.enable = false;
+                        0
+                    }
+                }
             } else {
                 // TODO
-                *s = 0;
+                0
             }
+        } else {
+            0
         }
     }
+
+    pub fn get_vol_left(&self) -> f32 {
+        self.vol_left
+    }
+
+    pub fn get_vol_right(&self) -> f32 {
+        self.vol_right
+    }
 }
+
+impl VoiceGen {
+    fn step_freq(&mut self) {
+        self.freq_counter += 1.0;
+        if self.freq_counter >= self.freq_step {
+            match self.source {
+                SampleSource::Samp(i) => {
+                    let new_i = i + 1;
+                    if new_i >= self.sample.len() {
+                        if self.should_loop() {
+                            self.source = SampleSource::Loop(0);
+                        } else {
+                            self.enable = false;
+                        }
+                    } else {
+                        self.source = SampleSource::Samp(new_i);
+                    }
+                },
+                SampleSource::Loop(i) => {
+                    let new_i = i + 1;
+                    if new_i >= self.s_loop.len() {
+                        self.source = SampleSource::Loop(0);
+                    } else {
+                        self.source = SampleSource::Loop(new_i);
+                    }
+                }
+            }
+
+            self.freq_counter -= self.freq_step;
+        }
+    }
+
+    fn should_loop(&self) -> bool {
+        self.s_loop.len() > 0
+    }
+}
+
+/*impl Iterator for VoiceGen {
+    type Item = i16;
+
+    // Get the next sample.
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.noise {
+            let sample = match self.source {
+                SampleSource::Samp(i) => self.sample[i],
+                SampleSource::Loop(i) => self.s_loop[i],
+            };
+            // TODO: step frequency.
+            // TODO: pitch mod
+            self.envelope.next().map(|g| (g * sample) as i16)
+        } else {
+            // TODO
+            None
+        }
+    }
+}*/

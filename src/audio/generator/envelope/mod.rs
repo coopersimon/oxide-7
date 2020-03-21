@@ -16,14 +16,12 @@ pub struct Envelope {
     sample_rate:    f64,
 
     adsr:           ADSRSettings,
-    gain:           GainSettings,
     sustain:        f32,
-    sustain_gap:    f32,
 
     state:          EnvelopeState,
     count:          f64,
 
-    envelope:       f32,
+    gain:           f32,
 }
 
 impl Envelope {
@@ -39,15 +37,18 @@ impl Envelope {
             sample_rate:    sample_rate,
 
             adsr:           adsr_settings,
-            gain:           gain_settings,
             sustain:        sustain,
-            sustain_gap:    1.0 - sustain,
 
             state:          state,
             count:          0.0,
 
-            envelope:       initial_gain
+            gain:           initial_gain
         }
+    }
+
+    pub fn off(&mut self, fade_duration: f64) {
+        self.count = 0.0;
+        self.state = EnvelopeState::Fade(fade_duration);
     }
 }
 
@@ -58,25 +59,29 @@ impl Iterator for Envelope {
         match self.state {
             // ADSR
             EnvelopeState::Attack(step_len) => {
-                let out = self.envelope;
+                let out = self.gain;
+                self.count += 1.0;
                 if self.count >= step_len {
-                    self.envelope += GAIN_STEP;
+                    self.gain += GAIN_STEP;
+                    self.count -= step_len;
                 }
-                if self.envelope >= 1.0 {
+                if self.gain >= 1.0 {
                     self.state = EnvelopeState::Decay(self.adsr.decay(self.sample_rate));
                 }
                 Some(out)
             },
             EnvelopeState::Decay(step_len) => {
-                let out = self.envelope;
+                let out = self.gain;
+                self.count += 1.0;
                 if self.count >= step_len {
-                    let over_sustain = self.envelope - self.sustain;
+                    let over_sustain = self.gain - self.sustain;
                     let sustain_mul = over_sustain * EXP_STEP;
-                    self.envelope = self.sustain + sustain_mul;
+                    self.gain = self.sustain + sustain_mul;
+                    self.count -= step_len;
                 }
                 // TODO: check this margin
-                if self.envelope <= self.sustain + EXP_MARGIN {
-                    self.envelope = self.sustain;
+                if self.gain <= self.sustain + EXP_MARGIN {
+                    self.gain = self.sustain;
                     self.state = self.adsr.sustain_release(self.sample_rate).map_or(
                         EnvelopeState::Static(self.sustain),
                         |sustain_release_step| EnvelopeState::Sustain(sustain_release_step)
@@ -85,66 +90,88 @@ impl Iterator for Envelope {
                 Some(out)
             },
             EnvelopeState::Sustain(step_len) => {
-                let out = self.envelope;
+                let out = self.gain;
+                self.count += 1.0;
                 if self.count >= step_len {
-                    self.envelope *= EXP_STEP;
+                    self.gain *= EXP_STEP;
+                    self.count -= step_len;
                 }
                 // TODO: check this margin
-                if self.envelope <= EXP_MARGIN {
-                    self.state = EnvelopeState::Off;
+                if self.gain <= EXP_MARGIN {
+                    None
+                } else {
+                    Some(out)
                 }
-                Some(out)
             },
             // Gain
             EnvelopeState::LinearIncrease(step_len) => {
-                let out = self.envelope;
+                let out = self.gain;
+                self.count += 1.0;
                 if self.count >= step_len {
-                    self.envelope += GAIN_STEP;
+                    self.gain += GAIN_STEP;
+                    self.count -= step_len;
                 }
-                if self.envelope >= 1.0 {
+                if self.gain >= 1.0 {
                     self.state = EnvelopeState::Static(1.0);
                 }
                 Some(out)
             },
             EnvelopeState::BentLineIncrease(step_len) => {
-                let out = self.envelope;
+                let out = self.gain;
+                self.count += 1.0;
                 if self.count >= step_len {
-                    self.envelope += if self.envelope >= BENT_MAX {
+                    self.gain += if self.gain >= BENT_MAX {
                         BENT_STEP
                     } else {
                         GAIN_STEP
                     };
+                    self.count -= step_len;
                 }
-                if self.envelope >= 1.0 {
+                if self.gain >= 1.0 {
                     self.state = EnvelopeState::Static(1.0);
                 }
                 Some(out)
             },
             EnvelopeState::LinearDecrease(step_len) => {
-                let out = self.envelope;
+                let out = self.gain;
+                self.count += 1.0;
                 if self.count >= step_len {
-                    self.envelope -= GAIN_STEP;
+                    self.gain -= GAIN_STEP;
+                    self.count -= step_len;
                 }
-                if self.envelope <= 0.0 {
+                if self.gain <= 0.0 {
                     self.state = EnvelopeState::Static(0.0);
                 }
                 Some(out)
             },
             EnvelopeState::ExpDecrease(step_len) => {
-                let out = self.envelope;
+                let out = self.gain;
+                self.count += 1.0;
                 if self.count >= step_len {
-                    self.envelope *= EXP_STEP;
+                    self.gain *= EXP_STEP;
+                    self.count -= step_len;
                 }
                 // TODO: check this margin
-                if self.envelope <= EXP_MARGIN {
+                if self.gain <= EXP_MARGIN {
                     self.state = EnvelopeState::Static(0.0);
                 }
                 Some(out)
             },
 
+            // Fade
+            EnvelopeState::Fade(fade_len) => {
+                let fade_factor = (self.count / fade_len) as f32;
+                let out = self.gain * (1.0 - fade_factor);
+                self.count += 1.0;
+                if self.count >= fade_len {
+                    None
+                } else {
+                    Some(out)
+                }
+            },
+
             // Static
             EnvelopeState::Static(val) => Some(val),
-            EnvelopeState::Off => None,
         }
     }
 }
@@ -152,7 +179,7 @@ impl Iterator for Envelope {
 // States along with the step time for each change.
 // The associated values here are the step size; i.e. how many samples should be emitted before altering gain.
 #[derive(Debug)]
-enum EnvelopeState {
+pub enum EnvelopeState {
     // ADSR
     Attack(f64),  // Increase of 1/64 per step.
     Decay(f64),   // Dn = D(n-1) * (255/256) per step; D0 = 1.0 - sustainLevel; Gn = sustainLevel + Dn
@@ -163,8 +190,8 @@ enum EnvelopeState {
     LinearDecrease(f64),    // Decrease of 1/64 per step.
     ExpDecrease(f64),       // Gn = G(n-1) * (255/256) per step, G0 = 1.0.
     // STATIC
+    Fade(f64),      // On key off. Fade value is total duration.
     Static(f32),    // Static gain or sustain. This assoc value is the LEVEL, not the step size.
-    Off,            // Post-envelope.
 }
 
 impl EnvelopeState {

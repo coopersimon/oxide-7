@@ -1,7 +1,5 @@
 // A single audio channel
 
-use bitflags::bitflags;
-
 const AUDIO_FREQ: f64 = 32_000.0;
 
 const PITCH_MASK: u16 = 0x3FFF;
@@ -109,5 +107,13 @@ impl Voice {
 
     pub fn read_gain(&self) -> u8 {
         self.gain
+    }
+
+    pub fn read_left_vol(&self) -> f32 {
+        ((self.left_vol as i8) as f32) / 128.0
+    }
+
+    pub fn read_right_vol(&self) -> f32 {
+        ((self.right_vol as i8) as f32) / 128.0
     }
 }

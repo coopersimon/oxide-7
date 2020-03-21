@@ -68,6 +68,6 @@ impl ADSRSettings {
 
     pub fn sustain_release(&self, sample_rate: f64) -> Option<f64> {
         let sr = (*self & ADSRSettings::RELEASE).bits() >> 8;
-        super::gain::stepFactor(sr as u8, sample_rate)
+        super::gain::step_factor(sr as u8, sample_rate)
     }
 }

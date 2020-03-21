@@ -104,7 +104,7 @@ fn decompress_sample(head: BRRHead, encoded: u8, last1: f32, last2: f32) -> f32 
     const MAX: f32 = std::i16::MAX as f32;
     const MIN: f32 = std::i16::MIN as f32;
     let unpacked = sign_extend!(encoded) as i16;
-    let base = (encoded << head.shift()) as f32;
+    let base = (unpacked << head.shift()) as f32;
     let samp = base + (last1 * head.coef_a()) + (last2 * head.coef_b());
     clamp!(samp, MIN, MAX)
 }
