@@ -3,7 +3,7 @@
 const AUDIO_FREQ: f64 = 32_000.0;
 
 const PITCH_MASK: u16 = 0x3FFF;
-const PITCH_FACTOR: usize = bit!(12) as usize;
+const PITCH_FACTOR: usize = bit!(12, u16) as usize;
 const PITCH_COEF: f64 = AUDIO_FREQ / (PITCH_FACTOR as f64);
 
 #[derive(Clone, Copy)]

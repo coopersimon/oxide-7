@@ -34,7 +34,6 @@ pub struct InternalAudioGenerator {
 impl InternalAudioGenerator {
     pub fn new(recv: Receiver<AudioData>, sample_rate: usize) -> Self {
         let process_step = sample_rate / 60;
-        println!("Making buffer step size: {}", process_step);
         InternalAudioGenerator {
             receiver:       recv,
             process_step:   process_step as f32,

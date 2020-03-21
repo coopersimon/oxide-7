@@ -54,7 +54,8 @@ impl VoiceGen {
         self.s_loop = data.s_loop;
         self.source = SampleSource::Samp(0);
 
-        self.freq_step = self.sample_rate / data.regs.freq();
+        let freq = data.regs.freq();
+        self.freq_step = self.sample_rate / freq;
         self.freq_counter = 0.0;
 
         self.envelope = Envelope::new(data.regs.read_adsr(), data.regs.read_gain(), self.sample_rate);
@@ -110,7 +111,7 @@ impl VoiceGen {
 impl VoiceGen {
     fn step_freq(&mut self) {
         self.freq_counter += 1.0;
-        if self.freq_counter >= self.freq_step {
+        while self.freq_counter >= self.freq_step {
             match self.source {
                 SampleSource::Samp(i) => {
                     let new_i = i + 1;
@@ -142,23 +143,3 @@ impl VoiceGen {
         self.s_loop.len() > 0
     }
 }
-
-/*impl Iterator for VoiceGen {
-    type Item = i16;
-
-    // Get the next sample.
-    fn next(&mut self) -> Option<Self::Item> {
-        if !self.noise {
-            let sample = match self.source {
-                SampleSource::Samp(i) => self.sample[i],
-                SampleSource::Loop(i) => self.s_loop[i],
-            };
-            // TODO: step frequency.
-            // TODO: pitch mod
-            self.envelope.next().map(|g| (g * sample) as i16)
-        } else {
-            // TODO
-            None
-        }
-    }
-}*/
