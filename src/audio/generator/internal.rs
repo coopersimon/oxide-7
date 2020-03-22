@@ -22,10 +22,9 @@ pub struct InternalAudioGenerator {
     voice_generators:   [VoiceGen; 8],
 
     // Control values
-    // ...?
-
-    // Raw channel buffers
-    //buffers:        AudioBuffers,
+    mute:       bool,
+    vol_left:   f32,
+    vol_right:  f32,
 
     // Previous buffer values
     previous: [i16; 8]
@@ -52,7 +51,9 @@ impl InternalAudioGenerator {
                 VoiceGen::new(sample_rate),
             ],
 
-            //buffers:    AudioBuffers::new(sample_rate / 60),
+            mute:       true,
+            vol_left:   0.0,
+            vol_right:  0.0,
 
             previous:   [0; 8],
         }
@@ -73,18 +74,14 @@ impl InternalAudioGenerator {
                         AudioData::VoiceKeyOff{
                             num, time
                         } => self.voice_data[num].push_back((None, (time * self.process_step) as usize)),
-                        AudioData::DSP(/*DSPRegs*/) => {
-                            // Set DSP stuff
-                            break;
-                        },
+                        AudioData::Mute(m) => self.mute = m,
+                        AudioData::DSPVolLeft(v) => self.vol_left = v,  // TODO: make this more fine-grained
+                        AudioData::DSPVolRight(v) => self.vol_right = v,
                         AudioData::Frame => break,
                     }
                 }
 
-                // Generate signals for each buffer
-                /*for ((gen, data), buffer) in self.voice_generators.iter_mut().zip(self.voice_data.iter_mut()).zip(self.buffers.voices.iter_mut()) {
-                    process_command_buffer(gen, data, buffer);
-                }*/
+                // Generate a full buffer of samples.
                 self.generate_and_mix();
 
                 // Mix first samples of new data.
@@ -97,7 +94,7 @@ impl InternalAudioGenerator {
     }
 }
 
-const CHAN_DIV_FACTOR: f32 = 1.0 / (8.0 * 32767.0);
+const CHAN_DIV_FACTOR: f32 = 1.0 / (8.0 * 32768.0);
 
 impl InternalAudioGenerator {
 
@@ -113,6 +110,10 @@ impl InternalAudioGenerator {
         for (i, d) in self.buffer.buffer.iter_mut().enumerate() {
             d[0] = 0.0;
             d[1] = 0.0;
+
+            if self.mute {
+                continue;
+            }
             for v in 0..8 {
                 // Update generator sound if necessary.
                 if i >= next_gen[v] {
@@ -125,7 +126,10 @@ impl InternalAudioGenerator {
                 }
 
                 // Generate and mix sample.
-                let outx = self.voice_generators[v].next(/*self.previous[v - 1]*/ 0);
+                if v > 0 {
+                    self.voice_generators[v].pitch_modulate(self.previous[v - 1]);
+                }
+                let outx = self.voice_generators[v].next();
                 current[v] = outx;
                 let samp = (outx as f32) * CHAN_DIV_FACTOR;
                 d[0] += samp * self.voice_generators[v].get_vol_left();
@@ -136,8 +140,8 @@ impl InternalAudioGenerator {
                 self.previous[v] = current[v];
             }
 
-            // d[0] *= self.vol_left;
-            // d[0] *= self.vol_right;
+            d[0] *= self.vol_left;
+            d[1] *= self.vol_right;
         }
     }
 }

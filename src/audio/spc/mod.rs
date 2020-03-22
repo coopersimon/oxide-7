@@ -4,8 +4,6 @@ mod types;
 use super::mem::SPCBus;
 use types::*;
 
-use std::collections::HashSet;
-
 pub struct SPC {
     a:      u8,         // Accumulator
     x:      u8,         // X-Index

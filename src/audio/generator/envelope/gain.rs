@@ -16,10 +16,10 @@ bitflags! {
 impl GainSettings {
     // Gets the state for the gain.
     pub fn state(&self, sample_rate: f64) -> EnvelopeState {
-        const LINEAR_INCREASE: u8       = 2 << 6;
-        const BENT_LINE_INCREASE: u8    = 3 << 6;
-        const LINEAR_DECREASE: u8       = 0 << 6;
-        const EXP_DECREASE: u8          = 1 << 6;
+        const LINEAR_INCREASE: u8       = 2 << 5;
+        const BENT_LINE_INCREASE: u8    = 3 << 5;
+        const LINEAR_DECREASE: u8       = 0 << 5;
+        const EXP_DECREASE: u8          = 1 << 5;
 
         if !self.contains(GainSettings::DIRECT) {
             let param = (*self & GainSettings::DIRECT_PARAM).bits() as f32;

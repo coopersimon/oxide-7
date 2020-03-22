@@ -18,7 +18,12 @@ pub enum AudioData {
         num:    usize,
         time:   f32
     },
-    DSP(/*DSPRegs*/),
+
+    // DSP things
+    Mute(bool),
+    DSPVolLeft(f32),
+    DSPVolRight(f32),
+
     Frame,
 }
 

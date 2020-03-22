@@ -88,7 +88,7 @@ impl SPCBus {
         match addr {
             0xF1 => 0,
 
-            0xF2 => self.dsp_reg_addr,
+            0xF2 => self.dsp_reg_addr & 0x7F,
             0xF3 => self.dsp.read(self.dsp_reg_addr),
 
             0xF4 => {

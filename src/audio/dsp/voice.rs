@@ -1,10 +1,6 @@
 // A single audio channel
 
-const AUDIO_FREQ: f64 = 32_000.0;
-
 const PITCH_MASK: u16 = 0x3FFF;
-const PITCH_FACTOR: usize = bit!(12, u16) as usize;
-const PITCH_COEF: f64 = AUDIO_FREQ / (PITCH_FACTOR as f64);
 
 #[derive(Clone, Copy)]
 pub struct Voice {
@@ -20,6 +16,7 @@ pub struct Voice {
     fir_coef:   u8,
 
     noise:      bool,   // Should this voice generate noise
+    pitch_mod:  bool,
 
     // Read
     envx:       u8,
@@ -41,6 +38,7 @@ impl Voice {
             fir_coef:   0,
 
             noise:      false,
+            pitch_mod:  false,
 
             envx:       0,
             outx:       0,
@@ -88,6 +86,7 @@ impl Voice {
         (self.src_num as u16) * 4
     }
 
+    // TODO: move these to main batch send?
     pub fn enable_noise(&mut self, enable: bool) {
         self.noise = enable;
     }
@@ -96,9 +95,18 @@ impl Voice {
         self.noise
     }
 
-    pub fn freq(&self) -> f64 {
-        let pitch = self.pitch & PITCH_MASK;
-        (pitch as f64) * PITCH_COEF
+    pub fn enable_pitch_mod(&mut self, enable: bool) {
+        self.pitch_mod = enable;
+    }
+
+    pub fn is_pitch_mod_enabled(&self) -> bool {
+        self.pitch_mod
+    }
+
+    //
+
+    pub fn read_pitch(&self) -> u16 {
+        self.pitch & PITCH_MASK
     }
 
     pub fn read_adsr(&self) -> u16 {
