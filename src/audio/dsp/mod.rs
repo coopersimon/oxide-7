@@ -84,7 +84,7 @@ impl DSP {
     }
 
     pub fn read(&self, addr: u8) -> u8 {
-        println!("Reading from DSP {:X}", addr);
+        //println!("Reading from DSP {:X}", addr);
         match addr {
             0x0C => self.regs.main_vol_left,
             0x1C => self.regs.main_vol_right,
@@ -123,7 +123,7 @@ impl DSP {
             0x0D => self.regs.echo_feedback = data,
             0x2D => self.set_pitch_mod(data),
             0x3D => self.set_noise_enable(data),
-            0x4D => self.regs.echo_enable = data,
+            0x4D => self.set_echo_enable(data),
             0x5D => self.regs.src_offset = data,
             0x6D => self.regs.echo_offset = data,
             0x7D => self.regs.echo_delay = data,
@@ -223,5 +223,10 @@ impl DSP {
         self.regs.main_vol_right = val;
         let vol = ((val as i8) as f32) / 128.0;
         self.signal_tx.send(AudioData::DSPVolRight(vol)).expect("Couldn't send vol right");
+    }
+
+    fn set_echo_enable(&mut self, val: u8) {
+        self.regs.echo_enable = val;
+        //println!("Echo: {:X}", val);
     }
 }

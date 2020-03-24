@@ -119,10 +119,10 @@ impl InternalAudioGenerator {
                 if i >= next_gen[v] {
                     let (voice_data, _) = self.voice_data[v].pop_front().expect("Popped empty voice data buffer!");
                     match voice_data {
-                        Some(data) => self.voice_generators[v].key_on(data),
+                        Some(data) => self.voice_generators[v].key_on(data, v),
                         None => self.voice_generators[v].key_off()
                     }
-                    next_gen[v] = self.voice_data[v].front().and_then(|(_, t)| Some(*t)).unwrap_or(self.process_step as usize);
+                    next_gen[v] = self.voice_data[v].front().map(|(_, t)| *t).unwrap_or(self.process_step as usize);
                 }
 
                 // Generate and mix sample.

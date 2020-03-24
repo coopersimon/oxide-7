@@ -1,7 +1,7 @@
 // Types for use with generating audio.
 use super::super::dsp::Voice;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct VoiceData {
     pub regs:   Box<Voice>, // Register values
     pub sample: Box<[f32]>, // Sample data

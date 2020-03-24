@@ -2,7 +2,7 @@
 
 const PITCH_MASK: u16 = 0x3FFF;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Voice {
     left_vol:   u8, // Signed magnitude representation
     right_vol:  u8,

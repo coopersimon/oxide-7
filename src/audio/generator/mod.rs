@@ -29,12 +29,15 @@ impl AudioGenerator {
             let event_loop = host.event_loop();
     
             let device = host.default_output_device().expect("no output device available.");
+
+            for f in device.supported_output_formats().unwrap() {
+                println!("Format: {:?}", f);
+            }
     
-            let mut supported_formats_range = device.supported_output_formats()
-                .expect("error while querying formats");
+            //let mut supported_formats_range = device.supported_output_formats()
+            //    .expect("error while querying formats");
     
-            let format = supported_formats_range.next()
-                .expect("No supported format")
+            let format = pick_output_format(&device)
                 .with_max_sample_rate();
     
             let stream_id = event_loop.build_output_stream(&device, &format).unwrap();
@@ -91,4 +94,25 @@ impl AudioGenerator {
             thread: thread
         }
     }
+}
+
+fn pick_output_format(device: &cpal::Device) -> cpal::SupportedFormat {
+    use cpal::traits::DeviceTrait;
+
+    const BASE: u32 = 32_000;
+
+    let supported_formats_range = device.supported_output_formats()
+        .expect("error while querying formats");
+
+    for format in supported_formats_range {
+        let cpal::SampleRate(v) = format.max_sample_rate;
+        if (v % BASE) == 0 {
+            return format;
+        }
+    }
+
+    device.supported_output_formats()
+        .expect("error while querying formats")
+        .next()
+        .expect("No supported format")
 }
