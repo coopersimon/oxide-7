@@ -119,12 +119,13 @@ impl SNES {
     // Step the device by one CPU cycle.
     pub fn step(&mut self) -> bool {
         // When NMI is triggered, disable rendering of new frames.
-        if self.cpu.step() {
+        /*if self.cpu.step() {
             self.cpu.enable_rendering(false);
             true
         } else {
             false
-        }
+        }*/
+        self.cpu.step()
     }
 
     pub fn show_frame(&mut self, frame: &mut [u8]) {

@@ -55,7 +55,7 @@ pub enum PPUSignal {
 }
 
 // PPU internal state
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum PPUState {
     HBlankLeft,         // The left side of the screen, before drawing begins.
     DrawingBeforePause, // Drawing the line.
@@ -95,6 +95,7 @@ pub struct PPU {
     h_timer:        u16,    // $4207-8, for triggering IRQ.
     h_cycle:        usize,  // Cycle into line to fire IRQ on.
     v_timer:        u16,    // $4209-a, for triggering IRQ.
+    h_irq_latch:    bool,   // Latched if the horizontal IRQ is triggered.
 
     renderer:       render::RenderThread,
     enable_render:  bool,
@@ -118,6 +119,7 @@ impl PPU {
             h_timer:        0,
             h_cycle:        0,
             v_timer:        0,
+            h_irq_latch:    false,
 
             renderer:       render::RenderThread::new(mem),
             enable_render:  true,
@@ -160,49 +162,28 @@ impl PPU {
         use PPUState::*;
         self.cycle_count += cycles;
 
-        let signal = match self.state {
-            VBlank if self.scanline == 0 => {
-                self.change_state(DrawingBeforePause);
-                PPUSignal::FrameStart
-            },
-            HBlankLeft if self.scanline > screen::V_RES => {
-                //self.renderer.frame_end();
-                self.change_state(VBlank)
-            },
-            HBlankLeft if (self.cycle_count >= timing::SCANLINE_OFFSET) && (self.scanline <= screen::V_RES) => {
-                self.renderer.draw_line((self.scanline - 1) as usize);
-                self.change_state(DrawingBeforePause)
-            },
-            DrawingBeforePause if self.cycle_count >= timing::PAUSE_START => {
-                self.change_state(DrawingAfterPause)
-            },
-            DrawingAfterPause if self.cycle_count >= timing::H_BLANK_TIME => {
-                // Enter blanking period.
-                self.change_state(HBlankRight)
-            },
-            HBlankRight if self.cycle_count >= timing::SCANLINE => {
-                self.change_state(HBlankLeft)
-            },
-            VBlank if self.cycle_count >= timing::SCANLINE => {
-                self.cycle_count -= timing::SCANLINE;
-                self.scanline += 1;
+        let transition = match self.state {
+            VBlank              if self.scanline == 0                       => Some(PPUTransition::ExitVBlank),
+            DrawingBeforePause  if self.cycle_count >= timing::PAUSE_START  => Some(PPUTransition::CPUPause),
+            DrawingAfterPause   if self.cycle_count >= timing::H_BLANK_TIME => Some(PPUTransition::EnterHBlank),
+            HBlankRight         if self.cycle_count >= timing::SCANLINE     => Some(PPUTransition::NextLine),
+            HBlankLeft          if self.scanline > screen::V_RES            => Some(PPUTransition::EnterVBlank),
+            HBlankLeft          if (self.cycle_count >= timing::SCANLINE_OFFSET)
+                                && (self.scanline <= screen::V_RES)         => Some(PPUTransition::ExitHBlank),
+            VBlank              if self.cycle_count >= timing::SCANLINE     => Some(PPUTransition::NextLine),
+            _ => None
+        };
 
-                if self.scanline >= screen::NUM_SCANLINES {
-                    self.scanline -= screen::NUM_SCANLINES;
-                }
-
-                if self.int_enable.contains(IntEnable::ENABLE_IRQ_Y) && (self.scanline == (self.v_timer as usize)) {
-                    self.trigger_interrupt(Interrupt::IRQ)
-                } else {
-                    PPUSignal::None
-                }
-            },
-            _ => PPUSignal::None
+        let signal = if let Some(transition) = transition {
+            self.transition_state(transition)
+        } else {
+            PPUSignal::None
         };
 
         if signal == PPUSignal::None {
-            if self.int_enable.contains(IntEnable::ENABLE_IRQ_X) && (self.cycle_count >= self.h_cycle) {
-                self.trigger_interrupt(Interrupt::IRQ)
+            if self.int_enable.contains(IntEnable::ENABLE_IRQ_X) && !self.h_irq_latch && (self.cycle_count >= self.h_cycle) {
+                self.h_irq_latch = true;
+                self.trigger_irq()
             } else {
                 PPUSignal::None
             }
@@ -219,11 +200,13 @@ impl PPU {
     pub fn set_h_timer_lo(&mut self, data: u8) {
         self.h_timer = set_lo!(self.h_timer, data);
         self.h_cycle = (self.h_timer as usize) * timing::DOT_TIME;
+        self.h_irq_latch = false;
     }
 
     pub fn set_h_timer_hi(&mut self, data: u8) {
         self.h_timer = set_hi!(self.h_timer, data);
         self.h_cycle = (self.h_timer as usize) * timing::DOT_TIME;
+        self.h_irq_latch = false;
     }
 
     pub fn set_v_timer_lo(&mut self, data: u8) {
@@ -235,36 +218,74 @@ impl PPU {
     }
 
     pub fn get_nmi_flag(&mut self) -> u8 {
-        let ret = self.nmi_flag;
-        self.nmi_flag = 0;
-        ret
+        std::mem::replace(&mut self.nmi_flag, 0)
     }
 
     pub fn get_irq_flag(&mut self) -> u8 {
-        let ret = self.irq_flag;
-        self.irq_flag = 0;
-        ret
+        std::mem::replace(&mut self.irq_flag, 0)
     }
+}
+
+// Each transition has a source and target state associated with it.
+// When transitioning, a signal can be emitted.
+enum PPUTransition {
+    ExitVBlank,
+    CPUPause,
+    EnterHBlank,
+    NextLine,
+    ExitHBlank,
+    EnterVBlank,
 }
 
 // Internal
 impl PPU {
-    // TODO: change this to transition?
-    fn change_state(&mut self, state: PPUState) -> PPUSignal {
-        self.state = state;
-        match self.state {
-            PPUState::DrawingBeforePause => {
+    // Transition to the appropriate state and emit a relevant signal.
+    fn transition_state(&mut self, transition: PPUTransition) -> PPUSignal {
+        use PPUTransition::*;
+        match transition {
+            ExitVBlank => {
                 self.nmi_flag = 0;
                 self.irq_flag = 0;
                 self.toggle_vblank(false);
                 self.toggle_hblank(false);
-
-                PPUSignal::None
+                self.state = PPUState::DrawingBeforePause;
+                PPUSignal::FrameStart
             },
-            PPUState::DrawingAfterPause => {
+            CPUPause => {
+                self.state = PPUState::DrawingAfterPause;
                 PPUSignal::Delay
             },
-            PPUState::VBlank => {
+            EnterHBlank => {
+                self.toggle_hblank(true);
+                self.state = PPUState::HBlankRight;
+                PPUSignal::HBlank
+            },
+            NextLine => {
+                self.cycle_count -= timing::SCANLINE;
+                self.h_irq_latch = false;
+                self.scanline += 1;
+
+                if self.scanline >= screen::NUM_SCANLINES {
+                    self.scanline -= screen::NUM_SCANLINES;
+                }
+
+                if self.state == PPUState::HBlankRight {
+                    self.state = PPUState::HBlankLeft;
+                }
+
+                if self.int_enable.contains(IntEnable::ENABLE_IRQ_Y) && (self.scanline == (self.v_timer as usize)) {
+                    self.trigger_irq()
+                } else {
+                    PPUSignal::None
+                }
+            },
+            ExitHBlank => {
+                self.renderer.draw_line((self.scanline - 1) as usize);
+                self.state = PPUState::DrawingBeforePause;
+                PPUSignal::None
+            },
+            EnterVBlank => {
+                //self.renderer.frame_end();
                 self.toggle_vblank(true);
                 self.toggle_hblank(false);
 
@@ -275,45 +296,25 @@ impl PPU {
                     }
                 }
 
-                self.trigger_interrupt(Interrupt::NMI)
+                self.state = PPUState::VBlank;
+                self.trigger_nmi()
             },
-            PPUState::HBlankRight => {
-                self.toggle_hblank(true);
-                PPUSignal::HBlank
-            },
-            PPUState::HBlankLeft => self.inc_scanline()
         }
     }
 
-    // Increment the scanline and return an IRQ interrupt if necessary.
-    fn inc_scanline(&mut self) -> PPUSignal {
-        self.cycle_count -= timing::SCANLINE;
-        self.scanline += 1;
-
-        if self.int_enable.contains(IntEnable::ENABLE_IRQ_Y) && (self.scanline == (self.v_timer as usize)) {
-            self.trigger_interrupt(Interrupt::IRQ)
+    // Trigger interrupts.
+    fn trigger_nmi(&mut self) -> PPUSignal {
+        self.nmi_flag |= bit!(7);
+        if self.int_enable.contains(IntEnable::ENABLE_NMI) {
+            PPUSignal::Int(Interrupt::NMI)
         } else {
-            PPUSignal::None
+            PPUSignal::Int(Interrupt::VBLANK)
         }
     }
 
-    // Set the appropriate bit and return the appropriate signal.
-    // TODO: allow triggering of multiple interrupts
-    // TODO: handle this better in general
-    fn trigger_interrupt(&mut self, int: Interrupt) -> PPUSignal {
-        if int.contains(Interrupt::NMI) {
-            self.nmi_flag |= bit!(7);
-            if self.int_enable.contains(IntEnable::ENABLE_NMI) {
-                PPUSignal::Int(Interrupt::NMI)
-            } else {
-                PPUSignal::Int(Interrupt::VBLANK)
-            }
-        } else if int.contains(Interrupt::IRQ) {
-            self.irq_flag |= bit!(7);
-            PPUSignal::Int(Interrupt::IRQ)
-        } else {
-            PPUSignal::None
-        }
+    fn trigger_irq(&mut self) -> PPUSignal {
+        self.irq_flag |= bit!(7);
+        PPUSignal::Int(Interrupt::IRQ)
     }
 
     // Toggle blanking modes.

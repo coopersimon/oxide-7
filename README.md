@@ -18,7 +18,7 @@ A SNES emulator written in Rust.
 * Super Mario All-Stars (mostly works. game select menu is unresponsive for some reason, but actual games are ok)
 * Aladdin (intro works, title screen is a bit glitchy, gameplay responds but then stops after a short while)
 * Zombies Ate My Neighbors! (works pretty well)
-* Mega Man X (first screen shows up ok, then freezes. This used to show the whole intro (before commit ~#100)
+* Mega Man X (Intro works, actual game play breaks.)
 * Tetris & Dr. Mario (shows an anti-piracy screen!)
 * Super Ghouls 'n Ghosts (Intro and title seem fine. Actual gameplay looks a bit corrupted (BG3 in mode 1 issues again I suspect))
 * Kirby's Dreamland 3 (Unrecognised ROM config)
