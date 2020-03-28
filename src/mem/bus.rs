@@ -177,7 +177,7 @@ impl MemBus {
             PPUSignal::Delay => {
                 self.bus_b.clock_apu(PAUSE_LEN);
                 match self.bus_b.ppu.clock(PAUSE_LEN) {
-                    PPUSignal::Int(i) if i == Interrupt::IRQ => i, // This is the only one that should happen here.
+                    PPUSignal::Int(Interrupt::IRQ) => Interrupt::IRQ, // This is the only one that should happen here.
                     PPUSignal::None => Interrupt::default(),
                     _ => unreachable!(),
                 }
@@ -447,7 +447,7 @@ impl MemBus {
 }
 
 // Amount of cycles to wait before telling the APU to clock.
-const APU_CYCLE_BATCH: usize = 10;
+const APU_CYCLE_BATCH: usize = 100;
 
 // Address Bus B, used for hardware registers.
 struct AddrBusB {

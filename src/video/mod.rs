@@ -95,6 +95,7 @@ pub struct PPU {
     h_timer:        u16,    // $4207-8, for triggering IRQ.
     h_cycle:        usize,  // Cycle into line to fire IRQ on.
     v_timer:        u16,    // $4209-a, for triggering IRQ.
+    h_irq_latch:    bool,   // Latched if the horizontal IRQ is triggered.
 
     renderer:       render::RenderThread,
     enable_render:  bool,
@@ -118,6 +119,7 @@ impl PPU {
             h_timer:        0,
             h_cycle:        0,
             v_timer:        0,
+            h_irq_latch:    false,
 
             renderer:       render::RenderThread::new(mem),
             enable_render:  true,
@@ -163,6 +165,7 @@ impl PPU {
         let signal = match self.state {
             VBlank if self.scanline == 0 => {
                 self.change_state(DrawingBeforePause);
+                self.h_irq_latch = false;
                 PPUSignal::FrameStart
             },
             HBlankLeft if self.scanline > screen::V_RES => {
@@ -201,7 +204,8 @@ impl PPU {
         };
 
         if signal == PPUSignal::None {
-            if self.int_enable.contains(IntEnable::ENABLE_IRQ_X) && (self.cycle_count >= self.h_cycle) {
+            if self.int_enable.contains(IntEnable::ENABLE_IRQ_X) && !self.h_irq_latch && (self.cycle_count >= self.h_cycle) {
+                self.h_irq_latch = true;
                 self.trigger_interrupt(Interrupt::IRQ)
             } else {
                 PPUSignal::None
@@ -219,11 +223,13 @@ impl PPU {
     pub fn set_h_timer_lo(&mut self, data: u8) {
         self.h_timer = set_lo!(self.h_timer, data);
         self.h_cycle = (self.h_timer as usize) * timing::DOT_TIME;
+        self.h_irq_latch = false;
     }
 
     pub fn set_h_timer_hi(&mut self, data: u8) {
         self.h_timer = set_hi!(self.h_timer, data);
         self.h_cycle = (self.h_timer as usize) * timing::DOT_TIME;
+        self.h_irq_latch = false;
     }
 
     pub fn set_v_timer_lo(&mut self, data: u8) {
@@ -235,15 +241,11 @@ impl PPU {
     }
 
     pub fn get_nmi_flag(&mut self) -> u8 {
-        let ret = self.nmi_flag;
-        self.nmi_flag = 0;
-        ret
+        std::mem::replace(&mut self.nmi_flag, 0)
     }
 
     pub fn get_irq_flag(&mut self) -> u8 {
-        let ret = self.irq_flag;
-        self.irq_flag = 0;
-        ret
+        std::mem::replace(&mut self.irq_flag, 0)
     }
 }
 
