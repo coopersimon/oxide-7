@@ -36,7 +36,7 @@ impl InternalAudioGenerator {
         InternalAudioGenerator {
             receiver:       recv,
             process_step:   process_step as f32,
-            buffer:         AudioBuffer::new(process_step),
+            buffer:         AudioBuffer::new(32_000, sample_rate),
 
             voice_data:     Default::default(),
 
@@ -107,7 +107,7 @@ impl InternalAudioGenerator {
 
         let mut current = vec![0; 8];
 
-        for (i, d) in self.buffer.buffer.iter_mut().enumerate() {
+        for (i, d) in self.buffer.in_buffer.iter_mut().enumerate() {
             d[0] = 0.0;
             d[1] = 0.0;
 
@@ -143,20 +143,45 @@ impl InternalAudioGenerator {
             d[0] *= self.vol_left;
             d[1] *= self.vol_right;
         }
+
+        self.buffer.fill_output_buffer();
     }
 }
 
+use samplerate::{Samplerate, ConverterType};
+
+// Gets generated samples and resamples them to the output rate.
 struct AudioBuffer {
-    buffer: Vec<[f32; 2]>,
-    i:      usize,
+    resampler:  Samplerate,
+
+    in_buffer:  Vec<[f32; 2]>,
+
+    out_buffer: Option<Vec<f32>>,
+    i:          usize,
 }
 
 impl AudioBuffer {
-    fn new(process_step: usize) -> Self {
+    fn new(sample_rate_in: usize, sample_rate_out: usize) -> Self {
+        let resampler = Samplerate::new(ConverterType::SincBestQuality, sample_rate_in as u32, sample_rate_out as u32, 2)
+            .expect("Couldn't make resampler");
+
         AudioBuffer {
-            buffer: vec![[0.0, 0.0]; process_step],
-            i:      0,
+            resampler:  resampler,
+            in_buffer:  vec![[0.0, 0.0]; sample_rate_in / 60],
+            out_buffer: None,//vec![[0.0, 0.0]; sample_rate_out / 60],
+            i:          0,
         }
+    }
+
+    // Call this after generating a frame's worth of input samples.
+    fn fill_output_buffer(&mut self) {
+        self.out_buffer = Some(self.resampler.process(
+            &self.in_buffer
+                .iter()
+                .flatten()
+                .cloned()
+                .collect::<Vec<_>>()
+            ).expect("Error occurred when resampling."));
     }
 }
 
@@ -164,13 +189,17 @@ impl Iterator for AudioBuffer {
     type Item = [f32; 2];
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.i >= self.buffer.len() {
-            self.i = 0;
-            None
+        if let Some(buffer) = self.out_buffer {
+            if self.i >= buffer.len() {
+                self.i = 0;
+                None
+            } else {
+                let ret = [buffer[self.i], buffer[self.i + 1]];
+                self.i += 2;
+                Some(ret)
+            }
         } else {
-            let ret = self.buffer[self.i];
-            self.i += 1;
-            Some(ret)
+            None
         }
     }
 }

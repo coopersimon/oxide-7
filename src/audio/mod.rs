@@ -7,9 +7,13 @@ mod mem;
 mod spc;
 mod spcthread;
 
-use spcthread::*;
+use crossbeam_channel::{
+    bounded,
+    unbounded,
+    Sender
+};
 
-use generator::AudioGenerator;
+use sample::frame::Stereo;
 
 use std::sync::{
     Arc,
@@ -19,11 +23,10 @@ use std::sync::{
     }
 };
 
-use crossbeam_channel::{
-    bounded,
-    unbounded,
-    Sender
-};
+use generator::AudioGenerator;
+use spcthread::*;
+
+type SamplePacket = Box<[Stereo<f32>]>;
 
 // CPU-side of APU. Sends and receives to/from audio thread, direct connection with CPU.
 pub struct APU {

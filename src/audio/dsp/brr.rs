@@ -16,22 +16,37 @@ bitflags! {
 }
 
 impl BRRHead {
-    fn coef_a(&self) -> f32 {
+    fn calc_coef_a(&self, old_samp: i16) -> i16 {
         match (*self & BRRHead::FILTER).bits() >> 2 {
-            0 => 0.0,
-            1 => 0.9375,
-            2 => 1.90625,
-            3 => 1.796875,
+            0 => 0,
+            1 => old_samp - (old_samp >> 4),
+            2 => {
+                let s32 = old_samp as i32;
+                let res = (s32 * 2) - ((s32 * 3) >> 5);
+                res as i16
+            },
+            3 => {
+                let s32 = old_samp as i32;
+                let res = (s32 * 2) - ((s32 * 13) >> 6);
+                res as i16
+            },
             _ => unreachable!()
         }
     }
 
-    fn coef_b(&self) -> f32 {
+    fn calc_coef_b(&self, old_samp: i16) -> i16 {
         match (*self & BRRHead::FILTER).bits() >> 2 {
-            0 => 0.0,
-            1 => 0.0,
-            2 => -0.9375,
-            3 => -0.8125,
+            0 | 1 => 0,
+            2 => {
+                let s32 = old_samp as i32;
+                let res = s32 - (s32 >> 4);
+                -res as i16
+            },
+            3 => {
+                let s32 = old_samp as i32;
+                let res = s32 - ((s32 * 3) >> 4);
+                -res as i16
+            },
             _ => unreachable!()
         }
     }
@@ -44,11 +59,11 @@ impl BRRHead {
 // Decode BRR samples. Returns a slice of 16-bit PCM,
 // and a bool that indicates whether the sample should loop or not.
 #[inline]
-pub fn decode_samples(start: u16, ram: &RAM) -> (Box<[f32]>, bool) {
+pub fn decode_samples(start: u16, ram: &RAM) -> (Box<[i16]>, bool) {
     let mut data = Vec::new();
     let mut should_loop = false;
-    let mut last1 = 0.0;
-    let mut last2 = 0.0;
+    let mut last1 = 0;
+    let mut last2 = 0;
 
     for sample in &ram.iter(start as usize).chunks(9) {
         let mut sample_iter = sample.into_iter();
@@ -78,13 +93,7 @@ pub fn decode_samples(start: u16, ram: &RAM) -> (Box<[f32]>, bool) {
 // Clamp val between min and max.
 macro_rules! clamp {
     ($val:expr, $min:expr, $max:expr) => {
-        if $val < $min {
-            $min
-        } else if $val > $max {
-            $max
-        } else {
-            $val
-        }
+        std::cmp::min($max, std::cmp::max($min, $val))
     };
 }
 
@@ -100,11 +109,9 @@ macro_rules! sign_extend {
 }
 
 #[inline]
-fn decompress_sample(head: BRRHead, encoded: u8, last1: f32, last2: f32) -> f32 {
-    const MAX: f32 = std::i16::MAX as f32;
-    const MIN: f32 = std::i16::MIN as f32;
+fn decompress_sample(head: BRRHead, encoded: u8, last1: i16, last2: i16) -> i16 {
     let unpacked = sign_extend!(encoded) as i16;
-    let base = (unpacked << head.shift()) as f32;
-    let samp = base + (last1 * head.coef_a()) + (last2 * head.coef_b());
-    clamp!(samp, MIN, MAX)
+    let base = unpacked << head.shift();
+    let samp = base + head.calc_coef_a(last1) + head.calc_coef_b(last2);
+    clamp!(samp, std::i16::MIN, std::i16::MAX)
 }

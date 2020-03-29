@@ -14,10 +14,7 @@ use std::sync::{
 
 use crate::mem::RAM;
 use timer::Timer;
-use super::{
-    dsp::DSP,
-    generator::AudioData
-};
+use super::dsp::DSP;
 
 bitflags! {
     struct SPCControl: u8 {
@@ -65,7 +62,7 @@ pub struct SPCBus {
 }
 
 impl SPCBus {
-    pub fn new(signal_tx: Sender<AudioData>, ports_cpu_to_apu: [Arc<AtomicU8>; 4], ports_apu_to_cpu: [Arc<AtomicU8>; 4]) -> Self {
+    pub fn new(signal_tx: Sender<super::SamplePacket>, ports_cpu_to_apu: [Arc<AtomicU8>; 4], ports_apu_to_cpu: [Arc<AtomicU8>; 4]) -> Self {
         SPCBus {
             ram:        RAM::new(SPC_RAM_SIZE),
 

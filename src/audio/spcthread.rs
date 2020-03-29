@@ -14,8 +14,7 @@ use std::thread;
 
 use super::{
     spc::SPC,
-    mem::SPCBus,
-    generator::AudioData
+    mem::SPCBus
 };
 use crate::constants;
 
@@ -32,7 +31,7 @@ pub struct SPCThread {
 }
 
 impl SPCThread {
-    pub fn new(rx: Receiver<SPCCommand>, signal_tx: Sender<AudioData>, ports_cpu_to_apu: [Arc<AtomicU8>; 4], ports_apu_to_cpu: [Arc<AtomicU8>; 4]) -> Self {
+    pub fn new(rx: Receiver<SPCCommand>, signal_tx: Sender<super::SamplePacket>, ports_cpu_to_apu: [Arc<AtomicU8>; 4], ports_apu_to_cpu: [Arc<AtomicU8>; 4]) -> Self {
         let thread = thread::spawn(move || {
             let bus = SPCBus::new(signal_tx, ports_cpu_to_apu, ports_apu_to_cpu);
             let mut spc = SPC::new(bus);

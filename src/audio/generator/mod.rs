@@ -1,22 +1,16 @@
 // The thread that deals with outputting audio.
-mod envelope;
-mod internal;
-mod types;
-mod voicegen;
+mod resampler;
 
 use crossbeam_channel::Receiver;
 
 use std::thread;
-
-use internal::InternalAudioGenerator;
-pub use types::*;
 
 pub struct AudioGenerator {
     thread: thread::JoinHandle<()>
 }
 
 impl AudioGenerator {
-    pub fn new(rx: Receiver<AudioData>) -> Self {
+    pub fn new(rx: Receiver<super::SamplePacket>) -> Self {
         use cpal::traits::{
             HostTrait,
             DeviceTrait,
@@ -42,13 +36,14 @@ impl AudioGenerator {
     
             let stream_id = event_loop.build_output_stream(&device, &format).unwrap();
     
-            let sample_rate = format.sample_rate.0 as usize;
-    
-            let mut generator = InternalAudioGenerator::new(rx, sample_rate);
+            let sample_rate = format.sample_rate.0;
+
+            let mut resampler = resampler::Resampler::new(rx, sample_rate as f64);
     
             event_loop.play_stream(stream_id).expect("Stream could not start.");
     
             event_loop.run(move |_stream_id, stream_result| {
+
                 use cpal::StreamData::*;
                 use cpal::UnknownTypeOutputBuffer::*;
     
@@ -62,24 +57,21 @@ impl AudioGenerator {
     
                 match stream_data {
                     Output { buffer: U16(mut buffer) } => {
-                        for out in buffer.chunks_exact_mut(2) {
-                            let frame = generator.process_frame();
+                        for (out, frame) in buffer.chunks_exact_mut(2).zip(&mut resampler) {
                             for (elem, f) in out.iter_mut().zip(frame.iter()) {
                                 *elem = (f * u16::max_value() as f32) as u16
                             }
                         }
                     },
                     Output { buffer: I16(mut buffer) } => {
-                        for out in buffer.chunks_exact_mut(2) {
-                            let frame = generator.process_frame();
+                        for (out, frame) in buffer.chunks_exact_mut(2).zip(&mut resampler) {
                             for (elem, f) in out.iter_mut().zip(frame.iter()) {
                                 *elem = (f * i16::max_value() as f32) as i16
                             }
                         }
                     },
                     Output { buffer: F32(mut buffer) } => {
-                        for out in buffer.chunks_exact_mut(2) {
-                            let frame = generator.process_frame();
+                        for (out, frame) in buffer.chunks_exact_mut(2).zip(&mut resampler) {
                             for (elem, f) in out.iter_mut().zip(frame.iter()) {
                                 *elem = *f;
                             }
@@ -99,14 +91,14 @@ impl AudioGenerator {
 fn pick_output_format(device: &cpal::Device) -> cpal::SupportedFormat {
     use cpal::traits::DeviceTrait;
 
-    const BASE: u32 = 32_000;
+    const MIN: u32 = 32_000;
 
     let supported_formats_range = device.supported_output_formats()
         .expect("error while querying formats");
 
     for format in supported_formats_range {
         let cpal::SampleRate(v) = format.max_sample_rate;
-        if (v % BASE) == 0 {
+        if v >= MIN {
             return format;
         }
     }

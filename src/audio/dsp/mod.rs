@@ -1,16 +1,17 @@
 // Digital signal processor
 
 mod brr;
+mod envelope;
 mod voice;
 
 use bitflags::bitflags;
 use crossbeam_channel::Sender;
+use sample::frame::{
+    Frame,
+    Stereo
+};
 
 pub use voice::*;
-
-use super::generator::{
-    AudioData, VoiceData
-};
 
 use crate::mem::RAM;
 
@@ -29,7 +30,10 @@ impl Default for DSPFlags {
     }
 }
 
-const VIDEO_FRAME_CYCLES: f32 = (super::spcthread::SPC_CLOCK_RATE as f32) / 60.0;
+//const VIDEO_FRAME_CYCLES: f32 = (super::spcthread::SPC_CLOCK_RATE as f32) / 60.0;
+const SPC_SAMPLE_RATE: usize = 32_000;
+const SAMPLE_CYCLES: usize = super::spcthread::SPC_CLOCK_RATE / SPC_SAMPLE_RATE;
+const SAMPLE_BATCH_SIZE: usize = 512;
 
 #[derive(Default, Clone)]
 pub struct DSPRegisters {
@@ -55,31 +59,59 @@ pub struct DSPRegisters {
 }
 
 pub struct DSP {
-    signal_tx:      Sender<AudioData>,
-    cycle_count:    f32,
+    signal_tx:      Sender<super::SamplePacket>,
+    cycle_count:    usize,
+    frames:         Vec<Stereo<f32>>,
 
-    voices:         [Voice; 8],
+    vol_left:       f32,
+    vol_right:      f32,
 
     regs:           DSPRegisters,
+    voices:         [Voice; 8],
 }
 
 impl DSP {
-    pub fn new(signal_tx: Sender<AudioData>) -> Self {
+    pub fn new(signal_tx: Sender<super::SamplePacket>) -> Self {
         DSP {
             signal_tx:      signal_tx,
-            cycle_count:    0.0,
+            cycle_count:    0,
+            frames:         Vec::with_capacity(SAMPLE_BATCH_SIZE),
 
-            voices:         [Voice::new(); 8],
+            vol_left:       0.0,
+            vol_right:      0.0,
 
-            regs:           DSPRegisters::default()
+            regs:           DSPRegisters::default(),
+            voices:         [
+                Voice::new(),
+                Voice::new(),
+                Voice::new(),
+                Voice::new(),
+                Voice::new(),
+                Voice::new(),
+                Voice::new(),
+                Voice::new(),
+            ],
         }
     }
 
     pub fn clock(&mut self, cycles: usize) {
-        self.cycle_count += cycles as f32;
+        /*self.cycle_count += cycles as f32;
         if self.cycle_count >= VIDEO_FRAME_CYCLES {
             self.cycle_count -= VIDEO_FRAME_CYCLES;
             self.signal_tx.send(AudioData::Frame).expect("Couldn't send frame signal to audio generator");
+        }*/
+
+        // Generate a new sample every 32 cycles.
+        self.cycle_count += cycles;
+        if self.cycle_count >= SAMPLE_CYCLES {
+            self.generate_frame();
+            self.cycle_count -= SAMPLE_CYCLES;
+        }
+
+        // Every 16384 cycles, send the batch of 512 samples over to the audio thread.
+        if self.frames.len() >= SAMPLE_BATCH_SIZE {
+            let in_ = self.frames.drain(..).collect::<Box<[_]>>();
+            self.signal_tx.send(in_).unwrap();
         }
     }
 
@@ -136,6 +168,30 @@ impl DSP {
 }
 
 impl DSP {
+    fn generate_frame(&mut self) {
+        let mut left = 0.0;
+        let mut right = 0.0;
+        for voice in &mut self.voices {
+            if let Some(v) = voice.next() {
+                let v_samp = (v as f32) / 32_768.0;
+                let voice_left = v_samp * voice.read_left_vol();
+                let voice_right = v_samp * voice.read_right_vol();
+                left += voice_left / 8.0;
+                right += voice_right / 8.0;
+            }
+        }
+
+        let frame = if self.is_mute() {
+            Stereo::equilibrium()
+        } else {
+            [left * self.vol_left, right * self.vol_right]
+        };
+
+        self.frames.push(frame);
+    }
+}
+
+impl DSP {
     fn set_key_on(&mut self, val: u8, ram: &RAM) {
         for v in 0..8 {
             if test_bit!(val, v, u8) {
@@ -145,7 +201,7 @@ impl DSP {
                     s_loop
                 } else { Box::new([]) };
 
-                self.signal_tx.send(AudioData::VoiceKeyOn{
+                /*self.signal_tx.send(AudioData::VoiceKeyOn{
                     data: VoiceData {
                         regs:   Box::new(self.voices[v]),
                         sample: sample,
@@ -153,7 +209,9 @@ impl DSP {
                     },
                     num:  v,
                     time: self.cycle_count / VIDEO_FRAME_CYCLES
-                }).expect("Couldn't send key on signal to audio generator");
+                }).expect("Couldn't send key on signal to audio generator");*/
+
+                self.voices[v].key_on(sample, s_loop);
             }
         }
     }
@@ -161,10 +219,12 @@ impl DSP {
     fn set_key_off(&mut self, val: u8) {
         for v in 0..8 {
             if test_bit!(val, v, u8) {
-                self.signal_tx.send(AudioData::VoiceKeyOff{
+                /*self.signal_tx.send(AudioData::VoiceKeyOff{
                     num:  v,
                     time: self.cycle_count / VIDEO_FRAME_CYCLES
-                }).expect("Couldn't send key on signal to audio generator");
+                }).expect("Couldn't send key on signal to audio generator");*/
+
+                self.voices[v].key_off();
             }
         }
     }
@@ -185,18 +245,15 @@ impl DSP {
         make16!(addr_hi, addr_lo)
     }
 
+    fn is_mute(&self) -> bool {
+        self.regs.flags.contains(DSPFlags::MUTE)
+    }
+
     fn set_flags(&mut self, val: u8) {
-        let new_flags = DSPFlags::from_bits_truncate(val);
+        self.regs.flags = DSPFlags::from_bits_truncate(val);
         if self.regs.flags.contains(DSPFlags::SOFT_RESET) {
             self.set_key_off(0xFF);
         }
-        if new_flags.contains(DSPFlags::MUTE) && !self.regs.flags.contains(DSPFlags::MUTE) {
-            self.signal_tx.send(AudioData::Mute(true)).expect("Couldn't mute");
-        } else if !new_flags.contains(DSPFlags::MUTE) && self.regs.flags.contains(DSPFlags::MUTE) {
-            self.signal_tx.send(AudioData::Mute(false)).expect("Couldn't unmute");
-        }
-
-        self.regs.flags = new_flags;
     }
 
     fn set_noise_enable(&mut self, val: u8) {
@@ -215,18 +272,15 @@ impl DSP {
 
     fn set_main_vol_left(&mut self, val: u8) {
         self.regs.main_vol_left = val;
-        let vol = ((val as i8) as f32) / 128.0;
-        self.signal_tx.send(AudioData::DSPVolLeft(vol)).expect("Couldn't send vol left");
+        self.vol_left = ((val as i8) as f32) / 128.0;
     }
 
     fn set_main_vol_right(&mut self, val: u8) {
         self.regs.main_vol_right = val;
-        let vol = ((val as i8) as f32) / 128.0;
-        self.signal_tx.send(AudioData::DSPVolRight(vol)).expect("Couldn't send vol right");
+        self.vol_right = ((val as i8) as f32) / 128.0;
     }
 
     fn set_echo_enable(&mut self, val: u8) {
         self.regs.echo_enable = val;
-        //println!("Echo: {:X}", val);
     }
 }
