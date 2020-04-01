@@ -95,6 +95,8 @@ impl Voice {
             0x5 => self.adsr = set_lo!(self.adsr, data),
             0x6 => self.adsr = set_hi!(self.adsr, data),
             0x7 => self.gain = data,
+            0x8 => self.envx = data,
+            0x9 => self.outx = data,
             0xF => self.fir_coef = data,
             _ => {},
         }
@@ -134,18 +136,6 @@ impl Voice {
         self.current_s.is_some()
     }
 
-    /*pub fn read_pitch(&self) -> u16 {
-        self.pitch & PITCH_MASK
-    }
-
-    pub fn read_adsr(&self) -> u16 {
-        self.adsr
-    }
-
-    pub fn read_gain(&self) -> u8 {
-        self.gain
-    }*/
-
     pub fn read_left_vol(&self) -> f32 {
         ((self.left_vol as i8) as f32) / 128.0
     }
@@ -160,10 +150,14 @@ impl Iterator for Voice {
     type Item = i16;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(s) = self.current_s {
-            let sample = self.generate_sample();
-            self.freq_step(s);
-            self.apply_envelope(sample)
+        if !self.noise {
+            if let Some(s) = self.current_s {
+                let sample = self.generate_sample();
+                self.freq_step(s);
+                self.apply_envelope(sample)
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -190,8 +184,6 @@ impl Voice {
         out += (samples[2] * GAUSS_TABLE[0x1FF - gauss_index]) >> 10;
         out += (samples[1] * GAUSS_TABLE[0x100 + gauss_index]) >> 10;
         out += (samples[0] * GAUSS_TABLE[gauss_index]) >> 10;
-        //let prev_1 = prev_2 + ();
-        //let prev_0 = prev_1 + ();
         (clamp!(out, MIN, MAX) >> 1) as i16
     }
 

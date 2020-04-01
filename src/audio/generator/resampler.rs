@@ -15,12 +15,6 @@ impl Resampler {
     pub fn new(receiver: Receiver<super::super::SamplePacket>, target_sample_rate: f64) -> Self {
         let sinc = Sinc::new(Fixed::from([Stereo::equilibrium(); 16]));
         Resampler {
-            /*converter: Converter::from_hz_to_hz(
-                Source::new(receiver),
-                Sinc::new(Fixed::from([Stereo::equilibrium(); 1024])),
-                32_000.0,
-                target_sample_rate
-            )*/
             converter: Source::new(receiver).from_hz_to_hz(sinc, 32_000.0, target_sample_rate)
         }
     }
@@ -30,9 +24,7 @@ impl Iterator for Resampler {
     type Item = Stereo<f32>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let s = self.converter.next();
-        //println!("{:?}", s);
-        Some(s)
+        Some(self.converter.next())
     }
 }
 
@@ -59,19 +51,14 @@ impl Signal for Source {
     type Frame = Stereo<f32>;
 
     fn next(&mut self) -> Self::Frame {
-        let x = if self.n < self.current.len() {
+        if self.n < self.current.len() {
             let out = self.current[self.n];
             self.n += 1;
             out
         } else {
-            let out = self.receiver.recv().unwrap();
-            //println!("RECV");
-            self.current = out;
+            self.current = self.receiver.recv().unwrap();
             self.n = 1;
             self.current[0]
-        };
-
-        //println!("{} = {:?}", self.n, x);
-        x
+        }
     }
 }

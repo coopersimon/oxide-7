@@ -90,28 +90,27 @@ pub fn decode_samples(start: u16, ram: &RAM) -> (Box<[i16]>, bool) {
     (data.into_boxed_slice(), should_loop)
 }
 
-// Clamp val between min and max.
-macro_rules! clamp {
-    ($val:expr, $min:expr, $max:expr) => {
-        std::cmp::min($max, std::cmp::max($min, $val))
-    };
+#[inline]
+fn decompress_sample(head: BRRHead, encoded: u8, last1: i16, last2: i16) -> i16 {
+    let unpacked = sign_extend_4(encoded) as i16;
+    let base = (unpacked << head.shift()) >> 1;
+    let samp = base + head.calc_coef_a(last1) + head.calc_coef_b(last2);
+    sign_extend_15(samp)
 }
 
 // Sign extend a 4-bit signed value to 8 bits.
-macro_rules! sign_extend {
-    ($val:expr) => {
-        if test_bit!($val, 3, u8) {
-            ($val | 0xF0) as i8
-        } else {
-            $val as i8
-        }
-    };
+#[inline]
+fn sign_extend_4(val: u8) -> i8 {
+    if test_bit!(val, 3, u8) {
+        (val | 0xF0) as i8
+    } else {
+        val as i8
+    }
 }
 
-#[inline]
-fn decompress_sample(head: BRRHead, encoded: u8, last1: i16, last2: i16) -> i16 {
-    let unpacked = sign_extend!(encoded) as i16;
-    let base = unpacked << head.shift();
-    let samp = base + head.calc_coef_a(last1) + head.calc_coef_b(last2);
-    clamp!(samp, std::i16::MIN, std::i16::MAX)
+// Take the lower 15 bits of a value and sign extend to 16 bits.
+fn sign_extend_15(val: i16) -> i16 {
+    let clipped = val & 0x7FFF;
+    let top_bit = clipped & (bit!(14, u16) as i16);
+    clipped | (top_bit << 1)
 }

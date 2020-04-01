@@ -95,12 +95,6 @@ impl DSP {
     }
 
     pub fn clock(&mut self, cycles: usize) {
-        /*self.cycle_count += cycles as f32;
-        if self.cycle_count >= VIDEO_FRAME_CYCLES {
-            self.cycle_count -= VIDEO_FRAME_CYCLES;
-            self.signal_tx.send(AudioData::Frame).expect("Couldn't send frame signal to audio generator");
-        }*/
-
         // Generate a new sample every 32 cycles.
         self.cycle_count += cycles;
         if self.cycle_count >= SAMPLE_CYCLES {
@@ -125,7 +119,7 @@ impl DSP {
             //0x4C => self.regs.key_on,
             //0x5C => self.regs.key_off,
             0x6C => self.regs.flags.bits(),
-            0x7C => self.regs.endx,
+            0x7C => self.read_endx(),
 
             0x0D => self.regs.echo_feedback,
             0x2D => self.regs.pitch_mod,
@@ -201,16 +195,6 @@ impl DSP {
                     s_loop
                 } else { Box::new([]) };
 
-                /*self.signal_tx.send(AudioData::VoiceKeyOn{
-                    data: VoiceData {
-                        regs:   Box::new(self.voices[v]),
-                        sample: sample,
-                        s_loop: s_loop,
-                    },
-                    num:  v,
-                    time: self.cycle_count / VIDEO_FRAME_CYCLES
-                }).expect("Couldn't send key on signal to audio generator");*/
-
                 self.voices[v].key_on(sample, s_loop);
             }
         }
@@ -219,11 +203,6 @@ impl DSP {
     fn set_key_off(&mut self, val: u8) {
         for v in 0..8 {
             if test_bit!(val, v, u8) {
-                /*self.signal_tx.send(AudioData::VoiceKeyOff{
-                    num:  v,
-                    time: self.cycle_count / VIDEO_FRAME_CYCLES
-                }).expect("Couldn't send key on signal to audio generator");*/
-
                 self.voices[v].key_off();
             }
         }
@@ -245,8 +224,11 @@ impl DSP {
         make16!(addr_hi, addr_lo)
     }
 
-    fn is_mute(&self) -> bool {
-        self.regs.flags.contains(DSPFlags::MUTE)
+    fn read_endx(&self) -> u8 {
+        (0..8).fold(0, |acc, v| {
+            let end = if self.voices[v].is_on() { 0 } else { bit!(v) };
+            acc | end
+        })
     }
 
     fn set_flags(&mut self, val: u8) {
@@ -254,6 +236,10 @@ impl DSP {
         if self.regs.flags.contains(DSPFlags::SOFT_RESET) {
             self.set_key_off(0xFF);
         }
+    }
+
+    fn is_mute(&self) -> bool {
+        self.regs.flags.contains(DSPFlags::MUTE)
     }
 
     fn set_noise_enable(&mut self, val: u8) {
