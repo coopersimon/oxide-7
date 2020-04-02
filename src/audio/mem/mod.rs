@@ -85,8 +85,8 @@ impl SPCBus {
         match addr {
             0xF1 => 0,
 
-            0xF2 => self.dsp_reg_addr & 0x7F,
-            0xF3 => self.dsp.read(self.dsp_reg_addr),
+            0xF2 => self.dsp_reg_addr,
+            0xF3 => self.dsp.read(self.dsp_reg_addr & 0x7F),
 
             0xF4 => {
                 let data = self.ports_cpu_to_apu[0].load(Ordering::SeqCst);
@@ -126,7 +126,7 @@ impl SPCBus {
             0xF1 => self.set_control(data),
 
             0xF2 => self.dsp_reg_addr = data,
-            0xF3 => self.dsp.write(self.dsp_reg_addr, data, &self.ram),
+            0xF3 => self.dsp.write(self.dsp_reg_addr & 0x7F, data, &self.ram),
 
             0xF4 => {
                 //println!("APU Write {:X} to {:X}", data, addr);

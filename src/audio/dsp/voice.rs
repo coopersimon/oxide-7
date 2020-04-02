@@ -9,8 +9,6 @@ enum SampleSource {
     Loop(usize)
 }
 
-const PITCH_MASK: u16 = 0x3FFF;
-
 pub struct Voice {
     left_vol:   u8, // Signed magnitude representation
     right_vol:  u8,

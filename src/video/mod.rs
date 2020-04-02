@@ -33,6 +33,12 @@ bitflags! {
     }
 }
 
+impl IntEnable {
+    fn all_irq() -> IntEnable {
+        IntEnable::ENABLE_IRQ_X | IntEnable::ENABLE_IRQ_Y
+    }
+}
+
 bitflags! {
     #[derive(Default)]
     struct PPUStatus: u8 {
@@ -181,7 +187,7 @@ impl PPU {
         };
 
         if signal == PPUSignal::None {
-            if self.int_enable.contains(IntEnable::ENABLE_IRQ_X) && !self.h_irq_latch && (self.cycle_count >= self.h_cycle) {
+            if self.check_x_irq() {
                 self.h_irq_latch = true;
                 self.trigger_irq()
             } else {
@@ -273,7 +279,7 @@ impl PPU {
                     self.state = PPUState::HBlankLeft;
                 }
 
-                if self.int_enable.contains(IntEnable::ENABLE_IRQ_Y) && (self.scanline == (self.v_timer as usize)) {
+                if self.check_y_irq() {
                     self.trigger_irq()
                 } else {
                     PPUSignal::None
@@ -299,6 +305,32 @@ impl PPU {
                 self.state = PPUState::VBlank;
                 self.trigger_nmi()
             },
+        }
+    }
+
+    // See if IRQ should be triggered.
+    // The Y IRQ check should happen at the start of each line.
+    fn check_y_irq(&self) -> bool {
+        let enabled = (self.int_enable & IntEnable::all_irq()) == IntEnable::ENABLE_IRQ_Y;
+        enabled && (self.scanline == (self.v_timer as usize))
+    }
+
+    // The X IRQ check should happen anytime the current X increases (every 4 cycles).
+    // If the Y IRQ line is enabled too, it will only trigger on the correct line.
+    // Otherwise it will trigger on every line.
+    fn check_x_irq(&self) -> bool {
+        let irq = self.int_enable & IntEnable::all_irq();
+
+        if !self.h_irq_latch {
+            if irq == IntEnable::all_irq() {
+                (self.scanline == (self.v_timer as usize)) && (self.cycle_count >= self.h_cycle)
+            } else if irq == IntEnable::ENABLE_IRQ_X {
+                self.cycle_count >= self.h_cycle
+            } else {
+                false
+            }
+        } else {
+            false
         }
     }
 

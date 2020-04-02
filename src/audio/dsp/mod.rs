@@ -45,6 +45,9 @@ pub struct DSPRegisters {
 
     flags:          DSPFlags,
 
+    key_on:         u8,
+    key_off:        u8,
+
     endx:           u8,
 
     echo_feedback:  u8,
@@ -116,8 +119,8 @@ impl DSP {
             0x1C => self.regs.main_vol_right,
             0x2C => self.regs.echo_vol_left,
             0x3C => self.regs.echo_vol_right,
-            //0x4C => self.regs.key_on,
-            //0x5C => self.regs.key_off,
+            0x4C => self.regs.key_on,
+            0x5C => self.regs.key_off,
             0x6C => self.regs.flags.bits(),
             0x7C => self.read_endx(),
 
@@ -187,6 +190,7 @@ impl DSP {
 
 impl DSP {
     fn set_key_on(&mut self, val: u8, ram: &RAM) {
+        self.regs.key_on = val;
         for v in 0..8 {
             if test_bit!(val, v, u8) {
                 let (sample, should_loop) = brr::decode_samples(self.get_sample_addr(v, ram), ram);
@@ -201,6 +205,7 @@ impl DSP {
     }
 
     fn set_key_off(&mut self, val: u8) {
+        self.regs.key_off = val;
         for v in 0..8 {
             if test_bit!(val, v, u8) {
                 self.voices[v].key_off();

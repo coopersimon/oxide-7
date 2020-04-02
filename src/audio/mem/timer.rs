@@ -41,9 +41,7 @@ impl Timer {
     }
 
     pub fn read_counter(&mut self) -> u8 {
-        let ret = self.counter;
-        self.counter = 0;
-        ret
+        std::mem::replace(&mut self.counter, 0)
     }
 
     pub fn reset(&mut self) {
