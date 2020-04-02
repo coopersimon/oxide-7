@@ -93,7 +93,7 @@ impl Renderer {
         for (bg_pattern, bg) in self.bg_pattern_mem.iter_mut().take(num_bgs).zip(BG::all().iter().cloned()) {
             if bg_pattern.get_start_addr() != regs.bg_pattern_addr(bg) {
                 let height = regs.get_pattern_table_height(bg);
-                bg_pattern.set_addr(regs.bg_pattern_addr(bg), height as u16);    // TODO: figure out this u32, u16 mess
+                bg_pattern.set_addr(regs.bg_pattern_addr(bg), height);
                 recreate_regions = true;
             }
         }
@@ -609,15 +609,15 @@ impl Renderer {
             } else {
                 (y >= object.y) || (y <= bottom_y)
             }   // TODO: fix sprite priorities...
-        }).take(32).collect::<Vec<_>>().iter().rev().for_each(|object| { // Actually do drawing.
+        }).take(32).collect::<Box::<[_]>>().iter().rev().for_each(|object| { // Actually do drawing.
             let size = if object.large {large} else {small};
             let sprite_y = y - object.y;   // TODO: deal with wraparound.
             let y_pixel = if object.y_flip() {size.1 - 1 - sprite_y} else {sprite_y} as usize;
 
             for x in 0..size.0 {
-                let line_x = object.x + x;  // TODO cast to unsigned here.
-                if line_x >= 0 && line_x < 256 {  // TODO: no magic number here.
-                    if main_line[line_x as usize].is_masked() && sub_line[line_x as usize].is_masked() {
+                let line_x = ((object.x + x) as u16) as usize;
+                if line_x < H_RES {
+                    if main_line[line_x].is_masked() && sub_line[line_x].is_masked() {
                         continue;
                     }
                     let x_pixel = if object.x_flip() {size.0 - 1 - x} else {x} as usize;
@@ -637,11 +637,11 @@ impl Renderer {
                             SpritePriority::_1 => SpritePixel::Prio1(SpriteColour{colour, col_math}),
                             SpritePriority::_0 => SpritePixel::Prio0(SpriteColour{colour, col_math}),
                         };
-                        if !main_line[line_x as usize].is_masked() {
-                            main_line[line_x as usize] = pix;
+                        if !main_line[line_x].is_masked() {
+                            main_line[line_x] = pix;
                         }
-                        if !sub_line[line_x as usize].is_masked() {
-                            sub_line[line_x as usize] = pix;
+                        if !sub_line[line_x].is_masked() {
+                            sub_line[line_x] = pix;
                         }
                     }
                 }

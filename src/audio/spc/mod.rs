@@ -832,8 +832,8 @@ impl SPC {
 
     // Move within direct page of mem.
     fn mov_dir(&mut self) {
-        let dst_addr = self.direct();
         let src_addr = self.direct();
+        let dst_addr = self.direct();
 
         let data = self.read_data(src_addr);
         self.write_data(dst_addr, data);
