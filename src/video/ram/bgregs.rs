@@ -105,14 +105,7 @@ impl From<Mode7Settings> for Mode7Extend {
     }
 }
 
-const VRAM_END_ADDR: u32 = 64 * 1024;
-const PATTERN_MAX_HEIGHT: u32 = 64;
 const BG_SCROLL_MASK: u16 = 0x3FF;
-const MODE_7_SCROLL_MASK: u16 = 0x1FFF;
-
-// Sub-map size (32x32 tiles)
-const SUB_MAP_LEN: u16 = 32;
-const SUB_MAP_SIZE: u16 = SUB_MAP_LEN * SUB_MAP_LEN * 2;
 
 pub struct Registers {
 
@@ -207,13 +200,13 @@ impl Registers {
 
     pub fn set_bg1_scroll_x(&mut self, data: u8) {
         self.bg1_scroll_x = make16!(data, hi!(self.bg1_scroll_x));
-        self.mode7_scroll_x = make16!(data, self.mode7_prev);
+        self.mode7_scroll_x = sign_extend(make16!(data, self.mode7_prev));
         self.mode7_prev = data;
     }
 
     pub fn set_bg1_scroll_y(&mut self, data: u8) {
         self.bg1_scroll_y = make16!(data, hi!(self.bg1_scroll_y));
-        self.mode7_scroll_y = make16!(data, self.mode7_prev);
+        self.mode7_scroll_y = sign_extend(make16!(data, self.mode7_prev));
         self.mode7_prev = data;
     }
 
@@ -290,12 +283,12 @@ impl Registers {
     }
 
     pub fn set_mode7_centre_x(&mut self, data: u8) {
-        self.mode7_centre_x = make16!(data, self.mode7_prev);
+        self.mode7_centre_x = sign_extend(make16!(data, self.mode7_prev));
         self.mode7_prev = data;
     }
 
     pub fn set_mode7_centre_y(&mut self, data: u8) {
-        self.mode7_centre_y = make16!(data, self.mode7_prev);
+        self.mode7_centre_y = sign_extend(make16!(data, self.mode7_prev));
         self.mode7_prev = data;
     }
 
@@ -489,100 +482,27 @@ impl Registers {
     }
 }
 
-// More complex methods called from renderer.
-/*impl Registers {
-    // Get height of pattern table from start address, in tiles.
-    pub fn get_pattern_table_height(&self, pattern_addr: u16, bits_per_pixel: u32) -> u32 {
-        let borders = self.get_vram_borders();  // TODO: call this from outside.
-
-        // Find border after pattern addr.
-        let end_addr = if let Some(idx) = borders.iter().position(|a| *a == pattern_addr) {
-            if (idx + 1) < borders.len() {
-                borders[idx + 1] as u32
-            } else {
-                VRAM_END_ADDR
-            }
-        } else {
-            VRAM_END_ADDR
-        };
-
-        let height = (end_addr - pattern_addr as u32) / (16 * 8 * bits_per_pixel);
-
-        if height < PATTERN_MAX_HEIGHT {
-            height
-        } else {
-            PATTERN_MAX_HEIGHT
-        }
-    }
-
-    // Get starting locations for each block of memory, in order.
-    pub fn get_vram_borders(&self) -> Vec<u16> {
-        let mode = self.get_mode();
-        let mut borders = BTreeSet::new();
-
-        // Always push sprite pattern mem
-        borders.insert(self.obj0_pattern_addr());
-        borders.insert(self.objn_pattern_addr());
-
-        self.set_bg_borders(&mut borders, self.bg_map_addr(0), self.bg1_settings);
-        borders.insert(self.bg_pattern_addr(0));
-
-        self.set_bg_borders(&mut borders, self.bg_map_addr(1), self.bg2_settings);
-        borders.insert(self.bg_pattern_addr(1));
-
-        if (mode == 0) || (mode == 1) {
-            self.set_bg_borders(&mut borders, self.bg_map_addr(2), self.bg3_settings);
-            borders.insert(self.bg_pattern_addr(2));
-        }
-        if mode == 0 {
-            self.set_bg_borders(&mut borders, self.bg_map_addr(3), self.bg4_settings);
-            borders.insert(self.bg_pattern_addr(3));
-        }
-
-        borders.iter().cloned().collect::<Vec<_>>()
-    }
-
-    // Set borders for a background.
-    fn set_bg_borders(&self, borders: &mut BTreeSet<u16>, start_addr: u16, settings: BGReg) {
-        use MapMirror::*;
-        let bg_map_mirror = MapMirror::from(settings);
-
-        borders.insert(start_addr);
-
-        match bg_map_mirror {
-            None =>     {},
-            X | Y =>    {
-                borders.insert(start_addr + SUB_MAP_SIZE);
-            },
-            Both => {
-                borders.insert(start_addr + SUB_MAP_SIZE);
-                borders.insert(start_addr + (SUB_MAP_SIZE * 2));
-                borders.insert(start_addr + (SUB_MAP_SIZE * 3));
-            },
-        }
-    }
-}*/
-
 impl Registers {
     // Get ranges of VRAM in which patterns exist.
     pub fn get_vram_pattern_regions(&self) -> Vec<(u16, u16)> {
-        const ROW_HEIGHT_2BPP: u16 = 16 * 16;
-        const ROW_HEIGHT_4BPP: u16 = 16 * 32;
+        const ROW_HEIGHT_2BPP: usize = 16 * 16;
+        const ROW_HEIGHT_4BPP: usize = 16 * 32;
+        const VRAM_MAX: usize = std::u16::MAX as usize;
 
         let mode = self.get_mode();
         let mut regions = Vec::new();
 
         let obj0_pattern_start = self.obj0_pattern_addr();
-        let obj0_pattern_end = std::cmp::max(obj0_pattern_start - 1 + (16 * ROW_HEIGHT_4BPP), std::u16::MAX);
+        let obj0_pattern_end = std::cmp::min((obj0_pattern_start as usize) - 1 + (16 * ROW_HEIGHT_4BPP), VRAM_MAX) as u16;
         regions.push((obj0_pattern_start, obj0_pattern_end));
         let objn_pattern_start = self.objn_pattern_addr();
-        let objn_pattern_end = std::cmp::max(objn_pattern_start - 1 + (16 * ROW_HEIGHT_4BPP), std::u16::MAX);
+        let objn_pattern_end = std::cmp::min((objn_pattern_start as usize) - 1 + (16 * ROW_HEIGHT_4BPP), VRAM_MAX) as u16;
         regions.push((objn_pattern_start, objn_pattern_end));
 
         let bg1_pattern_start = self.bg_pattern_addr(BG::_1);
         let bg1_pattern_end = match mode {
-            0 => std::cmp::max(bg1_pattern_start - 1 + (64 * ROW_HEIGHT_2BPP), std::u16::MAX),
-            1 | 2 | 5 | 6 => std::cmp::max(bg1_pattern_start - 1 + (64 * ROW_HEIGHT_4BPP), std::u16::MAX),
+            0 => std::cmp::min((bg1_pattern_start as usize) - 1 + (64 * ROW_HEIGHT_2BPP), VRAM_MAX) as u16,
+            1 | 2 | 5 | 6 => std::cmp::min((bg1_pattern_start as usize) - 1 + (64 * ROW_HEIGHT_4BPP), VRAM_MAX) as u16,
             3 | 4 => std::u16::MAX,
             _ => bg1_pattern_start,
         };
@@ -591,21 +511,21 @@ impl Registers {
         if mode < 6 {
             let bg2_pattern_start = self.bg_pattern_addr(BG::_2);
             let bg2_pattern_end = match mode {
-                0 | 4 | 5 => std::cmp::max(bg2_pattern_start - 1 + (64 * ROW_HEIGHT_2BPP), std::u16::MAX),
-                _ => std::cmp::max(bg2_pattern_start - 1 + (64 * ROW_HEIGHT_4BPP), std::u16::MAX),
+                0 | 4 | 5 => std::cmp::min((bg2_pattern_start as usize) - 1 + (64 * ROW_HEIGHT_2BPP), VRAM_MAX) as u16,
+                _ => std::cmp::min((bg2_pattern_start as usize) - 1 + (64 * ROW_HEIGHT_4BPP), VRAM_MAX) as u16,
             };
             regions.push((bg2_pattern_start, bg2_pattern_end));
         }
 
         if mode < 2 {
             let bg3_pattern_start = self.bg_pattern_addr(BG::_3);
-            let bg3_pattern_end = std::cmp::max(bg3_pattern_start - 1 + (64 * ROW_HEIGHT_2BPP), std::u16::MAX);
+            let bg3_pattern_end = std::cmp::min((bg3_pattern_start as usize) - 1 + (64 * ROW_HEIGHT_2BPP), VRAM_MAX) as u16;
             regions.push((bg3_pattern_start, bg3_pattern_end));
         }
 
         if mode == 0 {
             let bg4_pattern_start = self.bg_pattern_addr(BG::_4);
-            let bg4_pattern_end = std::cmp::max(bg4_pattern_start - 1 + (64 * ROW_HEIGHT_2BPP), std::u16::MAX);
+            let bg4_pattern_end = std::cmp::min((bg4_pattern_start as usize) - 1 + (64 * ROW_HEIGHT_2BPP), VRAM_MAX) as u16;
             regions.push((bg4_pattern_start, bg4_pattern_end));
         }
 
@@ -633,5 +553,15 @@ impl Registers {
             BG::_3 => std::cmp::min(64, rows / TILE_SIZE_2BPP),
             BG::_4 => std::cmp::min(64, rows / TILE_SIZE_2BPP),
         }
+    }
+}
+
+// Sign extend 13-bit value to 16 bits
+#[inline]
+fn sign_extend(val: u16) -> u16 {
+    if test_bit!(val, 12) {
+        val | 0xE000
+    } else {
+        val & 0x1FFF
     }
 }
