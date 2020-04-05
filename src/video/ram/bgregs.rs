@@ -3,8 +3,6 @@
 use bitflags::bitflags;
 use fixed::types::I8F8;
 
-use std::collections::BTreeSet;
-
 use crate::video::BG;
 
 bitflags! {

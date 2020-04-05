@@ -215,7 +215,7 @@ impl MemBus {
 impl MemBus {
     fn make_cart(cart_path: &str, save_path: &str) -> Box<dyn Cart> {
         let rom_file = File::open(cart_path).expect(&format!("Couldn't open file {}", cart_path));
-        let rom_size = rom_file.metadata().expect("Couldn't get metadata for file.").len();
+        //let rom_size = rom_file.metadata().expect("Couldn't get metadata for file.").len();
 
         let mut reader = BufReader::new(rom_file);
         

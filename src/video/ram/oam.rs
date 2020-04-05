@@ -127,8 +127,6 @@ pub struct OAM {
     addr:       usize,
     hi_byte:    bool,
     buffer:     u8,
-
-    dirty:      bool
 }
 
 impl OAM {
@@ -142,8 +140,6 @@ impl OAM {
             addr:       0,
             hi_byte:    false,
             buffer:     0,
-
-            dirty:      true,
         }
     }
 
@@ -202,8 +198,6 @@ impl OAM {
                 self.hi_byte = true;
             }
         }
-
-        self.dirty = true;
     }
 
     pub fn reset(&mut self) {
@@ -213,14 +207,6 @@ impl OAM {
     // For use by renderer memory caches.
     pub fn ref_data<'a>(&'a self) -> &'a [Object] {
         &self.objects
-    }
-
-    pub fn is_dirty(&self) -> bool {
-        self.dirty
-    }
-
-    pub fn reset_dirty(&mut self) {
-        self.dirty = false;
     }
 }
 

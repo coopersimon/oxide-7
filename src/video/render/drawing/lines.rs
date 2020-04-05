@@ -100,5 +100,12 @@ impl Renderer {
             let tile = tiles.ref_tile(tile_num as usize);
             *data = BGData{texel: tile.get_texel(real_tile_x, real_tile_y), attrs: tile_attrs};
         }
+
+        // DEBUG
+        /*for (x, data) in row.iter_mut().enumerate() {
+            let tile_num = ((x / 8) % 16) + ((y / 8) * 16);
+            let tile = tiles.ref_tile(tile_num);
+            *data = BGData{texel: tile.get_texel(x % 8, y % 8), attrs: TileAttributes::default()};
+        }*/
     }
 }

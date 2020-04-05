@@ -233,8 +233,8 @@ impl SPC {
             0xBF => self.mov_set_flags(Acc, Mode(XIndirInc)),
             0xF7 => self.mov_set_flags(Acc, Mode(DirPtrY)),
             0xE7 => self.mov_set_flags(Acc, Mode(DirXPtr)),
-            0x7D => self.mov_set_flags(Acc, X),
-            0xDD => self.mov_set_flags(Acc, Y),
+            0x7D => {self.mov_set_flags(Acc, X); self.clock_inc(SPC_OP)},
+            0xDD => {self.mov_set_flags(Acc, Y); self.clock_inc(SPC_OP)},
             0xE4 => self.mov_set_flags(Acc, Mode(Dir)),
             0xF4 => self.mov_set_flags(Acc, Mode(DirX)),
             0xE5 => self.mov_set_flags(Acc, Mode(Abs)),
@@ -245,13 +245,13 @@ impl SPC {
             0x9D => self.mov_x_sp(),
 
             0xCD => self.mov_set_flags(X, Imm),
-            0x5D => self.mov_set_flags(X, Acc),
+            0x5D => {self.mov_set_flags(X, Acc); self.clock_inc(SPC_OP)},
             0xF8 => self.mov_set_flags(X, Mode(Dir)),
             0xF9 => self.mov_set_flags(X, Mode(DirY)),
             0xE9 => self.mov_set_flags(X, Mode(Abs)),
 
             0x8D => self.mov_set_flags(Y, Imm),
-            0xFD => self.mov_set_flags(Y, Acc),
+            0xFD => {self.mov_set_flags(Y, Acc); self.clock_inc(SPC_OP)},
             0xEB => self.mov_set_flags(Y, Mode(Dir)),
             0xFB => self.mov_set_flags(Y, Mode(DirX)),
             0xEC => self.mov_set_flags(Y, Mode(Abs)),
@@ -395,7 +395,7 @@ impl SPC {
         let op2 = self.read_op(op2_mode);
         let (op1, op1_addr) = self.read_op_and_addr(op1_mode);
 
-        let result = self.arith(op1 as u16, !(op2 as u16));
+        let result = self.arith(op1 as u16, !op2 as u16);
 
         self.write_op(op1_addr, result);
     }
@@ -408,7 +408,7 @@ impl SPC {
         self.ps.set(PSFlags::V, test_bit!(!(op1 ^ op2) & (op1 ^ result), 7));
         self.ps.set(PSFlags::H, test_bit!((op1 & 0xF) + (op2 & 0xF) + self.carry(), 4));
         self.ps.set(PSFlags::Z, final_result == 0);
-        self.ps.set(PSFlags::C, test_bit!(result, 8));
+        self.ps.set(PSFlags::C, result > 0xFF);
 
         final_result
     }

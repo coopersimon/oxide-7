@@ -178,10 +178,6 @@ impl VideoMem {
     }
 
     // Renderer methods to check dirtiness of data.
-    pub fn is_oam_dirty(&self) -> bool {
-        self.oam.is_dirty()
-    }
-
     pub fn is_cgram_bg_dirty(&self) -> bool {
         self.cgram.is_bg_dirty()
     }

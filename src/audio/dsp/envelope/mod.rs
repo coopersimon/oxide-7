@@ -6,7 +6,7 @@ use adsr::*;
 use gain::*;
 
 const MAX_GAIN: i16 = (bit!(11, u16) as i16) - 1; // 2047
-const MAX_ATTACK: i16 = 0x7E0;
+const MAX_ATTACK: i16 = 0x7FF;
 const GAIN_STEP: i16 = 32;      // Linear increase/decrease gain adjustment per step.
 const BENT_STEP: i16 = 8;     // Bent line slow increase gain adjustment per step.
 //const EXP_STEP: f32 = 255.0 / 256.0;    // Exponential factor decrease gain adjustment per step.
