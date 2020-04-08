@@ -8,12 +8,12 @@ use sample::{
 };
 
 pub struct Resampler {
-    converter: Converter<Source, Sinc<[Stereo<f32>; 16]>>
+    converter: Converter<Source, Sinc<[Stereo<f32>; 2]>>
 }
 
 impl Resampler {
     pub fn new(receiver: Receiver<super::super::SamplePacket>, target_sample_rate: f64) -> Self {
-        let sinc = Sinc::new(Fixed::from([Stereo::equilibrium(); 16]));
+        let sinc = Sinc::new(Fixed::from([Stereo::equilibrium(); 2]));
         Resampler {
             converter: Source::new(receiver).from_hz_to_hz(sinc, 32_000.0, target_sample_rate)
         }
