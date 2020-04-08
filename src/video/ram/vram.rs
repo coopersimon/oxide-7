@@ -111,9 +111,10 @@ impl VRAM {
         }
     }
 
-    // Reset the dirty range once reading is finished.
+    // Reset the dirty ranges to false once reading is finished.
     pub fn reset_dirty_range(&mut self, read: &[u16]) {
         for ((start, _), dirty) in self.pattern_regions.iter_mut() {
+            // !(*dirty) &&
             if read.contains(start) {
                 *dirty = false;
             }
@@ -122,6 +123,7 @@ impl VRAM {
 
     // Set the borders of each region of VRAM pattern memory.
     pub fn set_pattern_regions(&mut self, regions: Vec<(u16, u16)>) {
+        //println!("Setting regions: {:?}", regions);
         self.pattern_regions = regions.iter().cloned().map(|r| (r, true)).collect::<Vec<_>>();
     }
 }
@@ -156,21 +158,24 @@ impl VRAM {
             0 => self.byte_addr,
             1 => {
                 let upper = self.byte_addr & 0xFE00;
-                let middle = (self.byte_addr & 0x01C0) >> 6;
-                let lower = (self.byte_addr & 0x003F) << 3;
-                upper | lower | middle
+                let middle = (self.byte_addr & 0x01C0) >> 5;
+                let lower = (self.byte_addr & 0x003E) << 3;
+                let byte_bit = self.byte_addr & 1;
+                upper | lower | middle | byte_bit
             },
             2 => {
                 let upper = self.byte_addr & 0xFC00;
-                let middle = (self.byte_addr & 0x0380) >> 7;
-                let lower = (self.byte_addr & 0x007F) << 3;
-                upper | lower | middle
+                let middle = (self.byte_addr & 0x0380) >> 6;
+                let lower = (self.byte_addr & 0x007E) << 3;
+                let byte_bit = self.byte_addr & 1;
+                upper | lower | middle | byte_bit
             },
             3 => {
                 let upper = self.byte_addr & 0xF800;
-                let middle = (self.byte_addr & 0x0700) >> 8;
-                let lower = (self.byte_addr & 0x00FF) << 3;
-                upper | lower | middle
+                let middle = (self.byte_addr & 0x0700) >> 7;
+                let lower = (self.byte_addr & 0x00FE) << 3;
+                let byte_bit = self.byte_addr & 1;
+                upper | lower | middle | byte_bit
             },
             _ => unreachable!()
         }

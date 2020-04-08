@@ -24,7 +24,7 @@ pub trait Cart {
     fn write(&mut self, bank: u8, addr: u16, data: u8) -> usize;
     fn flush(&mut self);
 
-    fn set_write_speed(&mut self, data: u8);
+    fn set_rom_speed(&mut self, data: u8);
 }
 
 // ROM banks.
@@ -65,19 +65,21 @@ impl ROM {
 }
 
 pub struct LoROM {
-    rom: ROM,
-    ram: SRAM,
+    rom:        ROM,
+    ram:        SRAM,
 
-    rom_speed: usize,
+    fast_rom:   bool,
+    rom_speed:  usize,
 }
 
 impl LoROM {
     pub fn new(cart_file: BufReader<File>, sram: SRAM, fast: bool) -> Self {
         LoROM {
-            rom: ROM::new(cart_file, 0x8000),
-            ram: sram,
+            rom:        ROM::new(cart_file, 0x8000),
+            ram:        sram,
 
-            rom_speed: if fast {timing::FAST_MEM_ACCESS} else {timing::SLOW_MEM_ACCESS}
+            fast_rom:   fast,
+            rom_speed:  timing::SLOW_MEM_ACCESS
         }
     }
 }
@@ -111,8 +113,8 @@ impl Cart for LoROM {
         self.ram.flush();
     }
 
-    fn set_write_speed(&mut self, data: u8) {
-        self.rom_speed = if test_bit!(data, SPEED_BIT, u8) {
+    fn set_rom_speed(&mut self, data: u8) {
+        self.rom_speed = if self.fast_rom && test_bit!(data, SPEED_BIT, u8) {
             timing::FAST_MEM_ACCESS
         } else {
             timing::SLOW_MEM_ACCESS
@@ -121,19 +123,21 @@ impl Cart for LoROM {
 }
 
 pub struct HiROM {
-    rom: ROM,
-    ram: SRAM,
+    rom:        ROM,
+    ram:        SRAM,
 
-    rom_speed: usize,
+    fast_rom:   bool,
+    rom_speed:  usize,
 }
 
 impl HiROM {
     pub fn new(cart_file: BufReader<File>, sram: SRAM, fast: bool) -> Self {
         HiROM {
-            rom: ROM::new(cart_file, 0x10000),
-            ram: sram,
+            rom:        ROM::new(cart_file, 0x10000),
+            ram:        sram,
 
-            rom_speed: if fast {timing::FAST_MEM_ACCESS} else {timing::SLOW_MEM_ACCESS}
+            fast_rom:   fast,
+            rom_speed:  timing::SLOW_MEM_ACCESS
         }
     }
 }
@@ -144,8 +148,12 @@ impl Cart for HiROM {
 
         match internal_bank {
             0x00..=0x3F if addr >= 0x8000 => (self.rom.read(internal_bank, addr), if bank < 0x80 {timing::SLOW_MEM_ACCESS} else {self.rom_speed}),
-            0x20..=0x3F if addr >= 0x6000 => {
+            0x20..=0x2F if addr >= 0x6000 => {
                 let ram_bank = ((internal_bank - 0x20) as u32) * HIROM_RAM_BANK_SIZE;
+                (self.ram.read(ram_bank + (addr as u32 - 0x6000)), timing::SLOW_MEM_ACCESS)
+            },
+            0x30..=0x3F if addr >= 0x6000 => {
+                let ram_bank = ((internal_bank - 0x30) as u32) * HIROM_RAM_BANK_SIZE;
                 (self.ram.read(ram_bank + (addr as u32 - 0x6000)), timing::SLOW_MEM_ACCESS)
             },
             0x40..=0x7F => (self.rom.read(internal_bank % 0x40, addr), if bank < 0x80 {timing::SLOW_MEM_ACCESS} else {self.rom_speed}),
@@ -157,8 +165,12 @@ impl Cart for HiROM {
         let internal_bank = bank % 0x80;
 
         match internal_bank {
-            0x20..=0x3F if addr >= 0x6000 => {
+            0x20..=0x2F if addr >= 0x6000 => {
                 let ram_bank = ((internal_bank - 0x20) as u32) * HIROM_RAM_BANK_SIZE;
+                self.ram.write(ram_bank + (addr as u32 - 0x6000), data);
+            },
+            0x30..=0x3F if addr >= 0x6000 => {
+                let ram_bank = ((internal_bank - 0x30) as u32) * HIROM_RAM_BANK_SIZE;
                 self.ram.write(ram_bank + (addr as u32 - 0x6000), data);
             },
             _ => {}
@@ -171,8 +183,8 @@ impl Cart for HiROM {
         self.ram.flush();
     }
 
-    fn set_write_speed(&mut self, data: u8) {
-        self.rom_speed = if test_bit!(data, SPEED_BIT, u8) {
+    fn set_rom_speed(&mut self, data: u8) {
+        self.rom_speed = if self.fast_rom && test_bit!(data, SPEED_BIT, u8) {
             timing::FAST_MEM_ACCESS
         } else {
             timing::SLOW_MEM_ACCESS

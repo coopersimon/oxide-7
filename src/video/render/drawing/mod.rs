@@ -698,7 +698,9 @@ impl Renderer {
         window_regs.bg_window(BG::_1, Screen::Sub, &mut sub_window);
 
         for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
-            let (bg_x, bg_y) = regs.calc_mode_7(x as i16, y as i16);
+            let x_in = if regs.mode_7_flip_x() {255 - x} else {x};
+            let y_in = if regs.mode_7_flip_y() {223 - y} else {y};
+            let (bg_x, bg_y) = regs.calc_mode_7(x_in as i16, y_in as i16);
             let lookup_x = if bg_x > 1023 {
                 match regs.mode_7_extend() {
                     Mode7Extend::Repeat => Some((bg_x as usize) % 1024),
@@ -719,9 +721,7 @@ impl Renderer {
             };
 
             if let (Some(x_val), Some(y_val)) = (lookup_x, lookup_y) {
-                let m7x = if regs.mode_7_flip_x() {1023 - x_val} else {x_val};
-                let m7y = if regs.mode_7_flip_y() {1023 - y_val} else {y_val};
-                let pix = get_mode_7_texel(vram, m7x, m7y);
+                let pix = get_mode_7_texel(vram, x_val, y_val);
                 let pix_out = if pix == 0 {None} else {Some(pix)};
 
                 if main_window[x] { // If pixel shows through main window.
@@ -1017,6 +1017,7 @@ fn sprite_size_lookup(size: u8) -> ((i16, u8), (i16, u8)) {
 
 // Lookup mode 7 texel using background coords.
 // X and Y must be in range 0-1023.
+// TODO: cache? This could be a lot faster.
 #[inline]
 fn get_mode_7_texel(vram: &[u8], x: usize, y: usize) -> u8 {
     // Find tile num.

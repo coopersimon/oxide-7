@@ -5,7 +5,7 @@ A SNES emulator written in Rust.
 `cargo run --release --features="debug" -- [ROM NAME] [--debug (if desired)]`
 
 ### Games tested:
-* Super Mario World (video: some bugged sprites, audio sounds good. also frame rate is now very slow in the gameplay)
+* Super Mario World (video: some bugged sprites, audio sounds good.)
 * Super Metroid (Intro looks good, gameplay looks less broken (lower ~1/3 of screen is block colour) and eventually freezes. Audio sounds good.)
 * Link to the Past (Intro triforce is glitched, gameplay seems ok. Audio sounds good.)
 * Final Fantasy 2 (IV) (Regressed. There is some sort of corrupted overlay (I think BG3 in Mode 1). Audio sounds good.)
@@ -28,7 +28,7 @@ A SNES emulator written in Rust.
 * Chrono Trigger (works pretty well. Audio works ok in title, broken in first intro scene, then audio is recognisable but broken from then on.)
 * Pilotwings (uses interlacing)
 * Super Baseball 2020 (looks and sounds good)
-* Dragon Quest 3 (now works. Graphics look mostly ok but text boxes are corrupted. Audio is mostly good, a bit glitched in the intro.)
+* Dragon Quest 3 (now works. Graphics look good. Audio is mostly good, a bit glitched in the intro.)
 * Final Fantasy V (quite a lot of incorrect tiles / priorities throughout, overworld is not visible. Audio is pretty good)
 * FZero (graphics look completely corrupted, audio sounds pretty good.)
 * Gradius III (looks mostly ok, some odd graphical glitches, audio sounds pretty good.)

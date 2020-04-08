@@ -286,6 +286,7 @@ impl PPU {
                 }
             },
             ExitHBlank => {
+                self.toggle_hblank(false);
                 self.renderer.draw_line((self.scanline - 1) as usize);
                 self.state = PPUState::DrawingBeforePause;
                 PPUSignal::None

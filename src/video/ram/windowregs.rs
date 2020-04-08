@@ -84,11 +84,6 @@ bitflags! {
     }
 }
 
-const FIXED_COLOUR_B_BIT: u8 = 7;
-const FIXED_COLOUR_G_BIT: u8 = 6;
-const FIXED_COLOUR_R_BIT: u8 = 5;
-const MAX_COLOUR: u8 = 0x1F;
-
 // Used as input to some window reg methods.
 #[derive(Clone, Copy)]
 pub enum Screen {
@@ -198,6 +193,11 @@ impl WindowRegisters {
     }
 
     pub fn set_fixed_colour(&mut self, data: u8) {
+        const FIXED_COLOUR_B_BIT: u8 = 7;
+        const FIXED_COLOUR_G_BIT: u8 = 6;
+        const FIXED_COLOUR_R_BIT: u8 = 5;
+        const MAX_COLOUR: u8 = 0x1F;
+
         if test_bit!(data, FIXED_COLOUR_B_BIT, u8) {
             let b = data & MAX_COLOUR;
             self.fixed_colour.b = (b << 3) + (b >> 2);

@@ -450,8 +450,8 @@ impl Registers {
     pub fn calc_mode_7(&self, x: i16, y: i16) -> (u16, u16) {
         let x_0 = I8F8::from_bits(self.mode7_centre_x as i16);
         let y_0 = I8F8::from_bits(self.mode7_centre_y as i16);
-        let x_i = I8F8::from_bits(x) + I8F8::from_bits(self.get_mode7_scroll_x() as i16) - x_0;
-        let y_i = I8F8::from_bits(y) + I8F8::from_bits(self.get_mode7_scroll_y() as i16) - y_0;
+        let x_i = I8F8::from_bits(x) + I8F8::from_bits(self.get_mode7_scroll_x()) - x_0;
+        let y_i = I8F8::from_bits(y) + I8F8::from_bits(self.get_mode7_scroll_y()) - y_0;
         let x_out = (I8F8::from_bits(self.mode7_matrix_a as i16) * x_i) + (I8F8::from_bits(self.mode7_matrix_b as i16) * y_i) + x_0;
         let y_out = (I8F8::from_bits(self.mode7_matrix_c as i16) * x_i) + (I8F8::from_bits(self.mode7_matrix_d as i16) * y_i) + y_0;
 

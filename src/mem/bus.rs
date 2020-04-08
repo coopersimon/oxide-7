@@ -226,6 +226,7 @@ impl MemBus {
         reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
 
         if (buf[0x15] & 0xE9) == 0x20/* && (0x400 << buf[0x17]) == rom_size*/ {
+            println!("LOROM {:X}: {}", buf[0x15], std::str::from_utf8(&buf[0..21]).unwrap());
             let save_file_size = std::cmp::min(0x400 << buf[0x18], 1024 * 512);    // TODO: check if there should be save data at all.
             let sram = SRAM::new(save_path, save_file_size).expect("Couldn't make save file.");
             return Box::new(LoROM::new(reader, sram, (buf[0x15] & 0x30) == 0x30));
@@ -236,6 +237,7 @@ impl MemBus {
         reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
 
         if (buf[0x15] & 0xE9) == 0x21/* || (0x400 << buf[0x17]) == rom_size*/ {
+            println!("HIROM {:X}: {}", buf[0x15], std::str::from_utf8(&buf[0..21]).unwrap());
             let save_file_size = std::cmp::min(0x400 << buf[0x18], 1024 * 256);    // TODO: check if there should be save data at all.
             let sram = SRAM::new(save_path, save_file_size).expect("Couldn't make save file.");
             return Box::new(HiROM::new(reader, sram, (buf[0x15] & 0x30) == 0x30));
@@ -248,13 +250,13 @@ impl MemBus {
     fn read_wram(&mut self) -> (u8, usize) {
         let data = self.wram.read(self.wram_addr);
         self.wram_addr = self.wram_addr.wrapping_add(1) & 0x1FFFF;
-        (data, SLOW_MEM_ACCESS)
+        (data, FAST_MEM_ACCESS)
     }
 
     fn write_wram(&mut self, data: u8) -> usize {
         self.wram.write(self.wram_addr, data);
         self.wram_addr = self.wram_addr.wrapping_add(1) & 0x1FFFF;
-        SLOW_MEM_ACCESS
+        FAST_MEM_ACCESS
     }
 
     // Internal status registers.
@@ -298,7 +300,7 @@ impl MemBus {
             0x420a => self.bus_b.ppu.set_v_timer_hi(data),
             0x420b => self.dma_transfer(data),
             0x420c => self.hdma_enable = data,
-            0x420d => self.cart.set_write_speed(data),
+            0x420d => self.cart.set_rom_speed(data),
             _ => unreachable!(),
         }
     }
@@ -307,7 +309,6 @@ impl MemBus {
     // Keeps cycling until the transfer is done. This pauses the CPU operation.
     fn dma_transfer(&mut self, mut channels: u8) {
         for chan in 0..8 {
-
             while test_bit!(channels, chan, u8) {
                 let (src_addr, dst_addr) = {
                     let channel = &mut self.dma_channels[chan];
