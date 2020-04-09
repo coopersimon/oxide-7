@@ -1,9 +1,6 @@
 mod shaders;
 mod debug;
 
-use chrono::{
-    Duration, Utc
-};
 use winit::{
     EventsLoop,
     Event,
@@ -83,9 +80,6 @@ fn main() {
     let save_file_name = make_save_name(&cart_path);
     let mut snes = SNES::new(&cart_path, &save_file_name);
 
-    let frame_duration = Duration::microseconds((FRAME_INTERVAL * 1_000_000.0) as i64);
-    //let mut averager = averager::Averager::new(100);
-
     let mut frame_tex = [0_u8; FRAME_BUFFER_SIZE];
 
     if debug_mode {
@@ -154,7 +148,7 @@ fn main() {
 
             (Swapchain::new(device.clone(), surface.clone(),
                 caps.min_image_count, format, dimensions, 1, caps.supported_usage_flags, &queue,
-                SurfaceTransform::Identity, CompositeAlpha::Opaque, PresentMode::Fifo, true, None
+                SurfaceTransform::Identity, CompositeAlpha::Opaque, PresentMode::Immediate, true, None
             ).expect("Failed to create swapchain"),
             DynamicState {
                 viewports: Some(vec![Viewport {
@@ -222,8 +216,13 @@ fn main() {
 
         let mut previous_frame_future = Box::new(vertex_future) as Box<dyn GpuFuture>;
 
+        let mut loop_helper = spin_sleep::LoopHelper::builder()
+            .native_accuracy_ns(1_000_000)
+            .report_interval_s(1.0)
+            .build_with_target_rate(60.0);
+
         loop {
-            let frame = Utc::now();
+            let _ = loop_helper.loop_start();
 
             read_events(&mut events_loop, &mut snes);
             snes.frame(&mut frame_tex);
@@ -248,7 +247,7 @@ fn main() {
 
             // Start building command buffer using pipeline and framebuffer, starting with the background vertices.
             let command_buffer = AutoCommandBufferBuilder::primary_one_time_submit(device.clone(), queue.family()).unwrap()
-                .begin_render_pass(framebuffers[image_num].clone(), false, vec![[1.0, 0.0, 0.0, 1.0].into()]).unwrap()
+                .begin_render_pass(framebuffers[image_num].clone(), false, vec![[0.0, 0.0, 0.0, 0.0].into()]).unwrap()
                 .draw(
                     pipeline.clone(),
                     &dynamic_state,
@@ -275,10 +274,11 @@ fn main() {
                 Err(e) => println!("Err: {:?}", e),
             }
 
-            //averager.add((Utc::now() - frame).num_milliseconds() as usize);
-            //println!("Frame t: {}ms", averager.get_avg());
+            /*if let Some(fps) = loop_helper.report_rate() {
+                println!("Current fps: {}", fps.round());
+            }*/
 
-            while (Utc::now() - frame) < frame_duration {}  // Wait until next frame.
+            loop_helper.loop_sleep();
         }
     }
 }
@@ -330,39 +330,3 @@ fn read_events(events_loop: &mut EventsLoop, snes: &mut SNES) {
         }
     });
 }
-
-/*mod averager {
-    use std::{
-        collections::VecDeque,
-        ops::{
-            Add,
-            Div
-        }
-    };
-    
-    pub struct Averager<T: Add + Div> {
-        queue:      VecDeque<T>,
-        max_len:    usize
-    }
-    
-    impl Averager<usize> {
-        pub fn new(len: usize) -> Self {
-            Averager {
-                queue:      VecDeque::with_capacity(len),
-                max_len:    len
-            }
-        }
-    
-        pub fn add(&mut self, data: usize) {
-            self.queue.push_back(data);
-    
-            if self.queue.len() > self.max_len {
-                self.queue.pop_front();
-            }
-        }
-    
-        pub fn get_avg(&self) -> usize {
-            self.queue.iter().sum::<usize>() / self.queue.len()
-        }
-    }
-}*/

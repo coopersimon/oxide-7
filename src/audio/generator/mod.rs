@@ -24,9 +24,9 @@ impl AudioGenerator {
     
             let device = host.default_output_device().expect("no output device available.");
 
-            for f in device.supported_output_formats().unwrap() {
+            /*for f in device.supported_output_formats().unwrap() {
                 println!("Format: {:?}", f);
-            }
+            }*/
     
             //let mut supported_formats_range = device.supported_output_formats()
             //    .expect("error while querying formats");
