@@ -298,9 +298,7 @@ impl PPU {
 
                 {
                     let mut mem = self.mem.lock().unwrap();
-                    if mem.get_bg_registers().in_fblank() {
-                        mem.oam_reset();
-                    }
+                    mem.oam_reset();
                 }
 
                 self.state = PPUState::VBlank;

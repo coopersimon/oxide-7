@@ -23,7 +23,7 @@ A SNES emulator written in Rust.
 * Super Ghouls 'n Ghosts (Intro and title seem fine, except for mode 7 in intro. Actual gameplay looks a bit corrupted (BG3 in mode 1 issues again I suspect). Audio sounds decent, with some glitches.)
 * Kirby's Dreamland 3 (Unrecognised ROM config (SA-1))
 * Kirby's Super Star (Unrecognised ROM config (SA-1))
-* Donkey Kong Country (intro and menus look ok, in gameplay sprites don't show up. audio sounds great now.)
+* Donkey Kong Country (looks good. audio sounds great now.)
 * Donkey Kong Country 2 (same as above.)
 * Chrono Trigger (works pretty well. Audio works ok in title, broken in first intro scene, then audio is recognisable but broken from then on.)
 * Pilotwings (uses interlacing)
@@ -61,6 +61,9 @@ A SNES emulator written in Rust.
 - Some issues with things being one scanline "off".
 - Ensure IRQ correctness.
 
+##### Bugs
+- Some background corruption.
+
 ##### Audio
 - Echo
 - Noise
@@ -69,7 +72,7 @@ A SNES emulator written in Rust.
 - Fix the slight lag on audio (resampler delay?)
 
 ##### System
-- Test - does BCD mode work? Also it could do with some cleanup.
+- Test - does BCD mode work (some tests say no)? Also it could do with some cleanup.
 - Ensure timing is correct
 
 ##### Carts
