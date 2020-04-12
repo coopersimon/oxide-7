@@ -131,7 +131,10 @@ impl Voice {
 
     // Is this channel currently keyed on?
     pub fn is_on(&self) -> bool {
-        self.current_s.is_some()
+        match self.current_s {
+            Some(SampleSource::Samp(_)) => true,
+            _ => false
+        }
     }
 
     pub fn read_left_vol(&self) -> f32 {
@@ -143,15 +146,28 @@ impl Voice {
     }
 }
 
-// Generator
-impl Iterator for Voice {
-    type Item = i16;
+// Clamp val between min and max.
+macro_rules! clamp {
+    ($val:expr, $min:expr, $max:expr) => {
+        std::cmp::min($max, std::cmp::max($min, $val))
+    };
+}
 
-    fn next(&mut self) -> Option<Self::Item> {
+// Generator
+impl Voice {
+    pub fn generate(&mut self, pitch_mod: i16) -> Option<i16> {
         if !self.noise {
             if let Some(s) = self.current_s {
                 let sample = self.generate_sample();
-                self.freq_step(s);
+                let step = if self.pitch_mod {
+                    println!("pm");
+                    let factor = ((pitch_mod >> 4) + 0x400) as u32;
+                    let step = ((self.pitch as u32) * factor) >> 10;
+                    clamp!(step, 0, 0x3FFF)
+                } else {
+                    self.pitch as u32
+                };
+                self.freq_step(s, step);
                 self.apply_envelope(sample)
             } else {
                 None
@@ -160,13 +176,6 @@ impl Iterator for Voice {
             None
         }
     }
-}
-
-// Clamp val between min and max.
-macro_rules! clamp {
-    ($val:expr, $min:expr, $max:expr) => {
-        std::cmp::min($max, std::cmp::max($min, $val))
-    };
 }
 
 // Internal: sample gen
@@ -208,8 +217,8 @@ impl Voice {
     }
 
     // Step after outputting each sample.
-    fn freq_step(&mut self, old_s: SampleSource) {
-        let counter = (self.freq_counter as u32) + (self.pitch as u32);
+    fn freq_step(&mut self, old_s: SampleSource, step: u32) {
+        let counter = (self.freq_counter as u32) + step;
         // Sample index is the sample number in the current or next BRR block.
         let sample_index = ((counter >> 12) as usize) & 0x1F;
         let sample_number = sample_index & 0xF;

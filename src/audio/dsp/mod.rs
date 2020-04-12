@@ -168,13 +168,19 @@ impl DSP {
     fn generate_frame(&mut self) {
         let mut left = 0.0;
         let mut right = 0.0;
+        let mut prev = 0;
+
         for voice in &mut self.voices {
-            if let Some(v) = voice.next() {
+            if let Some(v) = voice.generate(prev) {
+                prev = v;
+
                 let v_samp = (v as f32) / 32_768.0;
                 let voice_left = v_samp * voice.read_left_vol();
                 let voice_right = v_samp * voice.read_right_vol();
                 left += voice_left / 8.0;
                 right += voice_right / 8.0;
+            } else {
+                prev = 0;
             }
         }
 
