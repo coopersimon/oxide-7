@@ -10,7 +10,7 @@ A SNES emulator written in Rust.
 * Link to the Past (Intro triforce is glitched, gameplay seems ok. Audio sounds good.)
 * Final Fantasy 2 (IV) (There is some sort of corrupted overlay (I think BG3 in Mode 1). Otherwise video looks fine. Audio sounds good.)
 * Final Fantasy 3 (VI) (Title looks ok, reads out of bounds after. If this is ignored then the first "scene" doesn't show as memory reads are too slow. Then they look _mostly_ ok. Audio is audible now, but sounds pretty broken.)
-* Earthbound (Works pretty well. Audio sounds good, some clipping(?) in the title music.)
+* Earthbound (Works pretty well. Audio sounds mostly good.)
 * Super Castlevania IV (Works pretty well. Audio sounds good.)
 * Super Mario Kart (shows initial nintendo logo then freezes (Might be SPC issues, not sure).)
 * Mortal Kombat (looks and plays well now. Audio sounds mostly good.)
@@ -36,7 +36,7 @@ A SNES emulator written in Rust.
 * Super Mario RPG (unrecognised ROM config (SA-1))
 * Super Punch-out!! (sound seems to work fine, graphics look OK, crashed when gameplay begins due to STP being called (I guess I have to implement it))
 * Warios Woods (audio seems fine, graphics are a bit glitched (random lines and some missing graphics))
-* Prince of Persia (graphics look good, audio is a bit skippy, gameplay is fine but eventually crashes swapping in bank 0x54,0000)
+* Prince of Persia (graphics look good, audio is a bit skippy, gameplay is fine but used to crash (swapping in bank 0x54,0000), now crashes due to swapping bank 0x3F,53AC)
 * Prince of Persia 2 (intro shows up and looks _mostly_ fine. Gameplay is black except when paused (?). audio repeats the same broken loop.)
 * Shadowrun (Intro is fine, when gameplay begins sprites are bugged, audio sounds decent.)
 * International Superstar Soccer (Intro and menus look good. Audio also sounds good)
@@ -44,7 +44,7 @@ A SNES emulator written in Rust.
 * Super Street Fighter II (Intro plays, at a good frame rate (frame rate was bad before audio branch). unresponsive to controls. Some significant graphical glitches in the intro. Some audio plays but it's broken. Gameplay demo looks ok)
 * Ultima VI (title screen, name select and intro look good. audio sounds good. Black screen when gameplay begins (loading address 0x4F,7496))
 * Ultima VII (intro, title screen looks good. audio sounds _mostly_ ok. Main gameplay menus show up but sprites appear not to.)
-* Civilization (black screen, never starts)
+* Civilization (looks and sounds good, as of at least the last commit.)
 * Harvest Moon (unrecognised ROM)
 * Sim City 2000 (unrecognised ROM)
 * Terminator 2 (intro looks and sounds ok, used to crash upon start due to swapping bank 0x5B,5F6E, now crashes due to swapping bank 0x3F,7F07)
@@ -65,7 +65,7 @@ A SNES emulator written in Rust.
 - Some background corruption.
 
 ##### Audio
-- Echo
+- Echo: test
 - Noise
 - Pitch modulation: test
 - Ensure sample correctness!

@@ -166,7 +166,7 @@ impl SPCBus {
             self.timer_2.clock(cycles);
         }
 
-        self.dsp.clock(cycles);
+        self.dsp.clock(cycles, &mut self.ram);
     }
 }
 

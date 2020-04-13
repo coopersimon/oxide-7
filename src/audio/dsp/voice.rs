@@ -19,10 +19,10 @@ pub struct Voice {
 
     adsr:       u16,
     gain:       u8,
-    fir_coef:   u8,
 
     noise:      bool,   // Should this voice generate noise
     pitch_mod:  bool,
+    echo:       bool,
 
     // Read
     envx:       u8,
@@ -49,10 +49,10 @@ impl Voice {
 
             adsr:       0,
             gain:       0,
-            fir_coef:   0,
 
             noise:      false,
             pitch_mod:  false,
+            echo:       false,
 
             envx:       0,
             outx:       0,
@@ -78,7 +78,6 @@ impl Voice {
             0x7 => self.gain,
             0x8 => self.envx,
             0x9 => self.outx,
-            0xF => self.fir_coef,
             _ => 0,
         }
     }
@@ -95,7 +94,6 @@ impl Voice {
             0x7 => self.gain = data,
             0x8 => self.envx = data,
             0x9 => self.outx = data,
-            0xF => self.fir_coef = data,
             _ => {},
         }
     }
@@ -129,6 +127,14 @@ impl Voice {
         self.pitch_mod = enable;
     }
 
+    pub fn enable_echo(&mut self, enable: bool) {
+        self.echo = enable;
+    }
+
+    pub fn is_echo_enabled(&self) -> bool {
+        self.echo
+    }
+
     // Is this channel currently keyed on?
     pub fn is_on(&self) -> bool {
         match self.current_s {
@@ -144,13 +150,6 @@ impl Voice {
     pub fn read_right_vol(&self) -> f32 {
         ((self.right_vol as i8) as f32) / 128.0
     }
-}
-
-// Clamp val between min and max.
-macro_rules! clamp {
-    ($val:expr, $min:expr, $max:expr) => {
-        std::cmp::min($max, std::cmp::max($min, $val))
-    };
 }
 
 // Generator
