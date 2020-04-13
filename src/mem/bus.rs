@@ -28,11 +28,7 @@ use super::{
         DMAChannel,
         DMAControl
     },
-    rom::{
-        Cart,
-        LoROM,
-        HiROM
-    }
+    rom::*
 };
 
 // A bus to attach to the CPU (Address Bus A).
@@ -226,10 +222,17 @@ impl MemBus {
         reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
 
         if (buf[0x15] & 0xE9) == 0x20/* && (0x400 << buf[0x17]) == rom_size*/ {
-            println!("LOROM {:X}: {}", buf[0x15], std::str::from_utf8(&buf[0..21]).unwrap());
             let save_file_size = std::cmp::min(0x400 << buf[0x18], 1024 * 512);    // TODO: check if there should be save data at all.
             let sram = SRAM::new(save_path, save_file_size).expect("Couldn't make save file.");
-            return Box::new(LoROM::new(reader, sram, (buf[0x15] & 0x30) == 0x30));
+
+            let rom_size = 0x400 << buf[0x17];
+            return if rom_size > (1 << 21) {
+                println!("LOROM Large {:X}: {}", buf[0x15], std::str::from_utf8(&buf[0..21]).unwrap());
+                Box::new(LoROMLarge::new(reader, sram, (buf[0x15] & 0x30) == 0x30))
+            } else {
+                println!("LOROM {:X}: {}", buf[0x15], std::str::from_utf8(&buf[0..21]).unwrap());
+                Box::new(LoROM::new(reader, sram, (buf[0x15] & 0x30) == 0x30))
+            };
         }
 
         // Check for HiROM

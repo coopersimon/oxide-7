@@ -88,13 +88,80 @@ impl Cart for LoROM {
     fn read(&mut self, bank: u8, addr: u16) -> (u8, usize) {
         let internal_bank = bank % 0x80;
 
-        if addr >= 0x8000 {
-            (self.rom.read(internal_bank, addr % 0x8000), if bank < 0x80 {timing::SLOW_MEM_ACCESS} else {self.rom_speed})
+        /*if addr >= 0x8000 {
+            (self.rom.read(internal_bank % 0x40, addr % 0x8000), self.rom_speed)
         } else if internal_bank >= 0x70 {
             let ram_bank = ((internal_bank - 0x70) as u32) * LOROM_RAM_BANK_SIZE;
             (self.ram.read(ram_bank + addr as u32), timing::SLOW_MEM_ACCESS)
         } else {
             (0, timing::SLOW_MEM_ACCESS)
+        }*/
+        match internal_bank {
+            0x00..=0x3F if addr >= 0x8000 => (self.rom.read(internal_bank, addr % 0x8000), self.rom_speed),
+            0x70..=0x7F => {
+                let ram_bank = ((internal_bank - 0x70) as u32) * LOROM_RAM_BANK_SIZE;
+                (self.ram.read(ram_bank + addr as u32), timing::SLOW_MEM_ACCESS)
+            },
+            _ => (self.rom.read(internal_bank % 0x40, addr % 0x8000), self.rom_speed),
+        }
+    }
+
+    fn write(&mut self, bank: u8, addr: u16, data: u8) -> usize {
+        let internal_bank = bank % 0x80;
+
+        if internal_bank >= 0x70 {
+            let ram_bank = ((internal_bank - 0x70) as u32) * LOROM_RAM_BANK_SIZE;
+            self.ram.write(ram_bank + addr as u32, data);
+        }
+
+        timing::SLOW_MEM_ACCESS
+    }
+
+    fn flush(&mut self) {
+        self.ram.flush();
+    }
+
+    fn set_rom_speed(&mut self, data: u8) {
+        self.rom_speed = if self.fast_rom && test_bit!(data, SPEED_BIT, u8) {
+            timing::FAST_MEM_ACCESS
+        } else {
+            timing::SLOW_MEM_ACCESS
+        }
+    }
+}
+
+// For LoROM carts that are larger than 2MB.
+pub struct LoROMLarge {
+    rom:        ROM,
+    ram:        SRAM,
+
+    fast_rom:   bool,
+    rom_speed:  usize,
+}
+
+impl LoROMLarge {
+    pub fn new(cart_file: BufReader<File>, sram: SRAM, fast: bool) -> Self {
+        LoROMLarge {
+            rom:        ROM::new(cart_file, 0x8000),
+            ram:        sram,
+
+            fast_rom:   fast,
+            rom_speed:  timing::SLOW_MEM_ACCESS
+        }
+    }
+}
+
+impl Cart for LoROMLarge {
+    fn read(&mut self, bank: u8, addr: u16) -> (u8, usize) {
+        let internal_bank = bank % 0x80;
+
+        match internal_bank {
+            0x00..=0x3F if addr >= 0x8000 => (self.rom.read(internal_bank, addr % 0x8000), self.rom_speed),
+            0x70..=0x7F => {
+                let ram_bank = ((internal_bank - 0x70) as u32) * LOROM_RAM_BANK_SIZE;
+                (self.ram.read(ram_bank + addr as u32), timing::SLOW_MEM_ACCESS)
+            },
+            _ => (self.rom.read(internal_bank, addr % 0x8000), self.rom_speed),
         }
     }
 
@@ -147,7 +214,7 @@ impl Cart for HiROM {
         let internal_bank = bank % 0x80;
 
         match internal_bank {
-            0x00..=0x3F if addr >= 0x8000 => (self.rom.read(internal_bank, addr), if bank < 0x80 {timing::SLOW_MEM_ACCESS} else {self.rom_speed}),
+            0x00..=0x3F if addr >= 0x8000 => (self.rom.read(internal_bank, addr), self.rom_speed),
             0x20..=0x2F if addr >= 0x6000 => {
                 let ram_bank = ((internal_bank - 0x20) as u32) * HIROM_RAM_BANK_SIZE;
                 (self.ram.read(ram_bank + (addr as u32 - 0x6000)), timing::SLOW_MEM_ACCESS)
@@ -156,7 +223,7 @@ impl Cart for HiROM {
                 let ram_bank = ((internal_bank - 0x30) as u32) * HIROM_RAM_BANK_SIZE;
                 (self.ram.read(ram_bank + (addr as u32 - 0x6000)), timing::SLOW_MEM_ACCESS)
             },
-            0x40..=0x7F => (self.rom.read(internal_bank % 0x40, addr), if bank < 0x80 {timing::SLOW_MEM_ACCESS} else {self.rom_speed}),
+            0x40..=0x7F => (self.rom.read(internal_bank % 0x40, addr), self.rom_speed),
             _ => (0, timing::SLOW_MEM_ACCESS)
         }
     }
