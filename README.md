@@ -15,7 +15,7 @@ A SNES emulator written in Rust.
 * Super Mario Kart (shows initial nintendo logo then freezes (Might be SPC issues, not sure).)
 * Mortal Kombat (looks and plays well now. Audio sounds mostly good.)
 * SimCity (visuals are fine. Audio is mostly fine, some clipping(?) in the menu music.)
-* Super Mario All-Stars (works pretty well, but the top status bar has some issues with scrolling a line too early. sound is pretty good too.)
+* Super Mario All-Stars (works pretty well. some video glitches in super mario bros 3 world select. sound is pretty good too.)
 * Aladdin (intro works, title screen is a bit glitchy, gameplay responds but then stops after a short while. sound is pretty good now.)
 * Zombies Ate My Neighbors! (works pretty well. Audio is mostly fine but with some glitches.)
 * Mega Man X (Intro works, but title screen looks a bit glitched. Some glitched audio (still). Gameplay breaks due to incorrectly reading bank 0x40.)
@@ -30,11 +30,11 @@ A SNES emulator written in Rust.
 * Super Baseball 2020 (looks and sounds good)
 * Dragon Quest 3 (now works. Graphics look good. Audio is mostly good, a bit glitched in the intro.)
 * Final Fantasy V (quite a lot of incorrect tiles / priorities throughout, overworld is not visible. Audio is pretty good)
-* FZero (graphics look completely corrupted, audio sounds pretty good.)
+* FZero (mode 7 graphics look completely corrupted, sprites look ok. audio sounds pretty good.)
 * Gradius III (looks mostly ok, some odd graphical glitches, audio sounds pretty good.)
 * Mario Paint (title shows up ok, might need SNES mouse to see anything else. audio also sounds ok.)
 * Super Mario RPG (unrecognised ROM config (SA-1))
-* Super Punch-out!! (from last commit: sound seems to work fine, graphics look OK, crashed when gameplay begins due to STP being called (I guess I have to implement it))
+* Super Punch-out!! (sound seems to work fine, graphics look OK, crashed when gameplay begins due to STP being called (I guess I have to implement it))
 * Warios Woods (audio seems fine, graphics are a bit glitched (random lines and some missing graphics))
 * Prince of Persia (graphics look good, audio is a bit skippy, gameplay is fine but eventually crashes swapping in bank 0x54,0000)
 * Prince of Persia 2 (intro shows up and looks _mostly_ fine. Gameplay is black except when paused (?). audio repeats the same broken loop.)
@@ -58,8 +58,8 @@ A SNES emulator written in Rust.
 - Interlacing
 - Improve dirtiness detection in VRAM / move cache creation to CPU side
 - Test Modes 5 and 6 more extensively.
-- Some issues with things being one scanline "off".
 - Ensure IRQ correctness.
+- Mode 7 mosaic support.
 
 ##### Bugs
 - Some background corruption.
@@ -67,7 +67,7 @@ A SNES emulator written in Rust.
 ##### Audio
 - Echo
 - Noise
-- Pitch modulation
+- Pitch modulation: test
 - Ensure sample correctness!
 - Fix the slight lag on audio (resampler delay?)
 

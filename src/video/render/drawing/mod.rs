@@ -587,6 +587,8 @@ impl Renderer {
         let obj_regs = ObjectSettings::from_bits_truncate(mem.get_bg_registers().get_object_settings());
         let (small, large) = sprite_size_lookup((obj_regs & ObjectSettings::SIZE).bits() >> 5);
 
+        let actual_y = y + 1;
+
         let window_regs = mem.get_window_registers();
         for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
             if !window_regs.show_obj_pixel(Screen::Main, x as u8) {
@@ -605,13 +607,13 @@ impl Renderer {
             let bottom_y = object.y.wrapping_add(size_y - 1);
             
             if bottom_y > object.y {
-                (y >= object.y) && (y <= bottom_y)
+                (actual_y >= object.y) && (actual_y <= bottom_y)
             } else {
-                (y >= object.y) || (y <= bottom_y)
+                (actual_y >= object.y) || (actual_y <= bottom_y)
             }   // TODO: fix sprite priorities...
         }).take(32).collect::<Box::<[_]>>().iter().rev().for_each(|object| { // Actually do drawing.
             let size = if object.large {large} else {small};
-            let sprite_y = y - object.y;   // TODO: deal with wraparound.
+            let sprite_y = actual_y - object.y;   // TODO: deal with wraparound.
             let y_pixel = if object.y_flip() {size.1 - 1 - sprite_y} else {sprite_y} as usize;
 
             for x in 0..size.0 {
@@ -652,6 +654,9 @@ impl Renderer {
     fn draw_bg_to_line(&self, mem: &VideoMem, bg: BG, main_line: &mut [BGData], sub_line: &mut [BGData], y: usize) {
         let regs = mem.get_bg_registers();
         let window_regs = mem.get_window_registers();
+
+        let actual_y = y + 1;
+
         // TODO: separate mosaic stuff?
         let mosaic_amount = if regs.bg_mosaic_enabled(bg) {
             regs.bg_mosaic_mask()
@@ -662,7 +667,7 @@ impl Renderer {
 
         let y_mosaic_offset = y % (mosaic_amount + 1);
         let (_, mask_y) = regs.bg_size_mask(bg);
-        let bg_y = (y - y_mosaic_offset + regs.get_bg_scroll_y(bg)) & mask_y;
+        let bg_y = (actual_y - y_mosaic_offset + regs.get_bg_scroll_y(bg)) & mask_y;
         let mut bg_row = [BGData::default(); H_RES];
         self.get_row(self.get_pattern_mem(bg), mem, bg, bg_y, &mut bg_row);    // TODO: merge these functions together?
 
@@ -692,6 +697,8 @@ impl Renderer {
         let regs = mem.get_bg_registers();
         let window_regs = mem.get_window_registers();
 
+        let actual_y = y + 1;
+
         let mut main_window = [true; H_RES];
         window_regs.bg_window(BG::_1, Screen::Main, &mut main_window);
         let mut sub_window = [true; H_RES];
@@ -699,7 +706,7 @@ impl Renderer {
 
         for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
             let x_in = if regs.mode_7_flip_x() {255 - x} else {x};
-            let y_in = if regs.mode_7_flip_y() {223 - y} else {y};
+            let y_in = if regs.mode_7_flip_y() {224 - actual_y} else {actual_y};
             let (bg_x, bg_y) = regs.calc_mode_7(x_in as i16, y_in as i16);
             let lookup_x = if bg_x > 1023 {
                 match regs.mode_7_extend() {
@@ -739,12 +746,14 @@ impl Renderer {
         let regs = mem.get_bg_registers();
         let window_regs = mem.get_window_registers();
 
+        let actual_y = y + 1;
+
         let mut main_window = [true; H_RES];
         window_regs.bg_window(BG::_2, Screen::Main, &mut main_window);
         let mut sub_window = [true; H_RES];
         window_regs.bg_window(BG::_2, Screen::Sub, &mut sub_window);
 
-        let bg_y = y + (regs.get_mode7_scroll_y() as usize) % 1024;
+        let bg_y = actual_y + (regs.get_mode7_scroll_y() as usize) % 1024;
 
         for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
             let bg_x = x + (regs.get_mode7_scroll_x() as usize) % 1024;

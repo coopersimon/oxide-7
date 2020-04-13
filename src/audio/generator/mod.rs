@@ -13,7 +13,6 @@ impl AudioGenerator {
     pub fn new(rx: Receiver<super::SamplePacket>) -> Self {
         use cpal::traits::{
             HostTrait,
-            DeviceTrait,
             EventLoopTrait
         };
     
