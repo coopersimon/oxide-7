@@ -7,10 +7,7 @@ use std::{
         Seek,
         SeekFrom
     },
-    fs::File,
-    sync::{
-        Arc, Mutex
-    }
+    fs::File
 };
 
 use crate::{

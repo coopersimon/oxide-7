@@ -41,7 +41,7 @@ pub enum Button {
 pub struct SNES {
     cpu:    CPU,    // CPU, along with mem bus and devices
 
-    frame:  Arc<Mutex<Box<[u8]>>>
+    frame:  RenderTarget
 }
 
 impl SNES {

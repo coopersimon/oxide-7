@@ -159,7 +159,6 @@ impl Voice {
             if let Some(s) = self.current_s {
                 let sample = self.generate_sample();
                 let step = if self.pitch_mod {
-                    println!("pm");
                     let factor = ((pitch_mod >> 4) + 0x400) as u32;
                     let step = ((self.pitch as u32) * factor) >> 10;
                     clamp!(step, 0, 0x3FFF)

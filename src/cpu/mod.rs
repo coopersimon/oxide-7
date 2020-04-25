@@ -14,10 +14,6 @@ use crate::{
     video::RenderTarget
 };
 
-use std::sync::{
-    Arc, Mutex
-};
-
 // 65816
 pub struct CPU {
     // Registers

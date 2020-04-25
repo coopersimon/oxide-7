@@ -1,5 +1,4 @@
 // For stepping through the CPU.
-use crate::cpu::CPU;
 
 // Capture of CPU internal state.
 pub struct CPUState {
