@@ -80,6 +80,7 @@ A SNES emulator written in Rust.
 - Fix bug related to incorrect loading with LoROMs (see MegaManX, Ultima VI).
 
 ##### Extensions
+- DSP
 - SA-1
 - SuperFX
 

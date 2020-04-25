@@ -18,17 +18,17 @@ required-features = ["debug"]
 
 [dependencies]
 bitflags = "1.1.0"
-vulkano = "0.16"
-vulkano-shaders = "0.16"
-vulkano-win = "0.16"
-winit = "0.19"
-cgmath = "0.17"
 chrono = "0.4"
 crossbeam-channel = "0.4.2"
 fixed = "0.5.4"
 cpal = "0.11"
 itertools = "0.9"
 sample = "0.10"
+
+vulkano = "0.16"
+vulkano-shaders = "0.16"
+vulkano-win = "0.16"
+winit = "0.19"
 spin_sleep = "0.3.7"
 
 [features]
