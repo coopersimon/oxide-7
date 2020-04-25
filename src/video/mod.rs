@@ -20,6 +20,7 @@ use crate::{
 };
 
 use ram::VideoMem;
+pub use render::RenderTarget;
 
 type VRamRef = Arc<Mutex<VideoMem>>;
 
@@ -137,7 +138,7 @@ impl PPU {
         self.enable_render = enable;
     }
 
-    pub fn start_frame(&mut self, frame: Arc<Mutex<[u8]>>) {
+    pub fn start_frame(&mut self, frame: RenderTarget) {
         self.renderer.start_frame(frame);
     }
 

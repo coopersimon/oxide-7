@@ -13,6 +13,7 @@ pub mod debug;
 
 use cpu::CPU;
 use mem::MemBus;
+use video::RenderTarget;
 
 use std::sync::{
     Arc, Mutex
@@ -40,7 +41,7 @@ pub enum Button {
 pub struct SNES {
     cpu:    CPU,    // CPU, along with mem bus and devices
 
-    frame:  Arc<Mutex<[u8; FRAME_BUFFER_SIZE]>>
+    frame:  Arc<Mutex<Box<[u8]>>>
 }
 
 impl SNES {
@@ -52,7 +53,7 @@ impl SNES {
         SNES {
             cpu: cpu,
 
-            frame: Arc::new(Mutex::new([0; FRAME_BUFFER_SIZE]))
+            frame: Arc::new(Mutex::new(Box::new([0; FRAME_BUFFER_SIZE])))
         }
     }
 

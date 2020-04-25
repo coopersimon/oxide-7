@@ -16,7 +16,7 @@ use std::{
 use crate::{
     common::Interrupt,
     constants::timing::*,
-    video::{PPU, PPUSignal},
+    video::{PPU, PPUSignal, RenderTarget},
     audio::APU,
     joypad::{JoypadMem, Button}
 };
@@ -201,7 +201,7 @@ impl MemBus {
         self.joypads.set_buttons(button, val, joypad);
     }
 
-    pub fn start_frame(&mut self, frame: Arc<Mutex<[u8]>>) {
+    pub fn start_frame(&mut self, frame: RenderTarget) {
         self.bus_b.ppu.start_frame(frame);
         self.cart.flush();
     }

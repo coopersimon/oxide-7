@@ -10,7 +10,8 @@ use crate::{
         timing::INTERNAL_OP,
         int
     },
-    joypad::Button
+    joypad::Button,
+    video::RenderTarget
 };
 
 use std::sync::{
@@ -105,7 +106,7 @@ impl CPU {
     }
 
     // TODO: combine this with enable_rendering
-    pub fn start_frame(&mut self, frame: Arc<Mutex<[u8]>>) {
+    pub fn start_frame(&mut self, frame: RenderTarget) {
         self.mem.start_frame(frame);
     }
 }

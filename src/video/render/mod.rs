@@ -51,7 +51,7 @@ impl From<u8> for VideoMode {
     }
 }
 
-pub type RenderTarget = Arc<Mutex<[u8]>>;
+pub type RenderTarget = Arc<Mutex<Box<[u8]>>>;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Colour {

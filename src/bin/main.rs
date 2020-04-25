@@ -1,5 +1,5 @@
-mod shaders;
 mod debug;
+mod shaders;
 
 use winit::{
     EventsLoop,
@@ -80,7 +80,8 @@ fn main() {
     let save_file_name = make_save_name(&cart_path);
     let mut snes = SNES::new(&cart_path, &save_file_name);
 
-    let mut frame_tex = [0_u8; FRAME_BUFFER_SIZE];
+
+    let mut frame_tex = Box::new([0_u8; FRAME_BUFFER_SIZE]);
 
     if debug_mode {
         #[cfg(feature = "debug")]
@@ -148,7 +149,7 @@ fn main() {
 
             (Swapchain::new(device.clone(), surface.clone(),
                 caps.min_image_count, format, dimensions, 1, caps.supported_usage_flags, &queue,
-                SurfaceTransform::Identity, CompositeAlpha::Opaque, PresentMode::Immediate, true, None
+                SurfaceTransform::Identity, CompositeAlpha::Opaque, PresentMode::Fifo, true, None
             ).expect("Failed to create swapchain"),
             DynamicState {
                 viewports: Some(vec![Viewport {
@@ -225,7 +226,7 @@ fn main() {
             let _ = loop_helper.loop_start();
 
             read_events(&mut events_loop, &mut snes);
-            snes.frame(&mut frame_tex);
+            snes.frame(&mut frame_tex[..]);
 
             previous_frame_future.cleanup_finished();
 
