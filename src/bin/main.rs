@@ -13,11 +13,6 @@ use winit::{
     window::WindowBuilder
 };
 
-use crossbeam_channel::{
-    unbounded,
-    Receiver
-};
-
 use oxide7::*;
 
 #[repr(C)]
@@ -29,11 +24,6 @@ struct Vertex {
 
 unsafe impl bytemuck::Zeroable for Vertex {}
 unsafe impl bytemuck::Pod for Vertex {}
-
-struct ButtonEvent {
-    button: Button,
-    pressed: bool
-}
 
 fn main() {
     let cart_path = std::env::args().nth(1).expect("Expected ROM file path as first argument!");
@@ -49,9 +39,9 @@ fn main() {
         debug::debug_mode(&mut snes);
     } else {
         let event_loop = EventLoop::new();
-        let mut window = WindowBuilder::new()
+        let window = WindowBuilder::new()
             .with_inner_size(Size::Logical(LogicalSize{width: 512_f64, height: 448_f64}))
-            .with_title(&snes.rom_name())
+            .with_title("Oxide-7: ".to_owned() + &snes.rom_name())
             .build(&event_loop).unwrap();
 
         // Setup wgpu
@@ -261,7 +251,9 @@ fn main() {
                         }
                     },
                     WindowEvent::Resized(size) => {
-                        
+                        swapchain_desc.width = size.width;
+                        swapchain_desc.height = size.height;
+                        swapchain = device.create_swap_chain(&surface, &swapchain_desc);
                     },
                     _ => {}
                 },
