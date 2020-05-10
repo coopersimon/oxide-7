@@ -9,9 +9,7 @@ use winit::{
         ElementState,
         VirtualKeyCode,
     },
-    event_loop::{
-        ControlFlow, EventLoop
-    },
+    event_loop::EventLoop,
     window::WindowBuilder
 };
 
@@ -21,10 +19,6 @@ use crossbeam_channel::{
 };
 
 use oxide7::*;
-
-// Target output frame rate.
-const TARGET_FRAME_RATE: usize = 60;
-const FRAME_INTERVAL: f32 = 1.0 / TARGET_FRAME_RATE as f32;
 
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy)]
@@ -54,14 +48,13 @@ fn main() {
         #[cfg(feature = "debug")]
         debug::debug_mode(&mut snes);
     } else {
-        let mut frame_tex = Box::new([0_u8; FRAME_BUFFER_SIZE]);
-
         let event_loop = EventLoop::new();
         let window = WindowBuilder::new()
             .with_inner_size(Size::Logical(LogicalSize{width: 512_f64, height: 448_f64}))
             .with_title("Oxide-7")
             .build(&event_loop).unwrap();
 
+        // Setup wgpu
         let surface = wgpu::Surface::create(&window);
 
         let adapter = futures::executor::block_on(wgpu::Adapter::request(
@@ -74,7 +67,7 @@ fn main() {
 
         let (device, queue) = futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             extensions: wgpu::Extensions {
-                anisotropic_filtering: false, // TODO: need this?
+                anisotropic_filtering: false,
             },
             limits: wgpu::Limits::default()
         }));

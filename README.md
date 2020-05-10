@@ -12,7 +12,7 @@ A SNES emulator written in Rust.
 * Final Fantasy 3 (VI) (Title looks ok, reads out of bounds after. If this is ignored then the first "scene" doesn't show as memory reads are too slow. Then they look _mostly_ ok. Audio is audible now, but sounds pretty broken.)
 * Earthbound (Works pretty well. Audio sounds mostly good.)
 * Super Castlevania IV (Works pretty well. Audio sounds good.)
-* Super Mario Kart (shows initial nintendo logo then freezes (Might be SPC issues, not sure).)
+* Super Mario Kart (shows initial nintendo logo then freezes (Needs DSP to proceed))
 * Mortal Kombat (looks and plays well now. Audio sounds mostly good.)
 * SimCity (visuals are fine. Audio is mostly fine, some clipping(?) in the menu music.)
 * Super Mario All-Stars (works pretty well. some video glitches in super mario bros 3 world select. sound is pretty good too.)
