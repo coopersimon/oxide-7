@@ -25,10 +25,10 @@ cpal = "0.11"
 itertools = "0.9"
 sample = "0.10"
 
-vulkano = "0.16"
-vulkano-shaders = "0.16"
-vulkano-win = "0.16"
-winit = "0.19"
+bytemuck = "1.2.0"
+futures = "0.3.5"
+wgpu = "0.5.0"
+winit = "0.22"
 spin_sleep = "0.3.7"
 
 [features]
