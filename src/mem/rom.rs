@@ -25,6 +25,8 @@ pub trait Cart {
     fn flush(&mut self);
 
     fn set_rom_speed(&mut self, data: u8);
+
+    fn name(&self) -> String;
 }
 
 // ROM banks.
@@ -70,16 +72,20 @@ pub struct LoROM {
 
     fast_rom:   bool,
     rom_speed:  usize,
+
+    name:       String
 }
 
 impl LoROM {
-    pub fn new(cart_file: BufReader<File>, sram: SRAM, fast: bool) -> Self {
+    pub fn new(cart_file: BufReader<File>, sram: SRAM, fast: bool, name: String) -> Self {
         LoROM {
             rom:        ROM::new(cart_file, 0x8000),
             ram:        sram,
 
             fast_rom:   fast,
-            rom_speed:  timing::SLOW_MEM_ACCESS
+            rom_speed:  timing::SLOW_MEM_ACCESS,
+
+            name:       name,
         }
     }
 }
@@ -128,6 +134,10 @@ impl Cart for LoROM {
             timing::SLOW_MEM_ACCESS
         }
     }
+
+    fn name(&self) -> String {
+        self.name.clone()
+    }
 }
 
 // For LoROM carts that are larger than 2MB.
@@ -137,16 +147,20 @@ pub struct LoROMLarge {
 
     fast_rom:   bool,
     rom_speed:  usize,
+
+    name:       String
 }
 
 impl LoROMLarge {
-    pub fn new(cart_file: BufReader<File>, sram: SRAM, fast: bool) -> Self {
+    pub fn new(cart_file: BufReader<File>, sram: SRAM, fast: bool, name: String) -> Self {
         LoROMLarge {
             rom:        ROM::new(cart_file, 0x8000),
             ram:        sram,
 
             fast_rom:   fast,
-            rom_speed:  timing::SLOW_MEM_ACCESS
+            rom_speed:  timing::SLOW_MEM_ACCESS,
+
+            name:       name,
         }
     }
 }
@@ -187,6 +201,10 @@ impl Cart for LoROMLarge {
             timing::SLOW_MEM_ACCESS
         }
     }
+
+    fn name(&self) -> String {
+        self.name.clone()
+    }
 }
 
 pub struct HiROM {
@@ -195,16 +213,20 @@ pub struct HiROM {
 
     fast_rom:   bool,
     rom_speed:  usize,
+
+    name:       String
 }
 
 impl HiROM {
-    pub fn new(cart_file: BufReader<File>, sram: SRAM, fast: bool) -> Self {
+    pub fn new(cart_file: BufReader<File>, sram: SRAM, fast: bool, name: String) -> Self {
         HiROM {
             rom:        ROM::new(cart_file, 0x10000),
             ram:        sram,
 
             fast_rom:   fast,
-            rom_speed:  timing::SLOW_MEM_ACCESS
+            rom_speed:  timing::SLOW_MEM_ACCESS,
+
+            name:       name,
         }
     }
 }
@@ -256,5 +278,9 @@ impl Cart for HiROM {
         } else {
             timing::SLOW_MEM_ACCESS
         }
+    }
+
+    fn name(&self) -> String {
+        self.name.clone()
     }
 }

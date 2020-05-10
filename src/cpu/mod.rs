@@ -105,6 +105,10 @@ impl CPU {
     pub fn start_frame(&mut self, frame: RenderTarget) {
         self.mem.start_frame(frame);
     }
+
+    pub fn rom_name(&self) -> String {
+        self.mem.rom_name()
+    }
 }
 
 // Internal: High-level

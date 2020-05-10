@@ -42,16 +42,16 @@ fn main() {
 
     let save_file_name = make_save_name(&cart_path);
 
-    if debug_mode {
-        let mut snes = SNES::new(&cart_path, &save_file_name);
+    let mut snes = SNES::new(&cart_path, &save_file_name);
 
+    if debug_mode {
         #[cfg(feature = "debug")]
         debug::debug_mode(&mut snes);
     } else {
         let event_loop = EventLoop::new();
-        let window = WindowBuilder::new()
+        let mut window = WindowBuilder::new()
             .with_inner_size(Size::Logical(LogicalSize{width: 512_f64, height: 448_f64}))
-            .with_title("Oxide-7")
+            .with_title(&snes.rom_name())
             .build(&event_loop).unwrap();
 
         // Setup wgpu
@@ -220,78 +220,14 @@ fn main() {
             alpha_to_coverage_enabled: false,
         });
 
-        let mut loop_helper = spin_sleep::LoopHelper::builder()
-            .native_accuracy_ns(1_000_000)
-            .report_interval_s(1.0)
-            .build_with_target_rate(60.0);
-
-        let (send, mut recv) = unbounded();
-
-        std::thread::spawn(move || {
-            let mut snes = SNES::new(&cart_path, &save_file_name);
-
-            loop {
-                let _ = loop_helper.loop_start();
-
-                read_events(&mut recv, &mut snes);
-                let mut buf = device.create_buffer_mapped(&wgpu::BufferDescriptor {
-                    label: None,
-                    size: FRAME_BUFFER_SIZE as u64,
-                    usage: wgpu::BufferUsage::COPY_SRC | wgpu::BufferUsage::MAP_WRITE
-                });
-
-                snes.frame(&mut buf.data);
-
-                let tex_buffer = buf.finish();
-
-                let frame = swapchain.get_next_texture().expect("Timeout when acquiring next swapchain tex.");
-                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {label: None});
-
-                encoder.copy_buffer_to_texture(
-                    wgpu::BufferCopyView {
-                        buffer: &tex_buffer,
-                        offset: 0,
-                        bytes_per_row: 4 * texture_extent.width,
-                        rows_per_image: 0
-                    },
-                    wgpu::TextureCopyView {
-                        texture: &texture,
-                        mip_level: 0,
-                        array_layer: 0,
-                        origin: wgpu::Origin3d::ZERO,
-                    },
-                    texture_extent
-                );
-
-                {
-                    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                            attachment: &frame.view,
-                            resolve_target: None,
-                            load_op: wgpu::LoadOp::Clear,
-                            store_op: wgpu::StoreOp::Store,
-                            clear_color: wgpu::Color::WHITE,
-                        }],
-                        depth_stencil_attachment: None,
-                    });
-                    rpass.set_pipeline(&render_pipeline);
-                    rpass.set_bind_group(0, &bind_group, &[]);
-                    rpass.set_vertex_buffer(0, &vertex_buf, 0, 0);
-                    rpass.draw(0..4, 0..1);
-                }
-
-                queue.submit(&[encoder.finish()]);
-
-                /*if let Some(fps) = loop_helper.report_rate() {
-                    println!("Current fps: {}", fps.round());
-                }*/
-
-                loop_helper.loop_sleep();
-            }
-        });
+        let mut last_frame_time = chrono::Utc::now();
+        let frame_time = chrono::Duration::nanoseconds(1_000_000_000 / 60);
 
         event_loop.run(move |event, _, _| {
             match event {
+                Event::MainEventsCleared => {
+                    window.request_redraw();
+                },
                 Event::WindowEvent {
                     window_id: _,
                     event: w,
@@ -309,22 +245,80 @@ fn main() {
                             ElementState::Released => false,
                         };
                         match k.virtual_keycode {
-                            Some(VirtualKeyCode::X)         => send.send(ButtonEvent{ button: Button::A, pressed: pressed }).unwrap(),
-                            Some(VirtualKeyCode::Z)         => send.send(ButtonEvent{ button: Button::B, pressed: pressed }).unwrap(),
-                            Some(VirtualKeyCode::D)         => send.send(ButtonEvent{ button: Button::X, pressed: pressed }).unwrap(),
-                            Some(VirtualKeyCode::C)         => send.send(ButtonEvent{ button: Button::Y, pressed: pressed }).unwrap(),
-                            Some(VirtualKeyCode::A)         => send.send(ButtonEvent{ button: Button::L, pressed: pressed }).unwrap(),
-                            Some(VirtualKeyCode::S)         => send.send(ButtonEvent{ button: Button::R, pressed: pressed }).unwrap(),
-                            Some(VirtualKeyCode::Space)     => send.send(ButtonEvent{ button: Button::Select, pressed: pressed }).unwrap(),
-                            Some(VirtualKeyCode::Return)    => send.send(ButtonEvent{ button: Button::Start, pressed: pressed }).unwrap(),
-                            Some(VirtualKeyCode::Up)        => send.send(ButtonEvent{ button: Button::Up, pressed: pressed }).unwrap(),
-                            Some(VirtualKeyCode::Down)      => send.send(ButtonEvent{ button: Button::Down, pressed: pressed }).unwrap(),
-                            Some(VirtualKeyCode::Left)      => send.send(ButtonEvent{ button: Button::Left, pressed: pressed }).unwrap(),
-                            Some(VirtualKeyCode::Right)     => send.send(ButtonEvent{ button: Button::Right, pressed: pressed }).unwrap(),
+                            Some(VirtualKeyCode::X)         => snes.set_button(Button::A, pressed, 0),
+                            Some(VirtualKeyCode::Z)         => snes.set_button(Button::B, pressed, 0),
+                            Some(VirtualKeyCode::D)         => snes.set_button(Button::X, pressed, 0),
+                            Some(VirtualKeyCode::C)         => snes.set_button(Button::Y, pressed, 0),
+                            Some(VirtualKeyCode::A)         => snes.set_button(Button::L, pressed, 0),
+                            Some(VirtualKeyCode::S)         => snes.set_button(Button::R, pressed, 0),
+                            Some(VirtualKeyCode::Space)     => snes.set_button(Button::Select, pressed, 0),
+                            Some(VirtualKeyCode::Return)    => snes.set_button(Button::Start, pressed, 0),
+                            Some(VirtualKeyCode::Up)        => snes.set_button(Button::Up, pressed, 0),
+                            Some(VirtualKeyCode::Down)      => snes.set_button(Button::Down, pressed, 0),
+                            Some(VirtualKeyCode::Left)      => snes.set_button(Button::Left, pressed, 0),
+                            Some(VirtualKeyCode::Right)     => snes.set_button(Button::Right, pressed, 0),
                             _ => {},
                         }
                     },
+                    WindowEvent::Resized(size) => {
+                        
+                    },
                     _ => {}
+                },
+                Event::RedrawRequested(_) => {
+                    let now = chrono::Utc::now();
+                    if now.signed_duration_since(last_frame_time) >= frame_time {
+                        last_frame_time = now;
+
+                        let mut buf = device.create_buffer_mapped(&wgpu::BufferDescriptor {
+                            label: None,
+                            size: FRAME_BUFFER_SIZE as u64,
+                            usage: wgpu::BufferUsage::COPY_SRC | wgpu::BufferUsage::MAP_WRITE
+                        });
+        
+                        snes.frame(&mut buf.data);
+        
+                        let tex_buffer = buf.finish();
+        
+                        let frame = swapchain.get_next_texture().expect("Timeout when acquiring next swapchain tex.");
+                        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {label: None});
+        
+                        encoder.copy_buffer_to_texture(
+                            wgpu::BufferCopyView {
+                                buffer: &tex_buffer,
+                                offset: 0,
+                                bytes_per_row: 4 * texture_extent.width,
+                                rows_per_image: 0
+                            },
+                            wgpu::TextureCopyView {
+                                texture: &texture,
+                                mip_level: 0,
+                                array_layer: 0,
+                                origin: wgpu::Origin3d::ZERO,
+                            },
+                            texture_extent
+                        );
+        
+                        {
+                            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                                    attachment: &frame.view,
+                                    resolve_target: None,
+                                    load_op: wgpu::LoadOp::Clear,
+                                    store_op: wgpu::StoreOp::Store,
+                                    clear_color: wgpu::Color::WHITE,
+                                }],
+                                depth_stencil_attachment: None,
+                            });
+                            rpass.set_pipeline(&render_pipeline);
+                            rpass.set_bind_group(0, &bind_group, &[]);
+                            rpass.set_vertex_buffer(0, &vertex_buf, 0, 0);
+                            rpass.draw(0..4, 0..1);
+                        }
+        
+                        queue.submit(&[encoder.finish()]);
+                    }
+                    
                 },
                 _ => {},
             }
@@ -337,11 +331,5 @@ fn make_save_name(cart_name: &str) -> String {
     match cart_name.find(".") {
         Some(pos) => cart_name[0..pos].to_string() + ".sav",
         None      => cart_name.to_string() + ".sav"
-    }
-}
-
-fn read_events(event_queue: &mut Receiver<ButtonEvent>, snes: &mut SNES) {
-    while let Ok(e) = event_queue.try_recv() {
-        snes.set_button(e.button, e.pressed, 0);
     }
 }

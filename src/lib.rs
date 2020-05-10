@@ -19,10 +19,10 @@ use std::sync::{
     Arc, Mutex
 };
 
-// Size of destination buffer in bytes (R8G8B8A8uint format).
+/// Size of destination buffer in bytes (R8G8B8A8 format).
 pub const FRAME_BUFFER_SIZE: usize = 512 * 224 * 4;
 
-// Joypad buttons.
+/// Joypad buttons.
 pub enum Button {
     Up,
     Down,
@@ -38,6 +38,7 @@ pub enum Button {
     R
 }
 
+/// A SNES.
 pub struct SNES {
     cpu:    CPU,    // CPU, along with mem bus and devices
 
@@ -45,7 +46,7 @@ pub struct SNES {
 }
 
 impl SNES {
-    // Construct a new SNES with a cartridge inserted.
+    /// Construct a new SNES with a cartridge inserted.
     pub fn new(cart_path: &str, save_path: &str) -> Self {
         let bus = MemBus::new(cart_path, save_path);
         let cpu = CPU::new(bus);
@@ -57,7 +58,7 @@ impl SNES {
         }
     }
 
-    // Call at 60fps
+    /// Call at 60fps.
     pub fn frame(&mut self, frame: &mut [u8]) {
         // frame update?
         self.cpu.start_frame(self.frame.clone());
@@ -75,7 +76,7 @@ impl SNES {
         self.cpu.enable_rendering(true);
     }
 
-    // Sets a button on the specified joypad.
+    /// Sets a button on the specified joypad.
     pub fn set_button(&mut self, button: Button, val: bool, joypad: usize) {
         use joypad::Button as JB;
         self.cpu.set_buttons(match button {
@@ -92,6 +93,11 @@ impl SNES {
             Button::L       => JB::L,
             Button::R       => JB::R
         }, val, joypad);
+    }
+
+    /// Get the name of the ROM currently running.
+    pub fn rom_name(&self) -> String {
+        self.cpu.rom_name()
     }
 }
 

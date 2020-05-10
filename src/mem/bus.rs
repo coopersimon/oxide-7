@@ -202,11 +202,17 @@ impl MemBus {
         self.bus_b.ppu.start_frame(frame);
         self.cart.flush();
     }
+
+    pub fn rom_name(&self) -> String {
+        self.cart.name()
+    }
 }
 
 // Internal
 impl MemBus {
     fn make_cart(cart_path: &str, save_path: &str) -> Box<dyn Cart> {
+        use std::str::FromStr;
+
         let rom_file = File::open(cart_path).expect(&format!("Couldn't open file {}", cart_path));
         //let rom_size = rom_file.metadata().expect("Couldn't get metadata for file.").len();
 
@@ -222,13 +228,15 @@ impl MemBus {
             let save_file_size = std::cmp::min(0x400 << buf[0x18], 1024 * 512);    // TODO: check if there should be save data at all.
             let sram = SRAM::new(save_path, save_file_size).expect("Couldn't make save file.");
 
+            let name = String::from_str(std::str::from_utf8(&buf[0..21]).unwrap()).unwrap();
+
             let rom_size = 0x400 << buf[0x17];
             return if rom_size > (1 << 21) {
-                println!("LOROM Large {:X}: {}", buf[0x15], std::str::from_utf8(&buf[0..21]).unwrap());
-                Box::new(LoROMLarge::new(reader, sram, (buf[0x15] & 0x30) == 0x30))
+                println!("LOROM Large {:X}: {}", buf[0x15], name);
+                Box::new(LoROMLarge::new(reader, sram, (buf[0x15] & 0x30) == 0x30, name))
             } else {
-                println!("LOROM {:X}: {}", buf[0x15], std::str::from_utf8(&buf[0..21]).unwrap());
-                Box::new(LoROM::new(reader, sram, (buf[0x15] & 0x30) == 0x30))
+                println!("LOROM {:X}: {}", buf[0x15], name);
+                Box::new(LoROM::new(reader, sram, (buf[0x15] & 0x30) == 0x30, name))
             };
         }
 
@@ -237,10 +245,11 @@ impl MemBus {
         reader.read_exact(&mut buf).expect("Couldn't read cartridge header.");
 
         if (buf[0x15] & 0xE9) == 0x21/* || (0x400 << buf[0x17]) == rom_size*/ {
-            println!("HIROM {:X}: {}", buf[0x15], std::str::from_utf8(&buf[0..21]).unwrap());
+            let name = String::from_str(std::str::from_utf8(&buf[0..21]).unwrap()).unwrap();
+            println!("HIROM {:X}: {}", buf[0x15], name);
             let save_file_size = std::cmp::min(0x400 << buf[0x18], 1024 * 256);    // TODO: check if there should be save data at all.
             let sram = SRAM::new(save_path, save_file_size).expect("Couldn't make save file.");
-            return Box::new(HiROM::new(reader, sram, (buf[0x15] & 0x30) == 0x30));
+            return Box::new(HiROM::new(reader, sram, (buf[0x15] & 0x30) == 0x30, name));
         } else {
             panic!("Unrecognised ROM: {:X}", buf[0x15]);
         }
