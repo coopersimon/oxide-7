@@ -1,4 +1,7 @@
 // ROM types
+mod header;
+mod sram;
+
 use std::{
     collections::HashMap,
     io::{
@@ -12,7 +15,7 @@ use std::{
 
 use crate::constants::timing;
 
-use super::SRAM;
+use sram::*;
 
 const LOROM_RAM_BANK_SIZE: u32 = 0x8000;
 const HIROM_RAM_BANK_SIZE: u32 = 0x2000;
@@ -27,6 +30,38 @@ pub trait Cart {
     fn set_rom_speed(&mut self, data: u8);
 
     fn name(&self) -> String;
+}
+
+pub fn create_cart(cart_path: &str, save_path: &str) -> Box<dyn Cart> {
+    let rom_file = File::open(cart_path).expect(&format!("Couldn't open file {}", cart_path));
+    //let rom_size = rom_file.metadata().expect("Couldn't get metadata for file.").len();
+
+    let mut reader = BufReader::new(rom_file);
+
+    let mut header = header::ROMHeader::new();
+
+    if header.try_lo(&mut reader) {
+        let sram = create_sram(save_path, header.sram_size()).expect("Couldn't make save file.");
+        let name = header.rom_name();
+
+        return if header.rom_size() > (1 << 21) {
+            println!("LOROM Large {:X}: {}", header.rom_mapping(), name);
+            Box::new(LoROMLarge::new(reader, sram, header.fast_rom(), name))
+        } else {
+            println!("LOROM {:X}: {}", header.rom_mapping(), name);
+            Box::new(LoROM::new(reader, sram, header.fast_rom(), name))
+        };
+    }
+
+    // Check for HiROM
+    if header.try_hi(&mut reader) {
+        let sram = create_sram(save_path, header.sram_size()).expect("Couldn't make save file.");
+        let name = header.rom_name();
+        println!("HIROM {:X}: {}", header.rom_mapping(), name);
+        return Box::new(HiROM::new(reader, sram, header.fast_rom(), name));
+    } else {
+        panic!("Unrecognised ROM: {:X}", header.rom_mapping());
+    }
 }
 
 // ROM banks.
@@ -68,7 +103,7 @@ impl ROM {
 
 pub struct LoROM {
     rom:        ROM,
-    ram:        SRAM,
+    ram:        Box<dyn SRAM>,
 
     fast_rom:   bool,
     rom_speed:  usize,
@@ -77,7 +112,7 @@ pub struct LoROM {
 }
 
 impl LoROM {
-    pub fn new(cart_file: BufReader<File>, sram: SRAM, fast: bool, name: String) -> Self {
+    pub fn new(cart_file: BufReader<File>, sram: Box<dyn SRAM>, fast: bool, name: String) -> Self {
         LoROM {
             rom:        ROM::new(cart_file, 0x8000),
             ram:        sram,
@@ -143,7 +178,7 @@ impl Cart for LoROM {
 // For LoROM carts that are larger than 2MB.
 pub struct LoROMLarge {
     rom:        ROM,
-    ram:        SRAM,
+    ram:        Box<dyn SRAM>,
 
     fast_rom:   bool,
     rom_speed:  usize,
@@ -152,7 +187,7 @@ pub struct LoROMLarge {
 }
 
 impl LoROMLarge {
-    pub fn new(cart_file: BufReader<File>, sram: SRAM, fast: bool, name: String) -> Self {
+    pub fn new(cart_file: BufReader<File>, sram: Box<dyn SRAM>, fast: bool, name: String) -> Self {
         LoROMLarge {
             rom:        ROM::new(cart_file, 0x8000),
             ram:        sram,
@@ -209,7 +244,7 @@ impl Cart for LoROMLarge {
 
 pub struct HiROM {
     rom:        ROM,
-    ram:        SRAM,
+    ram:        Box<dyn SRAM>,
 
     fast_rom:   bool,
     rom_speed:  usize,
@@ -218,7 +253,7 @@ pub struct HiROM {
 }
 
 impl HiROM {
-    pub fn new(cart_file: BufReader<File>, sram: SRAM, fast: bool, name: String) -> Self {
+    pub fn new(cart_file: BufReader<File>, sram: Box<dyn SRAM>, fast: bool, name: String) -> Self {
         HiROM {
             rom:        ROM::new(cart_file, 0x10000),
             ram:        sram,

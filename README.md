@@ -19,7 +19,7 @@ A SNES emulator written in Rust.
 * Aladdin (intro works, title screen is a bit glitchy, gameplay responds but then stops after a short while. sound is pretty good now.)
 * Zombies Ate My Neighbors! (works pretty well. Audio is mostly fine but with some glitches.)
 * Mega Man X (Intro works, but title screen looks a bit glitched. The bottom line is incorrect. Audio is completely broken)
-* Tetris & Dr. Mario (shows an anti-piracy screen!)
+* Tetris & Dr. Mario (fixed anti-piracy screen (SRAM issue), now works great)
 * Super Ghouls 'n Ghosts (Intro and title seem fine, except for mode 7 in intro. Actual gameplay looks a bit corrupted (BG3 in mode 1 issues again I suspect). Audio sounds decent, with some glitches.)
 * Kirby's Dreamland 3 (Unrecognised ROM config (SA-1))
 * Kirby's Super Star (Unrecognised ROM config (SA-1))
@@ -76,7 +76,6 @@ A SNES emulator written in Rust.
 - Ensure timing is correct
 
 ##### Carts
-- Only make .sav if necessary.
 - Fix bug related to incorrect loading with LoROMs (see MegaManX, Ultima VI).
 
 ##### Extensions

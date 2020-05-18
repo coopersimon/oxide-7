@@ -3,24 +3,9 @@ mod bus;
 mod dma;
 mod rom;
 
-use std::{
-    io::{
-        BufReader,
-        BufWriter,
-        Read,
-        Write,
-        Seek,
-        SeekFrom
-    },
-    fs::{
-        File,
-        OpenOptions
-    }
-};
-
 pub use bus::MemBus;
 
-// Random access memory.
+/// Random access memory.
 pub struct RAM {
     data: Vec<u8>
 }
@@ -48,6 +33,8 @@ impl RAM {
     }
 }
 
+/// An iterator over RAM.
+/// Use RAM::iter to construct this.
 pub struct RAMIter<'a> {
     ram: &'a RAM,
     read_head: usize
@@ -60,62 +47,5 @@ impl Iterator for RAMIter<'_> {
         let data = self.ram.data[self.read_head];
         self.read_head = (self.read_head + 1) % self.ram.data.len();
         Some(data)
-    }
-}
-
-// Save RAM.
-pub struct SRAM {
-    save_file:  BufWriter<File>,
-    ram:        RAM,
-
-    mask:       u32,  // Mask when reading/writing
-
-    dirty:      bool,
-}
-
-impl SRAM {
-    pub fn new(file_name: &str, size: usize) -> Result<Self, String> {
-        let mut ram = RAM::new(size);
-
-        if let Ok(file) = File::open(file_name) {
-            let mut save_reader = BufReader::new(file);
-            save_reader.read_exact(&mut ram.data).map_err(|e| e.to_string())?;
-        } else {
-            let file = File::create(file_name).map_err(|e| e.to_string())?;
-            file.set_len(size as u64).map_err(|e| e.to_string())?;
-        }
-
-        let file = OpenOptions::new()
-            .write(true)
-            .open(file_name)
-            .map_err(|e| e.to_string())?;
-
-        Ok(SRAM {
-            save_file:  BufWriter::new(file),
-            ram:        ram,
-
-            mask:       (size - 1) as u32,
-
-            dirty:      false
-        })
-    }
-
-    pub fn read(&self, addr: u32) -> u8 {
-        self.ram.read(addr & self.mask)
-    }
-
-    pub fn write(&mut self, addr: u32, data: u8) {
-        self.ram.write(addr & self.mask, data);
-        self.dirty = true;
-    }
-
-    pub fn flush(&mut self) {
-        if self.dirty {
-            self.save_file.seek(SeekFrom::Start(0)).expect("Couldn't seek to start of save file!");
-
-            self.save_file.write_all(&self.ram.data).expect("Couldn't write to save file!");
-
-            self.dirty = false;
-        }
     }
 }
