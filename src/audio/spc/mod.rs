@@ -226,7 +226,7 @@ impl SPC {
             0x60 => self.clear_flag(PSFlags::C),    // CLRC
             0x20 => self.clear_flag(PSFlags::P),    // CLRP
             0xE0 => self.clear_flag(PSFlags::V | PSFlags::H),   // CLRV
-            0xC0 => self.clear_flag(PSFlags::I),    // DI TODO: is this the right way around?
+            0xC0 => self.clear_flag(PSFlags::I),    // DI
 
             0xE8 => self.mov_set_flags(Acc, Imm),
             0xE6 => self.mov_set_flags(Acc, Mode(XIndir)),
@@ -1104,7 +1104,6 @@ impl SPC {
     }
 
     fn brk(&mut self) {
-        panic!("BRK!");
         self.stack_push(hi!(self.pc));
         self.stack_push(lo!(self.pc));
         self.stack_push(self.ps.bits());
@@ -1118,6 +1117,8 @@ impl SPC {
         let pc_hi = self.read_data(0xFFDF);
 
         self.pc = make16!(pc_hi, pc_lo);
+
+        panic!("BRK should not be called!");
     }
 }
 

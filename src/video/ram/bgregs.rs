@@ -186,6 +186,7 @@ impl Registers {
 
     pub fn set_object_settings(&mut self, data: u8) {
         self.object_settings = ObjectSettings::from_bits_truncate(data);
+        //println!("Set obj settings: {:X}", data);
     }
 
     pub fn set_bg_mode(&mut self, data: u8) {
@@ -358,22 +359,23 @@ impl Registers {
         }
     }
 
-    // TODO: use less magic numbers in the following.
     pub fn bg_pattern_addr(&self, bg: BG) -> u16 {
+        const SHIFT_AMT: usize = 13;
         match bg {
-            BG::_1 => ((self.bg12_char_addr & 0xF) as u16) << 13,
-            BG::_2 => ((self.bg12_char_addr & 0xF0) as u16) << 9,
-            BG::_3 => ((self.bg34_char_addr & 0xF) as u16) << 13,
-            BG::_4 => ((self.bg34_char_addr & 0xF0) as u16) << 9,
+            BG::_1 => (lo_nybble!(self.bg12_char_addr) as u16) << SHIFT_AMT,
+            BG::_2 => (hi_nybble!(self.bg12_char_addr) as u16) << SHIFT_AMT,
+            BG::_3 => (lo_nybble!(self.bg34_char_addr) as u16) << SHIFT_AMT,
+            BG::_4 => (hi_nybble!(self.bg34_char_addr) as u16) << SHIFT_AMT,
         }
     }
 
     pub fn bg_map_addr(&self, bg: BG) -> u16 {
+        const SHIFT_AMT: usize = 9;
         match bg {
-            BG::_1 => ((self.bg1_settings & BGReg::ADDR).bits() as u16) << 9,
-            BG::_2 => ((self.bg2_settings & BGReg::ADDR).bits() as u16) << 9,
-            BG::_3 => ((self.bg3_settings & BGReg::ADDR).bits() as u16) << 9,
-            BG::_4 => ((self.bg4_settings & BGReg::ADDR).bits() as u16) << 9,
+            BG::_1 => ((self.bg1_settings & BGReg::ADDR).bits() as u16) << SHIFT_AMT,
+            BG::_2 => ((self.bg2_settings & BGReg::ADDR).bits() as u16) << SHIFT_AMT,
+            BG::_3 => ((self.bg3_settings & BGReg::ADDR).bits() as u16) << SHIFT_AMT,
+            BG::_4 => ((self.bg4_settings & BGReg::ADDR).bits() as u16) << SHIFT_AMT,
         }
     }
 

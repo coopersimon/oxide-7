@@ -66,7 +66,7 @@ impl CPU {
     // Executes an instruction and clocks other components.
     // Returns true if V-Blank occurred.
     pub fn step(&mut self) -> bool {
-        // Check for interrupts. TODO: allow multiple interrupts to trigger
+        // Check for interrupts.
         if self.int.contains(Interrupt::NMI) {
             self.trigger_interrupt(if self.is_e_set() {int::NMI_VECTOR_EMU} else {int::NMI_VECTOR});
             self.int.remove(Interrupt::NMI | Interrupt::VBLANK);
@@ -425,7 +425,6 @@ impl CPU {
 
 // Internal: Data instructions
 impl CPU {
-    // TODO: bcd mode.
     fn adc(&mut self, data_mode: DataMode) {
         let op = self.read_op(data_mode, self.is_m_set());
 

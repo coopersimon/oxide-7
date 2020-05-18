@@ -144,7 +144,7 @@ impl Renderer {
         mem.cgram_reset_dirty();
     }
 
-    // Switch mode: setup backgrounds. // TODO: other stuff here?
+    // Switch mode: setup backgrounds.
     fn switch_mode(&mut self, mode: VideoMode) {
         use VideoMode::*;
 

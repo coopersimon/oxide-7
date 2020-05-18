@@ -23,8 +23,7 @@ use std::sync::{
     }
 };
 
-use generator::AudioGenerator;
-use spcthread::*;
+use spcthread::SPCCommand;
 
 type SamplePacket = Box<[Stereo<f32>]>;
 
@@ -34,10 +33,6 @@ pub struct APU {
 
     ports_cpu_to_apu:   [Arc<AtomicU8>; 4],
     ports_apu_to_cpu:   [Arc<AtomicU8>; 4],
-
-    spc_thread:         SPCThread,
-
-    generator:          AudioGenerator,
 }
 
 impl APU {
@@ -48,15 +43,14 @@ impl APU {
         let ports_cpu_to_apu = [Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0))];
         let ports_apu_to_cpu = [Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0))];
 
+        spcthread::start(command_rx, signal_tx, ports_cpu_to_apu.clone(), ports_apu_to_cpu.clone());
+        generator::start(signal_rx);
+
         APU {
             command_tx:         command_tx,
 
             ports_cpu_to_apu:   [ports_cpu_to_apu[0].clone(), ports_cpu_to_apu[1].clone(), ports_cpu_to_apu[2].clone(), ports_cpu_to_apu[3].clone()],
             ports_apu_to_cpu:   [ports_apu_to_cpu[0].clone(), ports_apu_to_cpu[1].clone(), ports_apu_to_cpu[2].clone(), ports_apu_to_cpu[3].clone()],
-
-            spc_thread:         SPCThread::new(command_rx, signal_tx, ports_cpu_to_apu, ports_apu_to_cpu),
-
-            generator:          AudioGenerator::new(signal_rx),
         }
     }
 

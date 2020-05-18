@@ -91,6 +91,46 @@ pub enum Screen {
     Sub
 }
 
+// Different operations used to combine masking windows.
+#[derive(Clone, Copy)]
+enum WindowOp {
+    OR,
+    AND,
+    XOR,
+    XNOR
+}
+
+impl From<u8> for WindowOp {
+    // Should be from a 2-bit value.
+    fn from(val: u8) -> Self {
+        const MASK_LOGIC_OR: u8 = 0;
+        const MASK_LOGIC_AND: u8 = 1;
+        const MASK_LOGIC_XOR: u8 = 2;
+        const MASK_LOGIC_XNOR: u8 = 3;
+
+        match val {
+            MASK_LOGIC_OR   => Self::OR,
+            MASK_LOGIC_AND  => Self::AND,
+            MASK_LOGIC_XOR  => Self::XOR,
+            MASK_LOGIC_XNOR => Self::XNOR,
+            _ => unreachable!()
+        }
+    }
+}
+
+impl WindowOp {
+    // Use the op to combine the boolean variables.
+    fn combine(self, win_1: bool, win_2: bool) -> bool {
+        use WindowOp::*;
+        match self {
+            OR   => win_1 || win_2,
+            AND  => win_1 && win_2,
+            XOR  => win_1 != win_2,
+            XNOR => win_1 == win_2,
+        }
+    }
+}
+
 pub struct WindowRegisters {
     mask_bg1_2:         WindowMaskSettings,
     mask_bg3_4:         WindowMaskSettings,
@@ -313,8 +353,7 @@ impl WindowRegisters {
             (true, true) => {   // Use op to combine
                 let win_1 = self.test_inside_window_1(x) == self.invert_window_1_bg(bg);
                 let win_2 = self.test_inside_window_2(x) == self.invert_window_2_bg(bg);
-                let op = self.window_op_bg(bg);
-                do_window_op(op, win_1, win_2)
+                self.window_op_bg(bg).combine(win_1, win_2)
             },
             (true, false) => {  // Just use window 1
                 self.test_inside_window_1(x) == self.invert_window_1_bg(bg)
@@ -336,8 +375,7 @@ impl WindowRegisters {
             (true, true) => {   // Use op to combine
                 let win_1 = self.test_inside_window_1(x) == self.invert_window_1_obj();
                 let win_2 = self.test_inside_window_2(x) == self.invert_window_2_obj();
-                let op = self.window_op_obj();
-                do_window_op(op, win_1, win_2)
+                self.window_op_obj().combine(win_1, win_2)
             },
             (true, false) => {  // Just use window 1
                 self.test_inside_window_1(x) == self.invert_window_1_obj()
@@ -359,8 +397,7 @@ impl WindowRegisters {
             (true, true) => {   // Use op to combine
                 let win_1 = self.test_inside_window_1(x) != self.invert_window_1_col();
                 let win_2 = self.test_inside_window_2(x) != self.invert_window_2_col();
-                let op = self.window_op_col();
-                do_window_op(op, win_1, win_2)
+                self.window_op_col().combine(win_1, win_2)
             },
             (true, false) => {  // Just use window 1
                 self.test_inside_window_1(x) != self.invert_window_1_col()
@@ -496,19 +533,19 @@ impl WindowRegisters {
     }
 
     // Returns the window operation for the layer
-    fn window_op_bg(&self, bg: BG) -> u8 {
+    fn window_op_bg(&self, bg: BG) -> WindowOp {
         match bg {
             BG::_1 => (self.mask_logic_bg & BGMaskLogic::BG_1_OP).bits(),
             BG::_2 => (self.mask_logic_bg & BGMaskLogic::BG_2_OP).bits() >> 2,
             BG::_3 => (self.mask_logic_bg & BGMaskLogic::BG_3_OP).bits() >> 4,
             BG::_4 => (self.mask_logic_bg & BGMaskLogic::BG_4_OP).bits() >> 6,
-        }
+        }.into()
     }
-    fn window_op_obj(&self) -> u8 {
-        (self.mask_logic_obj_col & ObjColMaskLogic::OBJ_OP).bits()
+    fn window_op_obj(&self) -> WindowOp {
+        (self.mask_logic_obj_col & ObjColMaskLogic::OBJ_OP).bits().into()
     }
-    fn window_op_col(&self) -> u8 {
-        (self.mask_logic_obj_col & ObjColMaskLogic::COL_OP).bits() >> 2
+    fn window_op_col(&self) -> WindowOp {
+        ((self.mask_logic_obj_col & ObjColMaskLogic::COL_OP).bits() >> 2).into()
     }
 
     fn enable_bg_colour_math(&self, bg: BG) -> bool {
@@ -591,23 +628,5 @@ impl WindowRegisters {
         } else {
             main_col
         }
-    }
-}
-
-// Does the window operation
-// TODO: make this a type?
-#[inline]
-fn do_window_op(op: u8, win_1: bool, win_2: bool) -> bool {
-    const MASK_LOGIC_OR: u8 = 0;
-    const MASK_LOGIC_AND: u8 = 1;
-    const MASK_LOGIC_XOR: u8 = 2;
-    const MASK_LOGIC_XNOR: u8 = 3;
-
-    match op {
-        MASK_LOGIC_OR   => win_1 || win_2,
-        MASK_LOGIC_AND  => win_1 && win_2,
-        MASK_LOGIC_XOR  => win_1 != win_2,
-        MASK_LOGIC_XNOR => win_1 == win_2,
-        _ => unreachable!()
     }
 }

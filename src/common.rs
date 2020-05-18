@@ -160,12 +160,6 @@ macro_rules! set_hi24 {
     };
 }
 
-macro_rules! make32 {
-    ($b3:expr, $b2:expr, $b1:expr, $b0:expr) => {
-        (($b3 as u32) << 24) | (($b2 as u32) << 16) | (($b1 as u32) << 8) | ($b0 as u32)
-    };
-}
-
 // Get the low 16-bits of a 32-bit value.
 macro_rules! lo32 {
     ($val:expr) => {
