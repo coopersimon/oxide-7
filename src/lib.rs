@@ -7,6 +7,7 @@ mod joypad;
 mod mem;
 mod video;
 mod audio;
+mod ext;
 
 #[cfg(feature = "debug")]
 pub mod debug;

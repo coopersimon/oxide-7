@@ -31,6 +31,12 @@ macro_rules! bits16 {
     };
 }
 
+macro_rules! bits32 {
+    [ $($bit_num:expr),* ] => {
+        $(bit!($bit_num, u32))|*
+    };
+}
+
 // Check if a bit is set.
 macro_rules! test_bit {
     ($val:expr, $bit_num:expr) => {
@@ -164,6 +170,13 @@ macro_rules! set_hi24 {
 macro_rules! lo32 {
     ($val:expr) => {
         lo24!($val, u16)
+    };
+}
+
+// Get the high 16-bits of a 32-bit value.
+macro_rules! hi32 {
+    ($val:expr) => {
+        ($val >> 16) as u16
     };
 }
 
