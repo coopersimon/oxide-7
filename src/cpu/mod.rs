@@ -776,11 +776,7 @@ impl CPU {
         self.p |= add_flags;
         self.clock_inc(INTERNAL_OP);
 
-        if add_flags.contains(PFlags::E) {
-            self.p |= PFlags::M | PFlags::X;
-            self.x = set_hi!(self.x, 0);
-            self.y = set_hi!(self.y, 0);
-        } else if add_flags.contains(PFlags::X) {
+        if add_flags.contains(PFlags::X) {
             self.x = set_hi!(self.x, 0);
             self.y = set_hi!(self.y, 0);
         }
