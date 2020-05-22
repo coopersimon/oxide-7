@@ -23,7 +23,7 @@ pub struct MemBus {
     joypads:    JoypadMem,
 
     // Memory
-    cart:       Box<dyn Cart>,
+    cart:       Box<Cart>,
     wram:       RAM,
 
     // Stored values
@@ -42,9 +42,9 @@ pub struct MemBus {
 }
 
 impl MemBus {
-    pub fn new(cart_path: &str, save_path: &str) -> Self {
+    pub fn new(cart_path: &str, save_path: &str, dsp_rom_path: Option<&str>) -> Self {
         // Open ROM file.
-        let cart = create_cart(cart_path, save_path);
+        let cart = create_cart(cart_path, save_path, dsp_rom_path);
 
         MemBus {
             bus_b:      AddrBusB::new(),
@@ -141,6 +141,7 @@ impl MemBus {
     // Clock the PPU and APU, and handle any signals coming from the PPU.
     pub fn clock(&mut self, cycles: usize) -> Interrupt {
         self.bus_b.clock_apu(cycles);
+        self.cart.clock(cycles);
 
         match self.bus_b.ppu.clock(cycles) {
             PPUSignal::Int(i) => {

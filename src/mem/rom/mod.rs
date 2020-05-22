@@ -13,8 +13,12 @@ use std::{
     fs::File
 };
 
-use crate::constants::timing;
+use crate::{
+    constants::timing,
+    expansion::*
+};
 
+use header::*;
 use sram::*;
 
 const LOROM_RAM_BANK_SIZE: u32 = 0x8000;
@@ -22,35 +26,37 @@ const HIROM_RAM_BANK_SIZE: u32 = 0x2000;
 
 const SPEED_BIT: u8 = 0;
 
-pub trait Cart {
-    fn read(&mut self, bank: u8, addr: u16) -> (u8, usize);
-    fn write(&mut self, bank: u8, addr: u16, data: u8) -> usize;
-    fn flush(&mut self);
-
-    fn set_rom_speed(&mut self, data: u8);
-
-    fn name(&self) -> String;
-}
-
-pub fn create_cart(cart_path: &str, save_path: &str) -> Box<dyn Cart> {
+pub fn create_cart(cart_path: &str, save_path: &str, dsp_path: Option<&str>) -> Box<Cart> {
     let rom_file = File::open(cart_path).expect(&format!("Couldn't open file {}", cart_path));
     //let rom_size = rom_file.metadata().expect("Couldn't get metadata for file.").len();
 
     let mut reader = BufReader::new(rom_file);
-
-    let mut header = header::ROMHeader::new();
+    let mut header = ROMHeader::new();
 
     if header.try_lo(&mut reader) {
         let sram = create_sram(save_path, header.sram_size()).expect("Couldn't make save file.");
         let name = header.rom_name();
 
-        return if header.rom_size() > (1 << 21) {
+        let cart = if header.rom_size() > (1 << 21) {
             println!("LOROM Large {:X}: {}", header.rom_mapping(), name);
-            Box::new(LoROMLarge::new(reader, sram, header.fast_rom(), name))
+            Cart::new_lorom(reader, sram)
         } else {
             println!("LOROM {:X}: {}", header.rom_mapping(), name);
-            Box::new(LoROM::new(reader, sram, header.fast_rom(), name))
-        };
+            Cart::new_lorom_large(reader, sram)
+        }.named(name).fast_rom(header.fast_rom());
+
+        return match header.rom_type().enhancement_chip() {
+            Some(EnhancementChip::DSP) => {
+                let dsp_path = dsp_path.expect("Must specify DSP ROM path!");
+                let dsp_rom_file = File::open(dsp_path).expect(&format!("Couldn't open DSP ROM file {}", dsp_path));
+                let mut dsp_reader = BufReader::new(dsp_rom_file);
+                let mut buffer = vec![0; 0x2000];
+                dsp_reader.read_exact(&mut buffer).expect("Couldn't read into DSP ROM");
+                cart.with_dsp_lo(Box::new(DSP::new(&buffer)))
+            },
+            Some(_) => cart,
+            None => cart,
+        }.build();
     }
 
     // Check for HiROM
@@ -58,7 +64,22 @@ pub fn create_cart(cart_path: &str, save_path: &str) -> Box<dyn Cart> {
         let sram = create_sram(save_path, header.sram_size()).expect("Couldn't make save file.");
         let name = header.rom_name();
         println!("HIROM {:X}: {}", header.rom_mapping(), name);
-        return Box::new(HiROM::new(reader, sram, header.fast_rom(), name));
+        let cart = Cart::new_hirom(reader, sram)
+            .named(name)
+            .fast_rom(header.fast_rom());
+
+        match header.rom_type().enhancement_chip() {
+            Some(EnhancementChip::DSP) => {
+                let dsp_path = dsp_path.expect("Must specify DSP ROM path!");
+                let dsp_rom_file = File::open(dsp_path).expect(&format!("Couldn't open DSP ROM file {}", dsp_path));
+                let mut dsp_reader = BufReader::new(dsp_rom_file);
+                let mut buffer = vec![0; 0x2000];
+                dsp_reader.read_exact(&mut buffer).expect("Couldn't read into DSP ROM");
+                cart.with_dsp_hi(Box::new(DSP::new(&buffer)))
+            },
+            Some(_) => cart,
+            None => cart,
+        }.build()
     } else {
         panic!("Unrecognised ROM: {:X}", header.rom_mapping());
     }
@@ -101,9 +122,113 @@ impl ROM {
     }
 }
 
-pub struct LoROM {
+enum CartDevice {
+    ROM(u8, u16),
+    RAM(u32),
+    Expansion(u32)
+}
+
+type CartMappingFn = fn(u8, u16) -> CartDevice;
+
+struct CartMapping {
+    start_bank:     u8,
+    end_bank:       u8,
+    start_addr:     u16,
+
+    addr_mapping:   CartMappingFn
+}
+
+struct CartBuilder {
+    mappings:   Vec<CartMapping>,
+
+    rom:        Option<ROM>,
+    ram:        Option<Box<dyn SRAM>>,
+    expansion:  Option<Box<dyn Expansion>>,
+
+    fast_rom:   bool,
+
+    name:       String
+}
+
+impl CartBuilder {
+    fn new() -> Self {
+        CartBuilder {
+            mappings:   Vec::new(),
+            rom:        None,
+            ram:        None,
+            expansion:  None,
+
+            fast_rom:   false,
+
+            name:       String::new()
+        }
+    }
+
+    fn named(mut self, name: String) -> Self {
+        self.name = name;
+        self
+    }
+
+    fn fast_rom(mut self, fast: bool) -> Self {
+        self.fast_rom = fast;
+        self
+    }
+
+    fn with_dsp_lo(mut self, dsp: Box<dyn Expansion>) -> Self {
+        self.expansion = Some(dsp);
+
+        self.mappings.insert(0, CartMapping {
+            start_bank: 0x30,
+            end_bank:   0x3F,
+            start_addr: 0x8000,
+
+            addr_mapping: |_, addr| {
+                let out_addr = if addr < 0xC000 {0} else {1};
+                CartDevice::Expansion(out_addr)
+            },
+        });
+
+        self
+    }
+
+    fn with_dsp_hi(mut self, dsp: Box<dyn Expansion>) -> Self {
+        self.expansion = Some(dsp);
+
+        self.mappings.push(CartMapping {
+            start_bank: 0x00,
+            end_bank:   0x1F,
+            start_addr: 0x6000,
+
+            addr_mapping: |_, addr| {
+                let out_addr = if addr < 0x7000 {0} else {1};
+                CartDevice::Expansion(out_addr)
+            },
+        });
+
+        self
+    }
+
+    fn build(self) -> Box<Cart> {
+        Box::new(Cart {
+            mappings:   self.mappings,
+            rom:        self.rom.expect("Cannot construct cart without ROM"),
+            ram:        self.ram.expect("Cannot construct cart without RAM"),
+            expansion:  self.expansion,
+
+            fast_rom:   self.fast_rom,
+            rom_speed:  timing::SLOW_MEM_ACCESS,
+
+            name:       self.name,
+        })
+    }
+}
+
+pub struct Cart {
+    mappings:   Vec<CartMapping>,
+
     rom:        ROM,
     ram:        Box<dyn SRAM>,
+    expansion:  Option<Box<dyn Expansion>>,
 
     fast_rom:   bool,
     rom_speed:  usize,
@@ -111,58 +236,167 @@ pub struct LoROM {
     name:       String
 }
 
-impl LoROM {
-    pub fn new(cart_file: BufReader<File>, sram: Box<dyn SRAM>, fast: bool, name: String) -> Self {
-        LoROM {
-            rom:        ROM::new(cart_file, 0x8000),
-            ram:        sram,
+impl Cart {
+    fn new_lorom(cart_file: BufReader<File>, ram: Box<dyn SRAM>) -> CartBuilder {
+        let mut builder = CartBuilder::new();
+        builder.rom = Some(ROM::new(cart_file, 0x8000));
+        builder.ram = Some(ram);
 
-            fast_rom:   fast,
-            rom_speed:  timing::SLOW_MEM_ACCESS,
+        builder.mappings.push(CartMapping {
+            start_bank: 0x00,
+            end_bank:   0x3F,
+            start_addr: 0x8000,
 
-            name:       name,
-        }
+            addr_mapping: |bank, addr| {
+                CartDevice::ROM(bank, addr % 0x8000)
+            },
+        });
+
+        builder.mappings.push(CartMapping {
+            start_bank: 0x40,
+            end_bank:   0x6F,
+            start_addr: 0,
+
+            addr_mapping: |bank, addr| {
+                CartDevice::ROM(bank % 0x40, addr % 0x8000)
+            },
+        });
+
+        builder.mappings.push(CartMapping {
+            start_bank: 0x70,
+            end_bank:   0x7F,
+            start_addr: 0,
+
+            addr_mapping: |bank, addr| {
+                let ram_bank = ((bank - 0x70) as u32) * LOROM_RAM_BANK_SIZE;
+                CartDevice::RAM(ram_bank + addr as u32)
+            },
+        });
+
+        builder
+    }
+
+    fn new_lorom_large(cart_file: BufReader<File>, ram: Box<dyn SRAM>) -> CartBuilder {
+        let mut builder = CartBuilder::new();
+        builder.rom = Some(ROM::new(cart_file, 0x8000));
+        builder.ram = Some(ram);
+
+        builder.mappings.push(CartMapping {
+            start_bank: 0x00,
+            end_bank:   0x3F,
+            start_addr: 0x8000,
+
+            addr_mapping: |bank, addr| {
+                CartDevice::ROM(bank, addr % 0x8000)
+            },
+        });
+
+        builder.mappings.push(CartMapping {
+            start_bank: 0x40,
+            end_bank:   0x6F,
+            start_addr: 0,
+
+            addr_mapping: |bank, addr| {
+                CartDevice::ROM(bank, addr % 0x8000)
+            },
+        });
+
+        builder.mappings.push(CartMapping {
+            start_bank: 0x70,
+            end_bank:   0x7F,
+            start_addr: 0,
+
+            addr_mapping: |bank, addr| {
+                let ram_bank = ((bank - 0x70) as u32) * LOROM_RAM_BANK_SIZE;
+                CartDevice::RAM(ram_bank + addr as u32)
+            },
+        });
+
+        builder
+    }
+
+    fn new_hirom(cart_file: BufReader<File>, ram: Box<dyn SRAM>) -> CartBuilder {
+        let mut builder = CartBuilder::new();
+        builder.rom = Some(ROM::new(cart_file, 0x10000));
+        builder.ram = Some(ram);
+
+        builder.mappings.push(CartMapping {
+            start_bank: 0x00,
+            end_bank:   0x3F,
+            start_addr: 0x8000,
+
+            addr_mapping: |bank, addr| {
+                CartDevice::ROM(bank, addr)
+            },
+        });
+
+        builder.mappings.push(CartMapping {
+            start_bank: 0x20,
+            end_bank:   0x3F,
+            start_addr: 0x6000,
+
+            addr_mapping: |bank, addr| {
+                let ram_bank = ((bank % 0x10) as u32) * HIROM_RAM_BANK_SIZE;
+                CartDevice::RAM(ram_bank + (addr as u32 - 0x6000))
+            },
+        });
+
+        builder.mappings.push(CartMapping {
+            start_bank: 0x40,
+            end_bank:   0x7F,
+            start_addr: 0,
+
+            addr_mapping: |bank, addr| {
+                CartDevice::ROM(bank % 0x40, addr)
+            },
+        });
+
+        builder
     }
 }
 
-impl Cart for LoROM {
-    fn read(&mut self, bank: u8, addr: u16) -> (u8, usize) {
+impl Cart {
+    pub fn read(&mut self, bank: u8, addr: u16) -> (u8, usize) {
         let internal_bank = bank % 0x80;
 
-        /*if addr >= 0x8000 {
-            (self.rom.read(internal_bank % 0x40, addr % 0x8000), self.rom_speed)
-        } else if internal_bank >= 0x70 {
-            let ram_bank = ((internal_bank - 0x70) as u32) * LOROM_RAM_BANK_SIZE;
-            (self.ram.read(ram_bank + addr as u32), timing::SLOW_MEM_ACCESS)
-        } else {
-            (0, timing::SLOW_MEM_ACCESS)
-        }*/
-        match internal_bank {
-            0x00..=0x3F if addr >= 0x8000 => (self.rom.read(internal_bank, addr % 0x8000), self.rom_speed),
-            0x70..=0x7F => {
-                let ram_bank = ((internal_bank - 0x70) as u32) * LOROM_RAM_BANK_SIZE;
-                (self.ram.read(ram_bank + addr as u32), timing::SLOW_MEM_ACCESS)
-            },
-            _ => (self.rom.read(internal_bank % 0x40, addr % 0x8000), self.rom_speed),
+        for mapping in self.mappings.iter() {
+            if (internal_bank >= mapping.start_bank) &&
+                (internal_bank <= mapping.end_bank) &&
+                (addr >= mapping.start_addr) {
+                return match (mapping.addr_mapping)(internal_bank, addr) {
+                    CartDevice::ROM(bank, addr) => (self.rom.read(bank, addr), self.rom_speed),
+                    CartDevice::RAM(addr) => (self.ram.read(addr), timing::SLOW_MEM_ACCESS),
+                    CartDevice::Expansion(addr) => (self.expansion.as_mut().map_or(0, |e| e.read(addr)), timing::SLOW_MEM_ACCESS),
+                };
+            }
         }
+
+        (0, timing::SLOW_MEM_ACCESS)
     }
 
-    fn write(&mut self, bank: u8, addr: u16, data: u8) -> usize {
+    pub fn write(&mut self, bank: u8, addr: u16, data: u8) -> usize {
         let internal_bank = bank % 0x80;
 
-        if internal_bank >= 0x70 {
-            let ram_bank = ((internal_bank - 0x70) as u32) * LOROM_RAM_BANK_SIZE;
-            self.ram.write(ram_bank + addr as u32, data);
+        for mapping in self.mappings.iter() {
+            if (internal_bank >= mapping.start_bank) &&
+                (internal_bank <= mapping.end_bank) &&
+                (addr >= mapping.start_addr) {
+                match (mapping.addr_mapping)(internal_bank, addr) {
+                    CartDevice::ROM(_,_) => {},
+                    CartDevice::RAM(addr) => self.ram.write(addr, data),
+                    CartDevice::Expansion(addr) => self.expansion.as_mut().map_or((), |e| e.write(addr, data)),
+                }
+            }
         }
 
         timing::SLOW_MEM_ACCESS
     }
 
-    fn flush(&mut self) {
+    pub fn flush(&mut self) {
         self.ram.flush();
     }
 
-    fn set_rom_speed(&mut self, data: u8) {
+    pub fn set_rom_speed(&mut self, data: u8) {
         self.rom_speed = if self.fast_rom && test_bit!(data, SPEED_BIT, u8) {
             timing::FAST_MEM_ACCESS
         } else {
@@ -170,152 +404,13 @@ impl Cart for LoROM {
         }
     }
 
-    fn name(&self) -> String {
+    pub fn name(&self) -> String {
         self.name.clone()
     }
-}
 
-// For LoROM carts that are larger than 2MB.
-pub struct LoROMLarge {
-    rom:        ROM,
-    ram:        Box<dyn SRAM>,
-
-    fast_rom:   bool,
-    rom_speed:  usize,
-
-    name:       String
-}
-
-impl LoROMLarge {
-    pub fn new(cart_file: BufReader<File>, sram: Box<dyn SRAM>, fast: bool, name: String) -> Self {
-        LoROMLarge {
-            rom:        ROM::new(cart_file, 0x8000),
-            ram:        sram,
-
-            fast_rom:   fast,
-            rom_speed:  timing::SLOW_MEM_ACCESS,
-
-            name:       name,
+    pub fn clock(&mut self, cycles: usize) {
+        if let Some(ex) = self.expansion.as_mut() {
+            ex.clock(cycles);
         }
-    }
-}
-
-impl Cart for LoROMLarge {
-    fn read(&mut self, bank: u8, addr: u16) -> (u8, usize) {
-        let internal_bank = bank % 0x80;
-
-        match internal_bank {
-            0x00..=0x3F if addr >= 0x8000 => (self.rom.read(internal_bank, addr % 0x8000), self.rom_speed),
-            0x70..=0x7F => {
-                let ram_bank = ((internal_bank - 0x70) as u32) * LOROM_RAM_BANK_SIZE;
-                (self.ram.read(ram_bank + addr as u32), timing::SLOW_MEM_ACCESS)
-            },
-            _ => (self.rom.read(internal_bank, addr % 0x8000), self.rom_speed),
-        }
-    }
-
-    fn write(&mut self, bank: u8, addr: u16, data: u8) -> usize {
-        let internal_bank = bank % 0x80;
-
-        if internal_bank >= 0x70 {
-            let ram_bank = ((internal_bank - 0x70) as u32) * LOROM_RAM_BANK_SIZE;
-            self.ram.write(ram_bank + addr as u32, data);
-        }
-
-        timing::SLOW_MEM_ACCESS
-    }
-
-    fn flush(&mut self) {
-        self.ram.flush();
-    }
-
-    fn set_rom_speed(&mut self, data: u8) {
-        self.rom_speed = if self.fast_rom && test_bit!(data, SPEED_BIT, u8) {
-            timing::FAST_MEM_ACCESS
-        } else {
-            timing::SLOW_MEM_ACCESS
-        }
-    }
-
-    fn name(&self) -> String {
-        self.name.clone()
-    }
-}
-
-pub struct HiROM {
-    rom:        ROM,
-    ram:        Box<dyn SRAM>,
-
-    fast_rom:   bool,
-    rom_speed:  usize,
-
-    name:       String
-}
-
-impl HiROM {
-    pub fn new(cart_file: BufReader<File>, sram: Box<dyn SRAM>, fast: bool, name: String) -> Self {
-        HiROM {
-            rom:        ROM::new(cart_file, 0x10000),
-            ram:        sram,
-
-            fast_rom:   fast,
-            rom_speed:  timing::SLOW_MEM_ACCESS,
-
-            name:       name,
-        }
-    }
-}
-
-impl Cart for HiROM {
-    fn read(&mut self, bank: u8, addr: u16) -> (u8, usize) {
-        let internal_bank = bank % 0x80;
-
-        match internal_bank {
-            0x00..=0x3F if addr >= 0x8000 => (self.rom.read(internal_bank, addr), self.rom_speed),
-            0x20..=0x2F if addr >= 0x6000 => {
-                let ram_bank = ((internal_bank - 0x20) as u32) * HIROM_RAM_BANK_SIZE;
-                (self.ram.read(ram_bank + (addr as u32 - 0x6000)), timing::SLOW_MEM_ACCESS)
-            },
-            0x30..=0x3F if addr >= 0x6000 => {
-                let ram_bank = ((internal_bank - 0x30) as u32) * HIROM_RAM_BANK_SIZE;
-                (self.ram.read(ram_bank + (addr as u32 - 0x6000)), timing::SLOW_MEM_ACCESS)
-            },
-            0x40..=0x7F => (self.rom.read(internal_bank % 0x40, addr), self.rom_speed),
-            _ => (0, timing::SLOW_MEM_ACCESS)
-        }
-    }
-
-    fn write(&mut self, bank: u8, addr: u16, data: u8) -> usize {
-        let internal_bank = bank % 0x80;
-
-        match internal_bank {
-            0x20..=0x2F if addr >= 0x6000 => {
-                let ram_bank = ((internal_bank - 0x20) as u32) * HIROM_RAM_BANK_SIZE;
-                self.ram.write(ram_bank + (addr as u32 - 0x6000), data);
-            },
-            0x30..=0x3F if addr >= 0x6000 => {
-                let ram_bank = ((internal_bank - 0x30) as u32) * HIROM_RAM_BANK_SIZE;
-                self.ram.write(ram_bank + (addr as u32 - 0x6000), data);
-            },
-            _ => {}
-        }
-
-        timing::SLOW_MEM_ACCESS
-    }
-
-    fn flush(&mut self) {
-        self.ram.flush();
-    }
-
-    fn set_rom_speed(&mut self, data: u8) {
-        self.rom_speed = if self.fast_rom && test_bit!(data, SPEED_BIT, u8) {
-            timing::FAST_MEM_ACCESS
-        } else {
-            timing::SLOW_MEM_ACCESS
-        }
-    }
-
-    fn name(&self) -> String {
-        self.name.clone()
     }
 }

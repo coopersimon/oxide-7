@@ -84,7 +84,6 @@ impl ROMHeader {
     }
 }
 
-#[allow(dead_code)]
 pub enum EnhancementChip {
     DSP,
     SuperFX,
@@ -114,7 +113,6 @@ impl ROMType {
         lower_nybble == 2 || lower_nybble == 5 || lower_nybble == 6
     }
 
-    #[allow(dead_code)]
     pub fn enhancement_chip(self) -> Option<EnhancementChip> {
         use EnhancementChip::*;
         if lo_nybble!(self.rom_type) > 2 {

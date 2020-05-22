@@ -13,6 +13,8 @@ use winit::{
     window::WindowBuilder
 };
 
+use clap::{clap_app, crate_version};
+
 use oxide7::*;
 
 #[repr(C)]
@@ -26,15 +28,31 @@ unsafe impl bytemuck::Zeroable for Vertex {}
 unsafe impl bytemuck::Pod for Vertex {}
 
 fn main() {
-    let cart_path = std::env::args().nth(1).expect("Expected ROM file path as first argument!");
+    let app = clap_app!(oxide7 =>
+        (version: crate_version!())
+        (author: "Simon Cooper")
+        (about: "Super Nintendo Entertainment System emulator.")
+        (@arg CART: "The path to the game cart to use.")
+        (@arg debug: -d "Enter debug mode.")
+        (@arg save: -s +takes_value "Save file path.")
+        (@arg dsprom: -r +takes_value "DSP ROM path. Needed for DSP games (e.g. Super Mario Kart, Pilotwings)")
+    );
 
-    let debug_mode = std::env::args().nth(2).is_some();
+    let cmd_args = app.get_matches();
 
-    let save_file_name = make_save_name(&cart_path);
+    let cart_path = match cmd_args.value_of("CART") {
+        Some(c) => c.to_string(),
+        None => panic!("Usage: oxide7 [cart name]. Run with --help for more options."),
+    };
 
-    let mut snes = SNES::new(&cart_path, &save_file_name);
+    let save_file_path = match cmd_args.value_of("save") {
+        Some(c) => c.to_string(),
+        None => make_save_name(&cart_path),
+    };
 
-    if debug_mode {
+    let mut snes = SNES::new(&cart_path, &save_file_path, cmd_args.value_of("dsprom"));
+
+    if cmd_args.is_present("debug") {
         #[cfg(feature = "debug")]
         debug::debug_mode(&mut snes);
     } else {
