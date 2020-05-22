@@ -39,10 +39,10 @@ pub fn create_cart(cart_path: &str, save_path: &str, dsp_path: Option<&str>) -> 
 
         let cart = if header.rom_size() > (1 << 21) {
             println!("LOROM Large {:X}: {}", header.rom_mapping(), name);
-            Cart::new_lorom(reader, sram)
+            Cart::new_lorom_large(reader, sram)
         } else {
             println!("LOROM {:X}: {}", header.rom_mapping(), name);
-            Cart::new_lorom_large(reader, sram)
+            Cart::new_lorom(reader, sram)
         }.named(name).fast_rom(header.fast_rom());
 
         return match header.rom_type().enhancement_chip() {
