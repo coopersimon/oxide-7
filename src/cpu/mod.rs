@@ -1,5 +1,7 @@
 // SNES Processor
 mod types;
+#[cfg(test)]
+mod tests;
 
 use types::*;
 
@@ -25,10 +27,10 @@ pub struct CPU {
     dp:     u16,    // Direct Page
     pb:     u8,     // Program Bank
     p:      PFlags, // Processor Status
-    pe:     PFlags, // 6502 Emulator Processor Status
     pc:     u16,    // Program Counter
 
     // Status
+    pe:     bool,   // 6502 Emulator Processor Status
     halt:   bool,
     int:    Interrupt,  // Pending interrupts
 
@@ -52,7 +54,7 @@ impl CPU {
             dp:     0,
             pb:     0,
             p:      PFlags::M | PFlags::X | PFlags::I,
-            pe:     PFlags::E,
+            pe:     true,
             pc:     make16!(start_pc_hi, start_pc_lo),
 
             halt:   false,
@@ -68,7 +70,7 @@ impl CPU {
     pub fn step(&mut self) -> bool {
         // Check for interrupts.
         if self.int.contains(Interrupt::NMI) {
-            self.trigger_interrupt(if self.is_e_set() {int::NMI_VECTOR_EMU} else {int::NMI_VECTOR});
+            self.trigger_interrupt(if self.pe {int::NMI_VECTOR_EMU} else {int::NMI_VECTOR});
             self.int.remove(Interrupt::NMI | Interrupt::VBLANK);
             self.halt = false;
             return true;
@@ -77,7 +79,7 @@ impl CPU {
             return true;
         } else if self.int.contains(Interrupt::IRQ) {
             if !self.p.contains(PFlags::I) {
-                self.trigger_interrupt(if self.is_e_set() {int::IRQ_VECTOR_EMU} else {int::IRQ_VECTOR})
+                self.trigger_interrupt(if self.pe {int::IRQ_VECTOR_EMU} else {int::IRQ_VECTOR})
             }
             self.int.remove(Interrupt::IRQ);
             self.halt = false;
@@ -402,13 +404,13 @@ impl CPU {
             0xA8 => self.y = self.transfer(self.a, self.y, self.is_x_set(), true),  // TAY
             0xBA => self.x = self.transfer(self.s, self.x, self.is_x_set(), true),  // TSX
             0x8A => self.a = self.transfer(self.x, self.a, self.is_m_set(), true),  // TXA
-            0x9A => self.s = self.transfer(self.x, 0, self.is_x_set() && !self.is_e_set(), false),  // TXS
+            0x9A => self.s = self.transfer(self.x, 0, self.is_x_set() && !self.pe, false),  // TXS
             0x9B => self.y = self.transfer(self.x, self.y, self.is_x_set(), true),  // TXY
             0x98 => self.a = self.transfer(self.y, self.a, self.is_m_set(), true),  // TYA
             0xBB => self.x = self.transfer(self.y, self.x, self.is_x_set(), true),  // TYX
 
             0x5B => self.dp = self.transfer(self.a, 0, false, true),                // TCD
-            0x1B => self.s = self.transfer(self.a, 0x0100, self.is_e_set(), false), // TCS
+            0x1B => self.s = self.transfer(self.a, 0x0100, self.pe, false), // TCS
             0x7B => self.a = self.transfer(self.dp, 0, false, true),                // TDC
             0x3B => self.a = self.transfer(self.s, 0, false, true),                 // TSC
 
@@ -638,7 +640,7 @@ impl CPU {
         if self.p.contains(flag_check) == set {
             let pc = self.pc.wrapping_add(imm as u16);
 
-            if self.is_e_set() && (hi!(pc) != hi!(self.pc)) {
+            if self.pe && (hi!(pc) != hi!(self.pc)) {
                 self.clock_inc(INTERNAL_OP);
             }
 
@@ -715,7 +717,7 @@ impl CPU {
     fn brk(&mut self) {
         self.pc = self.pc.wrapping_add(1);
 
-        if self.is_e_set() {
+        if self.pe {
             self.p.insert(PFlags::B);
             self.trigger_interrupt(int::BRK_VECTOR_EMU);
         } else {
@@ -726,7 +728,7 @@ impl CPU {
     fn cop(&mut self) {
         self.pc = self.pc.wrapping_add(1);
 
-        self.trigger_interrupt(if self.is_e_set() {
+        self.trigger_interrupt(if self.pe {
             int::COP_VECTOR_EMU
         } else {
             int::COP_VECTOR
@@ -743,7 +745,7 @@ impl CPU {
 
         self.clock_inc(INTERNAL_OP * 2);
 
-        if !self.is_e_set() {
+        if !self.pe {
             self.pb = self.stack_pop();
         }
     }
@@ -815,8 +817,8 @@ impl CPU {
 
     fn xce(&mut self) {
         let c_set = self.p.contains(PFlags::C);
-        let e_set = self.is_e_set();
-        self.pe.set(PFlags::E, c_set);
+        let e_set = self.pe;
+        self.pe = c_set;
         self.p.set(PFlags::C, e_set);
 
         self.clock_inc(INTERNAL_OP);
@@ -1033,7 +1035,7 @@ impl CPU {
     fn set_p(&mut self, new_p: u8) {
         self.p = PFlags::from_bits_truncate(new_p);
 
-        if self.is_e_set() {
+        if self.pe {
             self.p.insert(PFlags::M);
             self.p.insert(PFlags::X);
         }
@@ -1159,7 +1161,7 @@ impl CPU {
             self.p.set(PFlags::N, test_bit!(result, 7));    // this might always be 0
             // V..?
             self.p.set(PFlags::Z, lo!(result) == 0);
-            self.p.set(PFlags::C, test_bit!(result, 8));
+            self.p.set(PFlags::C, !test_bit!(result, 8));
 
             self.a = set_lo!(self.a, lo!(result));
         } else {
@@ -1185,7 +1187,7 @@ impl CPU {
             self.p.set(PFlags::N, test_bit!(result, 15, u32));    // this might always be 0
             // V..?
             self.p.set(PFlags::Z, lo32!(result) == 0);
-            self.p.set(PFlags::C, test_bit!(result, 16, u32));
+            self.p.set(PFlags::C, !test_bit!(result, 16, u32));
 
             self.a = lo32!(result);
         }
@@ -1217,13 +1219,8 @@ impl CPU {
         self.p.contains(PFlags::X)
     }
 
-    #[inline]
-    fn is_e_set(&self) -> bool {
-        self.pe.contains(PFlags::E)
-    }
-
     fn trigger_interrupt(&mut self, vector_addr: u32) {
-        if !self.is_e_set() {
+        if !self.pe {
             self.stack_push(self.pb);
             self.pb = 0;
         }
@@ -1484,7 +1481,7 @@ impl CPU {
     fn direct_x(&mut self) -> Addr {
         let imm = self.fetch();
 
-        let addr = if self.is_e_set() && (lo!(self.dp) == 0) {
+        let addr = if self.pe && (lo!(self.dp) == 0) {
             let addr_lo = (self.x as u8).wrapping_add(imm);
             set_lo!(self.dp, addr_lo)
         } else {
@@ -1504,7 +1501,7 @@ impl CPU {
     fn direct_y(&mut self) -> Addr {
         let imm = self.fetch();
 
-        let addr = if self.is_e_set() && (lo!(self.dp) == 0) {
+        let addr = if self.pe && (lo!(self.dp) == 0) {
             let addr_lo = (self.y as u8).wrapping_add(imm);
             set_lo!(self.dp, addr_lo)
         } else {
@@ -1524,7 +1521,7 @@ impl CPU {
     fn direct_ptr_dbr(&mut self) -> Addr {
         let imm = self.fetch();
 
-        let (ptr_lo, ptr_hi) = if self.is_e_set() && (lo!(self.dp) == 0) {
+        let (ptr_lo, ptr_hi) = if self.pe && (lo!(self.dp) == 0) {
             (set_lo!(self.dp, imm), set_lo!(self.dp, imm.wrapping_add(1)))
         } else {
             let ptr_lo = self.dp.wrapping_add(imm as u16);
@@ -1545,7 +1542,7 @@ impl CPU {
     fn direct_ptr_x_dbr(&mut self) -> Addr {
         let imm = self.fetch();
 
-        let (ptr_lo, ptr_hi) = if self.is_e_set() && (lo!(self.dp) == 0) {
+        let (ptr_lo, ptr_hi) = if self.pe && (lo!(self.dp) == 0) {
             let ptr_addr_lo = (self.x as u8).wrapping_add(imm);
             (set_lo!(self.dp, ptr_addr_lo), set_lo!(self.dp, ptr_addr_lo.wrapping_add(1)))
         } else {
@@ -1569,7 +1566,7 @@ impl CPU {
     fn direct_ptr_dbr_y(&mut self) -> Addr {
         let imm = self.fetch();
 
-        let (ptr_lo, ptr_hi) = if self.is_e_set() && (lo!(self.dp) == 0) {
+        let (ptr_lo, ptr_hi) = if self.pe && (lo!(self.dp) == 0) {
             (set_lo!(self.dp, imm), set_lo!(self.dp, imm.wrapping_add(1)))
         } else {
             let ptr_lo = self.dp.wrapping_add(imm as u16);
@@ -1756,7 +1753,7 @@ impl CPU {
             dp: self.dp,
             pb: self.pb,
             p:  self.p.bits(),
-            pe: self.pe.bits(),
+            pe: self.pe,
             pc: self.pc
         }
     }

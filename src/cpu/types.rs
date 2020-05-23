@@ -17,7 +17,6 @@ bitflags! {
         const C = bit!(0);  // Carry
 
         const B = bit!(5);  // Break
-        const E = bit!(0);  // 6502 Emulator Mode
     }
 }
 

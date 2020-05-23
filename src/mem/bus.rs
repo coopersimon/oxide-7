@@ -37,8 +37,6 @@ pub struct MemBus {
     hdma_enable:    u8,
     hdma_active:    u8,
     dma_channels:   Vec<DMAChannel>,
-
-    // Extensions
 }
 
 impl MemBus {

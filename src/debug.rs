@@ -11,15 +11,15 @@ pub struct CPUState {
     pub dp:     u16,    // Direct Page
     pub pb:     u8,     // Program Bank
     pub p:      u8,     // Processor Status
-    pub pe:     u8,     // 6502 Emulator Processor Status
     pub pc:     u16,    // Program Counter
+    pub pe:     bool,   // 6502 Emulator Processor Status
 }
 
 impl CPUState {
     pub fn to_string(&self) -> String {
         format!("a: ${:04X} x: ${:04X} y: ${:04X} sp: ${:04X} db: ${:02X} dp: ${:04X}\n\
                 pb: ${:02X} pc: ${:04X}\n\
-                nvmxdizc: {:08b} e: {:08b}",
+                nvmxdizc: {:08b} e: {}",
                 self.a, self.x, self.y, self.s, self.db, self.dp,
                 self.pb, self.pc,
                 self.p, self.pe)

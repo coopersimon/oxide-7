@@ -100,7 +100,7 @@ fn print(s: &str, snes: &mut SNES) {
         "pb" => println!("pb: ${:02X}", snes.get_state().pb),
         "pc" => println!("pc: ${:04X}", snes.get_state().pc),
         "p" => println!("p: b{:08b}", snes.get_state().p),
-        "e" => println!("e: b{:08b}", snes.get_state().pe),
+        "e" => println!("e: {}", snes.get_state().pe),
         s => {
             // Memory range
             if let Some(x) = s.find('-') {

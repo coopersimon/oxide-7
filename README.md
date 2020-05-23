@@ -6,7 +6,7 @@ A SNES emulator written in Rust.
 
 ### Games tested:
 * Super Mario World (video: some bugged sprites, audio sounds good.)
-* Super Metroid (Intro looks good. In gameplay, lower ~1/3 of screen has a blue colour mask, and status bar is missing. Rest of base loads now. Ridley battle goes on far too long, and the counter seems to instantly tick over leading to game over (BCD SUB issues?). Audio sounds good.)
+* Super Metroid (Intro looks good. In gameplay, lower ~1/3 of screen has a blue colour mask, and status bar is missing. Initial space colony looks a bit odd. Ridley battle goes on far too long (I think). Crateria looks a bit odd, some glitches. Audio sounds good.)
 * Link to the Past (Intro triforce is glitched, gameplay seems ok. Audio sounds good.)
 * Final Fantasy 2 (IV) (There is some sort of corrupted overlay (I think BG3 in Mode 1). Otherwise video looks fine. Audio sounds good.)
 * Final Fantasy 3 (VI) (Title looks ok, reads out of bounds after. If this is ignored then the first "scene" doesn't show as memory reads are too slow. Then they look _mostly_ ok. Audio is audible now, but sounds pretty broken.)
