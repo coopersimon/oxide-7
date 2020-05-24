@@ -6,7 +6,7 @@ A SNES emulator written in Rust.
 
 ### Games tested:
 * Super Mario World (video: some bugged sprites, audio sounds good.)
-* Super Metroid (Intro looks good. Fixed a lot of issues due to indirect HDMA bug. Still some corruption in tiles. Audio sounds good.)
+* Super Metroid (Looks good. Audio sounds good.)
 * Link to the Past (Intro triforce is glitched, gameplay seems ok. Audio sounds good.)
 * Final Fantasy 2 (IV) (There is some sort of corrupted overlay (I think BG3 in Mode 1). Otherwise video looks fine. Audio sounds good.)
 * Final Fantasy 3 (VI) (Title looks ok, reads out of bounds after. If this is ignored then the first "scene" doesn't show as memory reads are too slow. Then they look _mostly_ ok. Audio is audible now, but sounds pretty broken.)
@@ -35,7 +35,7 @@ A SNES emulator written in Rust.
 * Mario Paint (title shows up ok, might need SNES mouse to see anything else. audio also sounds ok.)
 * Super Mario RPG (unrecognised ROM config (SA-1))
 * Super Punch-out!! (sound seems to work fine, menu graphics look OK, in game looks completely messed up)
-* Warios Woods (audio seems fine, graphics are a bit glitched (random lines and some missing graphics))
+* Warios Woods (audio seems fine, graphics look ok now. Some missing things and gameplay is broken due to (I think) no offset change per column.)
 * Prince of Persia (graphics look good, audio is a bit skippy, gameplay is fine but used to crash (swapping in bank 0x54,0000), now crashes due to swapping bank 0x3F,53AC)
 * Prince of Persia 2 (intro shows up and looks _mostly_ fine. Gameplay is black except when paused (?). audio repeats the same broken loop.)
 * Shadowrun (Intro is fine, when gameplay begins sprites are bugged, audio sounds decent.)
@@ -72,7 +72,7 @@ A SNES emulator written in Rust.
 - Fix the slight lag on audio (resampler delay?)
 
 ##### System
-- Test - does BCD mode work (some tests say no)? Also it could do with some cleanup.
+- Cleanup BCD mode
 - Ensure timing is correct
 
 ##### Carts
@@ -80,6 +80,7 @@ A SNES emulator written in Rust.
 
 ##### Extensions
 - DSP
+    - Bugfixes
 - SA-1
 - SuperFX
 

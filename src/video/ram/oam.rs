@@ -222,7 +222,7 @@ impl OAM {
     }
 
     fn write_hi_table(&mut self, hi_addr: usize, val: u8) {
-        let start = (hi_addr & 0x1F) * 4;
+        let start = hi_addr * 4;
         for i in 0..4 {
             let hi_bits = (val >> (i * 2)) & bits![1, 0];
             self.objects[start + i].write_hi(hi_bits);
@@ -234,7 +234,7 @@ impl OAM {
     }
 
     fn read_hi_table(&self, hi_addr: usize) -> u8 {
-        let start = (hi_addr & 0x1F) * 4;
+        let start = hi_addr * 4;
         (0..4).fold(0, |acc, i| {
             let hi_bits = self.objects[start + i].read_hi();
             acc | (hi_bits << (i * 2))

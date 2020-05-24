@@ -23,6 +23,7 @@ pub struct VRAM {
 
     port_control:   PortControl,
     byte_addr:      u16,
+    read_buffer:    u16,
 
     pattern_regions:    Vec<((u16, u16), bool)>
 }
@@ -34,6 +35,7 @@ impl VRAM {
 
             port_control:   PortControl::default(),
             byte_addr:      0,
+            read_buffer:    0,
 
             pattern_regions:    Vec::new()
         }
@@ -56,9 +58,13 @@ impl VRAM {
     }
 
     pub fn read_lo(&mut self) -> u8 {
-        let ret = self.data[self.remap_addr() as usize];
+        let ret = lo!(self.read_buffer);
 
         if !self.port_control.contains(PortControl::INC) {
+            let remapped_addr = self.remap_addr() as usize;
+            let lo = self.data[remapped_addr];
+            let hi = self.data[remapped_addr.wrapping_add(1)];
+            self.read_buffer = make16!(hi, lo);
             self.inc_addr();
         }
 
@@ -66,9 +72,13 @@ impl VRAM {
     }
 
     pub fn read_hi(&mut self) -> u8 {
-        let ret = self.data[self.remap_addr().wrapping_add(1) as usize];
+        let ret = hi!(self.read_buffer);
 
         if self.port_control.contains(PortControl::INC) {
+            let remapped_addr = self.remap_addr() as usize;
+            let lo = self.data[remapped_addr];
+            let hi = self.data[remapped_addr.wrapping_add(1)];
+            self.read_buffer = make16!(hi, lo);
             self.inc_addr();
         }
 
