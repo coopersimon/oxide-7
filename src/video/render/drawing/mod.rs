@@ -240,7 +240,7 @@ macro_rules! apply_brightness {
 impl Renderer {
     #[inline]
     fn write_hires_pixel(&self, out: &mut [u8], main: Pixel, sub: Colour, brightness: u8) {
-        let main_col = main.any().unwrap_or(self.palettes.get_bg_colour(0));
+        let main_col = main.any().unwrap_or(self.palettes.get_zero_colour());
         out[0] = apply_brightness!(sub.r, brightness);
         out[1] = apply_brightness!(sub.g, brightness);
         out[2] = apply_brightness!(sub.b, brightness);

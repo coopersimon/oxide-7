@@ -389,7 +389,7 @@ impl MemBus {
             },
             5 => for i in 0..4 {
                 let data = self.read(src_addr + i).0;
-                self.bus_b.write(self.dma_channels[chan].b_bus_addr + ((i / 2) as u8), data);
+                self.bus_b.write(self.dma_channels[chan].b_bus_addr + ((i % 2) as u8), data);
             },
             _ => unreachable!()
         }

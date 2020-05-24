@@ -129,7 +129,6 @@ impl DMAChannel {
     // HDMA
     pub fn start_hdma(&mut self) {
         self.hdma_table_addr = self.a_bus_addr;
-        self.hdma_bank = self.a_bus_bank;
         self.hdma_line_count = 0;
     }
 
@@ -188,11 +187,11 @@ impl DMAChannel {
 impl DMAChannel {
     #[allow(dead_code)]
     pub fn print_dma(&self) {
-        println!("CTRL: {:b}, B_ADDR: {:X}, A_ADDR: {:X}, count: {:X}", self.control.bits(), self.b_bus_addr, self.a_bus_addr, self.count);
+        println!("CTRL: {:b}, B_ADDR: {:X}, A_ADDR: {:X}_{:X}, count: {:X}", self.control.bits(), self.b_bus_addr, self.a_bus_bank, self.a_bus_addr, self.count);
     }
 
     #[allow(dead_code)]
     pub fn print_hdma(&self) {
-        println!("CTRL: {:b}, B_ADDR: {:X}, A_ADDR: {:X}, bank: {:X}, line count: {:X}", self.control.bits(), self.b_bus_addr, self.a_bus_addr, self.hdma_bank, self.hdma_line_count);
+        println!("CTRL: {:b}, B_ADDR: {:X}, A_ADDR: {:X}, bank: {:X}, line count: {:X}, table addr: {:X}, indirect addr: {:X}", self.control.bits(), self.b_bus_addr, self.a_bus_addr, self.hdma_bank, self.hdma_line_count, self.hdma_table_addr, self.count);
     }
 }
