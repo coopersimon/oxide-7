@@ -16,7 +16,7 @@ A SNES emulator written in Rust.
 * Mortal Kombat (looks and plays well now. Audio sounds mostly good.)
 * SimCity (visuals are fine. Audio is mostly fine, some clipping(?) in the menu music.)
 * Super Mario All-Stars (works pretty well. sound is pretty good too.)
-* Aladdin (intro works, title screen is a bit glitchy, gameplay seems to work ok. sound is pretty good now, but seems a bit off (extra sounds/intensity?).)
+* Aladdin (intro works, title screen looks fine now, gameplay seems to work ok. sound is pretty good now, but seems a bit off (extra sounds/intensity?).)
 * Zombies Ate My Neighbors! (works pretty well. Audio is mostly fine but with some glitches.)
 * Mega Man X (Intro works, but title screen looks a bit glitched. The bottom line is incorrect. Audio is completely broken)
 * Tetris & Dr. Mario (fixed anti-piracy screen (SRAM issue), now works great)
@@ -50,16 +50,19 @@ A SNES emulator written in Rust.
 * Terminator 2 (intro looks and sounds ok, used to crash upon start due to swapping bank 0x5B,5F6E, now crashes due to swapping bank 0x3F,7F07)
 * Wolfenstein 3D (unrecognised ROM)
 * Super Tennis (extremely temperamental, seems to sometimes work and sometimes not. a bit janky when it does work, but looks fine.)
+* Breath of Fire (looks mostly ok, menu text is a bit glitchy, audio is ok but some sounds don't stop. seem unable to open in-game menu?)
+* Breath of Fire 2 (looks mostly ok, very laggy intro, audio is completely broken.)
+* Tetris Attack (sounds good. Title looks ok, regular gameplay is ok. vs mode just shows a black screen.)
 
 ### TODO:
 
 ##### Video
-- Mode 2, 4 and 6 Offset change per column
 - Interlacing
 - Improve dirtiness detection in VRAM / move cache creation to CPU side
 - Test Modes 5 and 6 more extensively.
 - Ensure IRQ correctness.
 - Mode 7 mosaic support.
+- Ensure offset change per tile correctness (only test so far is with Chrono Trigger)
 
 ##### Bugs
 - Some background corruption.

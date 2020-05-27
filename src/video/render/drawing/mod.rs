@@ -287,16 +287,16 @@ impl Renderer {
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
         let mut main_bg1_pixels = [BGData::default(); H_RES];
         let mut sub_bg1_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
+        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y, false);
         let mut main_bg2_pixels = [BGData::default(); H_RES];
         let mut sub_bg2_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
+        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y, false);
         let mut main_bg3_pixels = [BGData::default(); H_RES];
         let mut sub_bg3_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_3, &mut main_bg3_pixels, &mut sub_bg3_pixels, y);
+        self.draw_bg_to_line(mem, BG::_3, &mut main_bg3_pixels, &mut sub_bg3_pixels, y, false);
         let mut main_bg4_pixels = [BGData::default(); H_RES];
         let mut sub_bg4_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_4, &mut main_bg4_pixels, &mut sub_bg4_pixels, y);
+        self.draw_bg_to_line(mem, BG::_4, &mut main_bg4_pixels, &mut sub_bg4_pixels, y, false);
 
         for (x, out) in target.chunks_mut(8).skip(target_start).take(H_RES).enumerate() {
             let main = {
@@ -333,13 +333,13 @@ impl Renderer {
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
         let mut main_bg1_pixels = [BGData::default(); H_RES];
         let mut sub_bg1_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
+        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y, false);
         let mut main_bg2_pixels = [BGData::default(); H_RES];
         let mut sub_bg2_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
+        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y, false);
         let mut main_bg3_pixels = [BGData::default(); H_RES];
         let mut sub_bg3_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_3, &mut main_bg3_pixels, &mut sub_bg3_pixels, y);
+        self.draw_bg_to_line(mem, BG::_3, &mut main_bg3_pixels, &mut sub_bg3_pixels, y, false);
 
         for (x, out) in target.chunks_mut(8).skip(target_start).take(H_RES).enumerate() {
             let main = {
@@ -374,10 +374,10 @@ impl Renderer {
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
         let mut main_bg1_pixels = [BGData::default(); H_RES];
         let mut sub_bg1_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y); // TODO: draw offset bg to line
+        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y, true);
         let mut main_bg2_pixels = [BGData::default(); H_RES];
         let mut sub_bg2_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y); // TODO: draw offset bg to line
+        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y, true);
 
         for (x, out) in target.chunks_mut(8).skip(target_start).take(H_RES).enumerate() {
             let main = {
@@ -410,10 +410,10 @@ impl Renderer {
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
         let mut main_bg1_pixels = [BGData::default(); H_RES];
         let mut sub_bg1_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
+        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y, false);
         let mut main_bg2_pixels = [BGData::default(); H_RES];
         let mut sub_bg2_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
+        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y, false);
 
         for (x, out) in target.chunks_mut(8).skip(target_start).take(H_RES).enumerate() {
             let main = {
@@ -446,10 +446,10 @@ impl Renderer {
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
         let mut main_bg1_pixels = [BGData::default(); H_RES];
         let mut sub_bg1_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y); // TODO: draw offset bg to line
+        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y, true); // TODO: offset to bg limits?
         let mut main_bg2_pixels = [BGData::default(); H_RES];
         let mut sub_bg2_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y); // TODO: draw offset bg to line
+        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y, true); // TODO: offset to bg limits?
 
         for (x, out) in target.chunks_mut(8).skip(target_start).take(H_RES).enumerate() {
             let main = {
@@ -482,10 +482,10 @@ impl Renderer {
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
         let mut main_bg1_pixels = [BGData::default(); H_RES];
         let mut sub_bg1_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y);
+        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y, false);
         let mut main_bg2_pixels = [BGData::default(); H_RES];
         let mut sub_bg2_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y);
+        self.draw_bg_to_line(mem, BG::_2, &mut main_bg2_pixels, &mut sub_bg2_pixels, y, false);
 
         for (x, out) in target.chunks_mut(8).skip(target_start).take(H_RES).enumerate() {
             let main = {
@@ -518,7 +518,7 @@ impl Renderer {
         self.draw_sprites_to_line(mem, &mut main_sprite_pixels, &mut sub_sprite_pixels, y as u8);
         let mut main_bg1_pixels = [BGData::default(); H_RES];
         let mut sub_bg1_pixels = [BGData::default(); H_RES];
-        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y); // TODO: draw offset bg to line
+        self.draw_bg_to_line(mem, BG::_1, &mut main_bg1_pixels, &mut sub_bg1_pixels, y, true);
 
         for (x, out) in target.chunks_mut(8).skip(target_start).take(H_RES).enumerate() {
             let main = {
@@ -651,7 +651,7 @@ impl Renderer {
         });
     }
 
-    fn draw_bg_to_line(&self, mem: &VideoMem, bg: BG, main_line: &mut [BGData], sub_line: &mut [BGData], y: usize) {
+    fn draw_bg_to_line(&self, mem: &VideoMem, bg: BG, main_line: &mut [BGData], sub_line: &mut [BGData], y: usize, offset_per_tile: bool) {
         let regs = mem.get_bg_registers();
         let window_regs = mem.get_window_registers();
 
@@ -666,10 +666,9 @@ impl Renderer {
         let mut x_mosaic_offset = 0;
 
         let y_mosaic_offset = y % (mosaic_amount + 1);
-        let (_, mask_y) = regs.bg_size_mask(bg);
-        let bg_y = (actual_y - y_mosaic_offset + regs.get_bg_scroll_y(bg)) & mask_y;
+        let line_y = actual_y - y_mosaic_offset;
         let mut bg_row = [BGData::default(); H_RES];
-        self.get_row(self.get_pattern_mem(bg), mem, bg, bg_y, &mut bg_row);    // TODO: merge these functions together?
+        self.get_row(self.get_pattern_mem(bg), mem, bg, &mut bg_row, line_y, offset_per_tile); // TODO: merge these functions together?
 
         let mut main_window = [true; H_RES];
         window_regs.bg_window(bg, Screen::Main, &mut main_window);

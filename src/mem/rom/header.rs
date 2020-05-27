@@ -84,6 +84,7 @@ impl ROMHeader {
     }
 }
 
+#[derive(Debug)]
 pub enum EnhancementChip {
     DSP,
     SuperFX,

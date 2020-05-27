@@ -54,7 +54,7 @@ pub fn create_cart(cart_path: &str, save_path: &str, dsp_path: Option<&str>) -> 
                 dsp_reader.read_exact(&mut buffer).expect("Couldn't read into DSP ROM");
                 cart.with_dsp_lo(Box::new(DSP::new(&buffer)))
             },
-            Some(_) => cart,
+            Some(e) => panic!("Unsupported enhancement chip {:?}", e),
             None => cart,
         }.build();
     }
@@ -77,7 +77,7 @@ pub fn create_cart(cart_path: &str, save_path: &str, dsp_path: Option<&str>) -> 
                 dsp_reader.read_exact(&mut buffer).expect("Couldn't read into DSP ROM");
                 cart.with_dsp_hi(Box::new(DSP::new(&buffer)))
             },
-            Some(_) => cart,
+            Some(e) => panic!("Unsupported enhancement chip {:?}", e),
             None => cart,
         }.build()
     } else {
