@@ -17,7 +17,7 @@ use crate::{
 };
 
 // 65816
-pub struct CPU {
+pub struct CPU<B: MemBus> {
     // Registers
     a:      u16,    // Accumulator
     x:      u16,    // X-Index
@@ -35,13 +35,13 @@ pub struct CPU {
     int:    Interrupt,  // Pending interrupts
 
     // Memory
-    mem:    MemBus
+    mem:    B
 }
 
 // Public
-impl CPU {
+impl<B: MemBus> CPU<B> {
     // Create and initialise new CPU.
-    pub fn new(mut bus: MemBus) -> Self {
+    pub fn new(mut bus: B) -> Self {
         let start_pc_lo = bus.read(int::RESET_VECTOR_EMU).0;
         let start_pc_hi = bus.read(int::RESET_VECTOR_EMU + 1).0;
 
@@ -79,7 +79,7 @@ impl CPU {
             return true;
         } else if self.int.contains(Interrupt::IRQ) {
             if !self.p.contains(PFlags::I) {
-                self.trigger_interrupt(if self.pe {int::IRQ_VECTOR_EMU} else {int::IRQ_VECTOR})
+                self.trigger_interrupt(if self.pe {int::IRQ_VECTOR_EMU} else {int::IRQ_VECTOR});
             }
             self.int.remove(Interrupt::IRQ);
             self.halt = false;
@@ -92,18 +92,12 @@ impl CPU {
         false
     }
 
-    // Enable or disable outputting video.
-    // This is used to let the CPU process for a frame but not render anything.
-    pub fn enable_rendering(&mut self, enable: bool) {
-        self.mem.enable_rendering(enable);
-    }
-
     // Set buttons on the specified joypad.
     pub fn set_buttons(&mut self, button: Button, val: bool, joypad: usize) {
         self.mem.set_buttons(button, val, joypad);
     }
 
-    // TODO: combine this with enable_rendering
+    // Call this before processing each frame.
     pub fn start_frame(&mut self, frame: RenderTarget) {
         self.mem.start_frame(frame);
     }
@@ -114,7 +108,7 @@ impl CPU {
 }
 
 // Internal: High-level
-impl CPU {
+impl<B: MemBus> CPU<B> {
     // Execute a single instruction.
     fn execute_instruction(&mut self) {
         use DataAddrMode::*;
@@ -426,7 +420,7 @@ impl CPU {
 }
 
 // Internal: Data instructions
-impl CPU {
+impl<B: MemBus> CPU<B> {
     fn adc(&mut self, data_mode: DataMode) {
         let op = self.read_op(data_mode, self.is_m_set());
 
@@ -633,7 +627,7 @@ impl CPU {
 }
 
 // Internal: Branch/Jump instructions
-impl CPU {
+impl<B: MemBus> CPU<B> {
     fn branch(&mut self, flag_check: PFlags, set: bool) {
         let imm = (self.fetch() as i8) as i16;
 
@@ -752,7 +746,7 @@ impl CPU {
 }
 
 // Internal: Misc ops
-impl CPU {
+impl<B: MemBus> CPU<B> {
     fn flag(&mut self, flag: PFlags, set: bool) {
         self.p.set(flag, set);
 
@@ -833,7 +827,7 @@ impl CPU {
 }
 
 // Internal: Data moving ops
-impl CPU {
+impl<B: MemBus> CPU<B> {
     fn lda(&mut self, data_mode: DataMode) {
         let data = self.read_op(data_mode, self.is_m_set());
 
@@ -988,7 +982,7 @@ impl CPU {
 }
 
 // Internal: Data and Flag setting Micro-ops
-impl CPU {
+impl<B: MemBus> CPU<B> {
     // Get carry as data.
     #[inline]
     fn carry(&self) -> u16 {
@@ -1242,7 +1236,7 @@ impl CPU {
 }
 
 // Internal: Memory and Addressing Micro-ops
-impl CPU {
+impl<B: MemBus> CPU<B> {
     // Read a byte from the (data) bus.
     fn read_data(&mut self, addr: u32) -> u8 {
         let (data, cycles) = self.mem.read(addr);

@@ -105,7 +105,6 @@ pub struct PPU {
     h_irq_latch:    bool,   // Latched if the horizontal IRQ is triggered.
 
     renderer:       render::RenderThread,
-    enable_render:  bool,
 }
 
 impl PPU {
@@ -129,13 +128,7 @@ impl PPU {
             h_irq_latch:    false,
 
             renderer:       render::RenderThread::new(mem),
-            enable_render:  true,
         }
-    }
-
-    // Enable or disable rendering (from outside).
-    pub fn enable_rendering(&mut self, enable: bool) {
-        self.enable_render = enable;
     }
 
     pub fn start_frame(&mut self, frame: RenderTarget) {

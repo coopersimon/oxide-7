@@ -8,6 +8,7 @@ use crate::{
 };
 
 use super::{
+    MemBus,
     RAM,
     dma::{
         DMAChannel,
@@ -17,7 +18,7 @@ use super::{
 };
 
 // A bus to attach to the CPU (Address Bus A).
-pub struct MemBus {
+pub struct AddrBusA {
     // Devices
     bus_b:      AddrBusB,
     joypads:    JoypadMem,
@@ -39,12 +40,12 @@ pub struct MemBus {
     dma_channels:   Vec<DMAChannel>,
 }
 
-impl MemBus {
+impl AddrBusA {
     pub fn new(cart_path: &str, save_path: &str, dsp_rom_path: Option<&str>) -> Self {
         // Open ROM file.
         let cart = create_cart(cart_path, save_path, dsp_rom_path);
 
-        MemBus {
+        Self {
             bus_b:      AddrBusB::new(),
             joypads:    JoypadMem::new(),
             
@@ -62,8 +63,10 @@ impl MemBus {
             mult_result:    0,
         }
     }
+}
 
-    pub fn read(&mut self, addr: u32) -> (u8, usize) {
+impl MemBus for AddrBusA {
+    fn read(&mut self, addr: u32) -> (u8, usize) {
         let bank = hi24!(addr);
         let offset = lo24!(addr);
 
@@ -97,7 +100,7 @@ impl MemBus {
         }
     }
 
-    pub fn write(&mut self, addr: u32, data: u8) -> usize {
+    fn write(&mut self, addr: u32, data: u8) -> usize {
         let bank = hi24!(addr);
         let offset = lo24!(addr);
 
@@ -137,7 +140,7 @@ impl MemBus {
     }
 
     // Clock the PPU and APU, and handle any signals coming from the PPU.
-    pub fn clock(&mut self, cycles: usize) -> Interrupt {
+    fn clock(&mut self, cycles: usize) -> Interrupt {
         self.bus_b.clock_apu(cycles);
         self.cart.clock(cycles);
 
@@ -175,28 +178,23 @@ impl MemBus {
         }
     }
 
-    // Enable or disable rendering video.
-    pub fn enable_rendering(&mut self, enable: bool) {
-        self.bus_b.ppu.enable_rendering(enable);
-    }
-
     // Set buttons on the specified joypad.
-    pub fn set_buttons(&mut self, button: Button, val: bool, joypad: usize) {
+    fn set_buttons(&mut self, button: Button, val: bool, joypad: usize) {
         self.joypads.set_buttons(button, val, joypad);
     }
 
-    pub fn start_frame(&mut self, frame: RenderTarget) {
+    fn start_frame(&mut self, frame: RenderTarget) {
         self.bus_b.ppu.start_frame(frame);
         self.cart.flush();
     }
 
-    pub fn rom_name(&self) -> String {
+    fn rom_name(&self) -> String {
         self.cart.name()
     }
 }
 
 // Internal
-impl MemBus {
+impl AddrBusA {
     // WRAM access from special register.
     fn read_wram(&mut self) -> (u8, usize) {
         let data = self.wram.read(self.wram_addr);

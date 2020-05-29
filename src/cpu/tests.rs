@@ -1,9 +1,25 @@
 // Processor tests.
 use super::*;
+use crate::mem::MemBus;
+
+struct TestBus {
+}
+
+impl MemBus for TestBus {
+    fn read(&mut self, _: u32) -> (u8, usize) {
+        (0, 0)
+    }
+    fn write(&mut self, _: u32, _: u8) -> usize {
+        0
+    }
+    fn clock(&mut self, _: usize) -> Interrupt {
+        Interrupt::default()
+    }
+}
 
 #[test]
 fn decimal_add_8bit() {
-    let mut cpu = CPU::new(MemBus::new("./roms/SuperMetroid.sfc", "./empty.sav", None));
+    let mut cpu = CPU::new(TestBus{});
     cpu.pe = false;
     cpu.set_p(0x20);
     cpu.a = 0x1234;
@@ -31,7 +47,7 @@ fn decimal_add_8bit() {
 
 #[test]
 fn decimal_add_16bit() {
-    let mut cpu = CPU::new(MemBus::new("./roms/SuperMetroid.sfc", "./empty.sav", None));
+    let mut cpu = CPU::new(TestBus{});
     cpu.pe = false;
     cpu.set_p(0x00);
     cpu.a = 0x1234;
@@ -58,7 +74,7 @@ fn decimal_add_16bit() {
 
 #[test]
 fn decimal_sub_8bit() {
-    let mut cpu = CPU::new(MemBus::new("./roms/SuperMetroid.sfc", "./empty.sav", None));
+    let mut cpu = CPU::new(TestBus{});
     cpu.pe = false;
     cpu.set_p(0x21);
     cpu.a = 0x1234;
@@ -86,7 +102,7 @@ fn decimal_sub_8bit() {
 
 #[test]
 fn decimal_sub_16bit() {
-    let mut cpu = CPU::new(MemBus::new("./roms/SuperMetroid.sfc", "./empty.sav", None));
+    let mut cpu = CPU::new(TestBus{});
     cpu.pe = false;
     cpu.set_p(0x00);
     cpu.a = 0x1234;

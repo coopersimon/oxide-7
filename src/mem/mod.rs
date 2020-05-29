@@ -3,7 +3,26 @@ mod bus;
 mod dma;
 mod rom;
 
-pub use bus::MemBus;
+pub use bus::AddrBusA;
+
+use crate::{
+    common::Interrupt,
+    video::RenderTarget,
+    joypad::Button
+};
+
+// Memory Bus to attach to CPU.
+pub trait MemBus {
+    fn read(&mut self, addr: u32) -> (u8, usize);
+    fn write(&mut self, addr: u32, data: u8) -> usize;
+    fn clock(&mut self, cycles: usize) -> Interrupt;
+
+    fn set_buttons(&mut self, button: Button, val: bool, joypad: usize) {}
+    fn start_frame(&mut self, _: RenderTarget) {}
+    fn rom_name(&self) -> String {
+        String::new()
+    }
+}
 
 /// Random access memory.
 pub struct RAM {
