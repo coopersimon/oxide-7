@@ -50,7 +50,7 @@ impl SNES {
     /// Construct a new SNES with a cartridge inserted.
     pub fn new(cart_path: &str, save_path: &str, dsp_rom_path: Option<&str>) -> Self {
         let bus = AddrBusA::new(cart_path, save_path, dsp_rom_path);
-        let cpu = CPU::new(bus);
+        let cpu = CPU::new(bus, constants::timing::INTERNAL_OP);
 
         SNES {
             cpu: cpu,
@@ -121,13 +121,6 @@ impl SNES {
 
     // Step the device by one CPU cycle.
     pub fn step(&mut self) -> bool {
-        // When NMI is triggered, disable rendering of new frames.
-        /*if self.cpu.step() {
-            self.cpu.enable_rendering(false);
-            true
-        } else {
-            false
-        }*/
         self.cpu.step()
     }
 

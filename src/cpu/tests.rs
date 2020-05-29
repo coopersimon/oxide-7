@@ -19,7 +19,7 @@ impl MemBus for TestBus {
 
 #[test]
 fn decimal_add_8bit() {
-    let mut cpu = CPU::new(TestBus{});
+    let mut cpu = CPU::new(TestBus{}, 1);
     cpu.pe = false;
     cpu.set_p(0x20);
     cpu.a = 0x1234;
@@ -47,7 +47,7 @@ fn decimal_add_8bit() {
 
 #[test]
 fn decimal_add_16bit() {
-    let mut cpu = CPU::new(TestBus{});
+    let mut cpu = CPU::new(TestBus{}, 1);
     cpu.pe = false;
     cpu.set_p(0x00);
     cpu.a = 0x1234;
@@ -74,7 +74,7 @@ fn decimal_add_16bit() {
 
 #[test]
 fn decimal_sub_8bit() {
-    let mut cpu = CPU::new(TestBus{});
+    let mut cpu = CPU::new(TestBus{}, 1);
     cpu.pe = false;
     cpu.set_p(0x21);
     cpu.a = 0x1234;
@@ -102,7 +102,7 @@ fn decimal_sub_8bit() {
 
 #[test]
 fn decimal_sub_16bit() {
-    let mut cpu = CPU::new(TestBus{});
+    let mut cpu = CPU::new(TestBus{}, 1);
     cpu.pe = false;
     cpu.set_p(0x00);
     cpu.a = 0x1234;

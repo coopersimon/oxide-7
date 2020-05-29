@@ -1,7 +1,7 @@
 // Memory
 mod bus;
 mod dma;
-mod rom;
+pub mod rom;
 
 pub use bus::AddrBusA;
 
@@ -17,7 +17,7 @@ pub trait MemBus {
     fn write(&mut self, addr: u32, data: u8) -> usize;
     fn clock(&mut self, cycles: usize) -> Interrupt;
 
-    fn set_buttons(&mut self, button: Button, val: bool, joypad: usize) {}
+    fn set_buttons(&mut self, _button: Button, _pressed: bool, _joypad: usize) {}
     fn start_frame(&mut self, _: RenderTarget) {}
     fn rom_name(&self) -> String {
         String::new()

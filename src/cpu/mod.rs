@@ -8,10 +8,7 @@ use types::*;
 use crate::{
     mem::MemBus,
     common::Interrupt,
-    constants::{
-        timing::INTERNAL_OP,
-        int
-    },
+    constants::int,
     joypad::Button,
     video::RenderTarget
 };
@@ -30,9 +27,10 @@ pub struct CPU<B: MemBus> {
     pc:     u16,    // Program Counter
 
     // Status
-    pe:     bool,   // 6502 Emulator Processor Status
-    halt:   bool,
-    int:    Interrupt,  // Pending interrupts
+    pe:     bool,               // 6502 Emulator Processor Status
+    halt:   bool,               // If true, the CPU should halt until interrupted.
+    int:    Interrupt,          // Pending interrupts
+    internal_op_cycles: usize,  // Number of cycles for an internal operation.
 
     // Memory
     mem:    B
@@ -41,7 +39,7 @@ pub struct CPU<B: MemBus> {
 // Public
 impl<B: MemBus> CPU<B> {
     // Create and initialise new CPU.
-    pub fn new(mut bus: B) -> Self {
+    pub fn new(mut bus: B, internal_op_cycles: usize) -> Self {
         let start_pc_lo = bus.read(int::RESET_VECTOR_EMU).0;
         let start_pc_hi = bus.read(int::RESET_VECTOR_EMU + 1).0;
 
@@ -54,11 +52,12 @@ impl<B: MemBus> CPU<B> {
             dp:     0,
             pb:     0,
             p:      PFlags::M | PFlags::X | PFlags::I,
-            pe:     true,
             pc:     make16!(start_pc_hi, start_pc_lo),
 
+            pe:     true,
             halt:   false,
             int:    Interrupt::default(),
+            internal_op_cycles: internal_op_cycles,
 
             mem:    bus
         }
@@ -86,7 +85,7 @@ impl<B: MemBus> CPU<B> {
         } else if !self.halt {
             self.execute_instruction();
         } else {
-            self.clock_inc(INTERNAL_OP);
+            self.clock_inc(self.internal_op_cycles);
         }
 
         false
@@ -550,7 +549,7 @@ impl<B: MemBus> CPU<B> {
 
         self.set_z(result);
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         let write_data = op & (!self.a);
         self.write_op(write_data, write_mode, self.is_m_set());
@@ -562,7 +561,7 @@ impl<B: MemBus> CPU<B> {
 
         self.set_z(result);
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         let write_data = op | self.a;
         self.write_op(write_data, write_mode, self.is_m_set());
@@ -578,7 +577,7 @@ impl<B: MemBus> CPU<B> {
             test_bit!(op, 15)
         });
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         let write_data = self.set_nz(result, self.is_m_set());
         self.write_op(write_data, write_mode, self.is_m_set());
@@ -590,7 +589,7 @@ impl<B: MemBus> CPU<B> {
 
         self.p.set(PFlags::C, test_bit!(op, 0));
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         let write_data = self.set_nz(result, self.is_m_set());
         self.write_op(write_data, write_mode, self.is_m_set());
@@ -606,7 +605,7 @@ impl<B: MemBus> CPU<B> {
             test_bit!(op, 15)
         });
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         let write_data = self.set_nz(result, self.is_m_set());
         self.write_op(write_data, write_mode, self.is_m_set());
@@ -619,7 +618,7 @@ impl<B: MemBus> CPU<B> {
 
         self.p.set(PFlags::C, test_bit!(op, 0));
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         let write_data = self.set_nz(result, self.is_m_set());
         self.write_op(write_data, write_mode, self.is_m_set());
@@ -635,10 +634,10 @@ impl<B: MemBus> CPU<B> {
             let pc = self.pc.wrapping_add(imm as u16);
 
             if self.pe && (hi!(pc) != hi!(self.pc)) {
-                self.clock_inc(INTERNAL_OP);
+                self.clock_inc(self.internal_op_cycles);
             }
 
-            self.clock_inc(INTERNAL_OP);
+            self.clock_inc(self.internal_op_cycles);
 
             self.pc = pc;
         }
@@ -648,7 +647,7 @@ impl<B: MemBus> CPU<B> {
         let imm_lo = self.fetch();
         let imm_hi = self.fetch();
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         self.pc = self.pc.wrapping_add(make16!(imm_hi, imm_lo));
     }
@@ -671,7 +670,7 @@ impl<B: MemBus> CPU<B> {
         let pc = self.pc.wrapping_sub(1);
 
         if addr_mode != ProgramAddrMode::AbsPtrXPbr {
-            self.clock_inc(INTERNAL_OP);
+            self.clock_inc(self.internal_op_cycles);
         }
 
         match addr {
@@ -693,7 +692,7 @@ impl<B: MemBus> CPU<B> {
         let pc_hi = self.stack_pop();
         let pb = self.stack_pop();
 
-        self.clock_inc(INTERNAL_OP * 2);
+        self.clock_inc(self.internal_op_cycles * 2);
 
         self.pc = make16!(pc_hi, pc_lo).wrapping_add(1);
         self.pb = pb;
@@ -703,7 +702,7 @@ impl<B: MemBus> CPU<B> {
         let pc_lo = self.stack_pop();
         let pc_hi = self.stack_pop();
 
-        self.clock_inc(INTERNAL_OP * 3);
+        self.clock_inc(self.internal_op_cycles * 3);
 
         self.pc = make16!(pc_hi, pc_lo).wrapping_add(1);
     }
@@ -737,7 +736,7 @@ impl<B: MemBus> CPU<B> {
 
         self.pc = make16!(pc_hi, pc_lo);
 
-        self.clock_inc(INTERNAL_OP * 2);
+        self.clock_inc(self.internal_op_cycles * 2);
 
         if !self.pe {
             self.pb = self.stack_pop();
@@ -755,14 +754,14 @@ impl<B: MemBus> CPU<B> {
             self.y = set_hi!(self.y, 0);
         }
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
     }
 
     fn rep(&mut self) {
         let imm = self.fetch();
 
         self.p &= PFlags::from_bits_truncate(!imm);
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
     }
 
     fn sep(&mut self) {
@@ -770,7 +769,7 @@ impl<B: MemBus> CPU<B> {
         let add_flags = PFlags::from_bits_truncate(imm);
 
         self.p |= add_flags;
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         if add_flags.contains(PFlags::X) {
             self.x = set_hi!(self.x, 0);
@@ -779,22 +778,22 @@ impl<B: MemBus> CPU<B> {
     }
 
     fn nop(&mut self) {
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
     }
 
     fn wdm(&mut self) {
         self.pc = self.pc.wrapping_add(1);
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
     }
 
     fn stp(&mut self) {
         // TODO
-        self.clock_inc(INTERNAL_OP * 2);
+        self.clock_inc(self.internal_op_cycles * 2);
         panic!("STP not implemented.");
     }
 
     fn wai(&mut self) {
-        self.clock_inc(INTERNAL_OP * 2);
+        self.clock_inc(self.internal_op_cycles * 2);
         self.halt = true;
     }
 
@@ -804,7 +803,7 @@ impl<B: MemBus> CPU<B> {
 
         let _ = self.set_nz(b as u16, true);
 
-        self.clock_inc(INTERNAL_OP * 2);
+        self.clock_inc(self.internal_op_cycles * 2);
 
         self.a = make16!(a, b);
     }
@@ -815,7 +814,7 @@ impl<B: MemBus> CPU<B> {
         self.pe = c_set;
         self.p.set(PFlags::C, e_set);
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         if c_set {
             self.p.insert(PFlags::M | PFlags::X);
@@ -877,7 +876,7 @@ impl<B: MemBus> CPU<B> {
 
         self.a = self.a.wrapping_sub(1);
 
-        self.clock_inc(INTERNAL_OP * 2);
+        self.clock_inc(self.internal_op_cycles * 2);
 
         if self.a != 0xFFFF {
             self.pc = self.pc.wrapping_sub(3);
@@ -899,7 +898,7 @@ impl<B: MemBus> CPU<B> {
 
         self.a = self.a.wrapping_sub(1);
 
-        self.clock_inc(INTERNAL_OP * 2);
+        self.clock_inc(self.internal_op_cycles * 2);
 
         if self.a != 0xFFFF {
             self.pc = self.pc.wrapping_sub(3);
@@ -918,7 +917,7 @@ impl<B: MemBus> CPU<B> {
 
         let data = self.pc.wrapping_add(imm);
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         self.stack_push(hi!(data));
         self.stack_push(lo!(data));
@@ -932,7 +931,7 @@ impl<B: MemBus> CPU<B> {
             self.stack_push(lo!(reg));
         }
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
     }
 
     fn pl(&mut self, byte: bool) -> u16 {
@@ -944,7 +943,7 @@ impl<B: MemBus> CPU<B> {
             make16!(hi, lo)
         };
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         self.set_nz(reg, byte)
     }
@@ -961,7 +960,7 @@ impl<B: MemBus> CPU<B> {
             self.set_nz(data, false)
         };
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
     }
 
     fn transfer(&mut self, from: u16, to: u16, byte: bool, set_flags: bool) -> u16 {
@@ -971,7 +970,7 @@ impl<B: MemBus> CPU<B> {
             from
         };
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         if byte {
             set_lo!(to, lo!(result))    // hi!(to) | result should work too.
@@ -1228,7 +1227,7 @@ impl<B: MemBus> CPU<B> {
 
         self.pc = make16!(pc_hi, pc_lo);
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         self.p.insert(PFlags::I);
         self.p.remove(PFlags::D);
@@ -1434,7 +1433,7 @@ impl<B: MemBus> CPU<B> {
         let addr = abs_addr.wrapping_add(self.x as u32);
 
         if !self.is_x_set() || (self.is_x_set() && (abs_addr < addr)) {
-            self.clock_inc(INTERNAL_OP);
+            self.clock_inc(self.internal_op_cycles);
         }
 
         Addr::Full(addr)
@@ -1449,7 +1448,7 @@ impl<B: MemBus> CPU<B> {
         let addr = abs_addr.wrapping_add(self.y as u32);
 
         if !self.is_x_set() || (self.is_x_set() && (abs_addr < addr)) {
-            self.clock_inc(INTERNAL_OP);
+            self.clock_inc(self.internal_op_cycles);
         }
 
         Addr::Full(addr)
@@ -1465,7 +1464,7 @@ impl<B: MemBus> CPU<B> {
             self.dp.wrapping_add(imm as u16)
         };*/
         if lo!(self.dp) != 0 {
-            self.clock_inc(INTERNAL_OP);
+            self.clock_inc(self.internal_op_cycles);
         }
 
         Addr::ZeroBank(self.dp.wrapping_add(imm))
@@ -1483,10 +1482,10 @@ impl<B: MemBus> CPU<B> {
         };
 
         if lo!(self.dp) != 0 {
-            self.clock_inc(INTERNAL_OP);
+            self.clock_inc(self.internal_op_cycles);
         }
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         Addr::ZeroBank(addr)
     }
@@ -1503,10 +1502,10 @@ impl<B: MemBus> CPU<B> {
         };
 
         if lo!(self.dp) != 0 {
-            self.clock_inc(INTERNAL_OP);
+            self.clock_inc(self.internal_op_cycles);
         }
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         Addr::ZeroBank(addr)
     }
@@ -1523,7 +1522,7 @@ impl<B: MemBus> CPU<B> {
         };
 
         if lo!(self.dp) != 0 {
-            self.clock_inc(INTERNAL_OP);
+            self.clock_inc(self.internal_op_cycles);
         }
 
         let addr_lo = self.read_data(make24!(0, ptr_lo));
@@ -1545,10 +1544,10 @@ impl<B: MemBus> CPU<B> {
         };
 
         if lo!(self.dp) != 0 {
-            self.clock_inc(INTERNAL_OP);
+            self.clock_inc(self.internal_op_cycles);
         }
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         let addr_lo = self.read_data(make24!(0, ptr_lo));
         let addr_hi = self.read_data(make24!(0, ptr_hi));
@@ -1568,7 +1567,7 @@ impl<B: MemBus> CPU<B> {
         };
 
         if lo!(self.dp) != 0 {
-            self.clock_inc(INTERNAL_OP);
+            self.clock_inc(self.internal_op_cycles);
         }
 
         let addr_lo = self.read_data(make24!(0, ptr_lo));
@@ -1578,7 +1577,7 @@ impl<B: MemBus> CPU<B> {
         let final_addr = addr.wrapping_add(self.y as u32);
 
         if !self.is_x_set() || (self.is_x_set() && (addr < final_addr)) {
-            self.clock_inc(INTERNAL_OP);
+            self.clock_inc(self.internal_op_cycles);
         }
 
         Addr::Full(final_addr)
@@ -1595,7 +1594,7 @@ impl<B: MemBus> CPU<B> {
         let ptr_hi = make24!(0, ptr.wrapping_add(2));
 
         if lo!(self.dp) != 0 {
-            self.clock_inc(INTERNAL_OP);
+            self.clock_inc(self.internal_op_cycles);
         }
 
         let addr_lo = self.read_data(ptr_lo);
@@ -1616,7 +1615,7 @@ impl<B: MemBus> CPU<B> {
         let ptr_hi = make24!(0, ptr.wrapping_add(2));
 
         if lo!(self.dp) != 0 {
-            self.clock_inc(INTERNAL_OP);
+            self.clock_inc(self.internal_op_cycles);
         }
 
         let addr_lo = self.read_data(ptr_lo);
@@ -1632,7 +1631,7 @@ impl<B: MemBus> CPU<B> {
 
         let addr = self.s.wrapping_add(imm);
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         Addr::ZeroBank(addr)
     }
@@ -1646,7 +1645,7 @@ impl<B: MemBus> CPU<B> {
         let ptr_lo = make24!(0, ptr);
         let ptr_hi = make24!(0, ptr.wrapping_add(1));
 
-        self.clock_inc(INTERNAL_OP * 2);
+        self.clock_inc(self.internal_op_cycles * 2);
 
         let addr_lo = self.read_data(ptr_lo);
         let addr_hi = self.read_data(ptr_hi);
@@ -1706,7 +1705,7 @@ impl<B: MemBus> CPU<B> {
         let ptr_lo = make24!(self.pb, ptr);
         let ptr_hi = make24!(self.pb, ptr.wrapping_add(1));
 
-        self.clock_inc(INTERNAL_OP);
+        self.clock_inc(self.internal_op_cycles);
 
         let addr_lo = self.read_data(ptr_lo);
         let addr_hi = self.read_data(ptr_hi);
@@ -1735,7 +1734,7 @@ impl<B: MemBus> CPU<B> {
 
 // Debug functions.
 #[cfg(feature = "debug")]
-impl CPU {
+impl<B: MemBus> CPU<B> {
     // Capture the state of the internal registers.
     pub fn get_state(&self) -> crate::debug::CPUState {
         crate::debug::CPUState {

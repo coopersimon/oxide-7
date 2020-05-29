@@ -142,9 +142,10 @@ impl MemBus for AddrBusA {
     // Clock the PPU and APU, and handle any signals coming from the PPU.
     fn clock(&mut self, cycles: usize) -> Interrupt {
         self.bus_b.clock_apu(cycles);
-        self.cart.clock(cycles);
 
-        match self.bus_b.ppu.clock(cycles) {
+        let cart_i = self.cart.clock(cycles);
+
+        let v_i = match self.bus_b.ppu.clock(cycles) {
             PPUSignal::Int(i) => {
                 if i.intersects(Interrupt::NMI | Interrupt::VBLANK) {
                     self.joypads.prepare_read();
@@ -175,7 +176,9 @@ impl MemBus for AddrBusA {
                 Interrupt::default()
             },
             PPUSignal::None => Interrupt::default()
-        }
+        };
+
+        cart_i | v_i
     }
 
     // Set buttons on the specified joypad.
