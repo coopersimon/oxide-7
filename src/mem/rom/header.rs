@@ -10,6 +10,7 @@ use std::{
     fs::File
 };
 
+const SA1_MAPPING_MASK: u8 = 0xEB;
 const ROM_MAPPING_MASK: u8 = 0xE9;
 
 pub struct ROMHeader {
@@ -27,11 +28,13 @@ impl ROMHeader {
     pub fn try_lo(&mut self, reader: &mut BufReader<File>) -> bool {
         const LO_ROM_HEADER_START: u64 = 0x7FC0;
         const LO_ROM: u8 = 0x20;
+        const LO_ROM_SA1: u8 = 0x23;
 
         reader.seek(SeekFrom::Start(LO_ROM_HEADER_START)).expect("Couldn't seek to cartridge header.");
         reader.read_exact(&mut self.data).expect("Couldn't read cartridge header.");
 
-        (self.rom_mapping() & ROM_MAPPING_MASK) == LO_ROM
+        (self.rom_mapping() & ROM_MAPPING_MASK) == LO_ROM || 
+        (self.rom_mapping() & SA1_MAPPING_MASK) == LO_ROM_SA1
     }
 
     /// Set the header to the HIROM position, and check if it is a hirom header.

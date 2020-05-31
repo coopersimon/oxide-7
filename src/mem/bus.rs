@@ -63,6 +63,20 @@ impl AddrBusA {
             mult_result:    0,
         }
     }
+
+    // Set buttons on the specified joypad.
+    pub fn set_buttons(&mut self, button: Button, val: bool, joypad: usize) {
+        self.joypads.set_buttons(button, val, joypad);
+    }
+
+    pub fn start_frame(&mut self, frame: RenderTarget) {
+        self.bus_b.ppu.start_frame(frame);
+        self.cart.flush();
+    }
+
+    pub fn rom_name(&self) -> String {
+        self.cart.name()
+    }
 }
 
 impl MemBus for AddrBusA {
@@ -77,6 +91,7 @@ impl MemBus for AddrBusA {
                 0x2100..=0x2143 => (self.bus_b.read(lo!(offset)), FAST_MEM_ACCESS),
                 0x2180          => self.read_wram(),
                 0x2100..=0x21FF => (0, FAST_MEM_ACCESS),
+                0x2200..=0x23FF => (self.cart.read_exp(offset), FAST_MEM_ACCESS),
                 0x3000..=0x3FFF => (0, FAST_MEM_ACCESS),                                // Extensions
 
                 0x4000..=0x4015 |
@@ -114,6 +129,7 @@ impl MemBus for AddrBusA {
                 0x2182          => {self.wram_addr = set_mid24!(self.wram_addr, data); FAST_MEM_ACCESS},
                 0x2183          => {self.wram_addr = set_hi24!(self.wram_addr, data & 1); FAST_MEM_ACCESS},
                 0x2100..=0x21FF => FAST_MEM_ACCESS,
+                0x2200..=0x23FF => {self.cart.write_exp(offset, data); FAST_MEM_ACCESS}
                 0x3000..=0x3FFF => FAST_MEM_ACCESS, // Extensions
 
                 0x4000..=0x4015 |
@@ -179,20 +195,6 @@ impl MemBus for AddrBusA {
         };
 
         cart_i | v_i
-    }
-
-    // Set buttons on the specified joypad.
-    fn set_buttons(&mut self, button: Button, val: bool, joypad: usize) {
-        self.joypads.set_buttons(button, val, joypad);
-    }
-
-    fn start_frame(&mut self, frame: RenderTarget) {
-        self.bus_b.ppu.start_frame(frame);
-        self.cart.flush();
-    }
-
-    fn rom_name(&self) -> String {
-        self.cart.name()
     }
 }
 

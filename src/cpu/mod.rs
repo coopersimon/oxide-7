@@ -6,7 +6,10 @@ mod tests;
 use types::*;
 
 use crate::{
-    mem::MemBus,
+    mem::{
+        AddrBusA,
+        MemBus
+    },
     common::Interrupt,
     constants::int,
     joypad::Button,
@@ -68,7 +71,9 @@ impl<B: MemBus> CPU<B> {
     // Returns true if V-Blank occurred.
     pub fn step(&mut self) -> bool {
         // Check for interrupts.
-        if self.int.contains(Interrupt::NMI) {
+        if self.int.contains(Interrupt::RESET) {
+            self.reset();
+        } else if self.int.contains(Interrupt::NMI) {
             self.trigger_interrupt(if self.pe {int::NMI_VECTOR_EMU} else {int::NMI_VECTOR});
             self.int.remove(Interrupt::NMI | Interrupt::VBLANK);
             self.halt = false;
@@ -91,6 +96,14 @@ impl<B: MemBus> CPU<B> {
         false
     }
 
+    // Get the underlying bus.
+    // Not needed for normal operation.
+    pub fn get_bus<'a>(&'a mut self) -> &'a mut B {
+        &mut self.mem
+    }
+}
+
+impl CPU<AddrBusA> {
     // Set buttons on the specified joypad.
     pub fn set_buttons(&mut self, button: Button, val: bool, joypad: usize) {
         self.mem.set_buttons(button, val, joypad);
@@ -415,6 +428,26 @@ impl<B: MemBus> CPU<B> {
     // Clock
     fn clock_inc(&mut self, cycles: usize) {
         self.int.insert(self.mem.clock(cycles));
+    }
+
+    // Reset
+    fn reset(&mut self) {
+        let start_pc_lo = self.mem.read(int::RESET_VECTOR_EMU).0;
+        let start_pc_hi = self.mem.read(int::RESET_VECTOR_EMU + 1).0;
+
+        self.a = 0;
+        self.x = 0;
+        self.y = 0;
+        self.s = 0x100;
+        self.db = 0;
+        self.dp = 0;
+        self.pb = 0;
+        self.p = PFlags::M | PFlags::X | PFlags::I;
+        self.pc = make16!(start_pc_hi, start_pc_lo);
+
+        self.pe = true;
+        self.halt = false;
+        self.int = Interrupt::default();
     }
 }
 

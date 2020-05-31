@@ -16,7 +16,7 @@ pub trait Expansion {
 }
 
 impl Expansion for DSP {
-    fn read(&mut self, bank: u8, addr: u16) -> u8 {
+    fn read(&mut self, bank: u8, _addr: u16) -> u8 {
         match bank {
             0 => self.read_dr(),
             1 => self.read_sr(),
@@ -24,7 +24,7 @@ impl Expansion for DSP {
         }
     }
 
-    fn write(&mut self, bank: u8, addr: u16, data: u8) {
+    fn write(&mut self, bank: u8, _addr: u16, data: u8) {
         match bank {
             0 => self.write_dr(data),
             1 => self.write_sr(data),
@@ -43,46 +43,6 @@ impl Expansion for DSP {
             self.step();
         }
 
-        Interrupt::default()
-    }
-}
-
-impl Expansion for SA1 {
-    fn read(&mut self, bank: u8, addr: u16) -> u8 {
-        match addr {
-            0x2300 => 0,    // SNES CPU flag read
-            0x230E => 0,    // SNES VC
-            _ => 0,
-        }
-    }
-
-    fn write(&mut self, bank: u8, addr: u16, data: u8) {
-        match addr {
-            0x2200 => {},   // SA-1 CPU control
-            0x2201 => {},   // Int enable
-            0x2202 => {},   // Int clear
-            0x2203 => {},   // SA-1 RST vector LSB
-            0x2204 => {},   // SA-1 RST vector MSB
-            0x2205 => {},   // SA-1 NMI vector LSB
-            0x2206 => {},   // SA-1 NMI vector MSB
-            0x2207 => {},   // SA-1 IRQ vector LSB
-            0x2208 => {},   // SA-1 IRQ vector MSB
-
-            0x2220 => {},   // MMC Bank C
-            0x2221 => {},   // MMC Bank D
-            0x2222 => {},   // MMC Bank E
-            0x2223 => {},   // MMC Bank F
-            0x2224 => {},   // BMAPS
-            0x2226 => {},   // BW-RAM Write enable
-            0x2228 => {},   // BW-RAM write-protected area
-            0x2229 => {},   // I-RAM Write-protection
-
-            _ => {}
-        }
-    }
-
-    fn clock(&mut self, cycles: usize) -> Interrupt {
-        // 2 Master cycles = 1 SA-1 cycle.
         Interrupt::default()
     }
 }

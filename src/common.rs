@@ -188,5 +188,7 @@ bitflags! {
         const IRQ   = bit!(1);  // Indicates that an IRQ was triggered.
 
         const VBLANK = bit!(2); // Indicates that V-Blank without NMI happened.
+
+        const RESET = bit!(3);  // Indicates a RST was triggered.
     }
 }

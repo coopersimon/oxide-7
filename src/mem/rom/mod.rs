@@ -65,6 +65,9 @@ pub fn create_cart(cart_path: &str, save_path: &str, dsp_path: Option<&str>) -> 
             dsp_reader.read_exact(&mut buffer).expect("Couldn't read into DSP ROM");
             cart.with_dsp(Box::new(DSP::new(&buffer)))
         },
+        Some(EnhancementChip::SA1) => {
+            cart.with_sa1()
+        },
         Some(e) => panic!("Unsupported enhancement chip {:?}", e),
         None => cart,
     }.build()
@@ -216,7 +219,7 @@ impl CartBuilder {
             Lo => LoSA,
             LoLarge => LoLargeSA,
             Hi => HiSA,
-            _ => self.mapping_mode
+            _ => panic!("Cannot attach multiple SA-1 expansions")
         };
 
         self
@@ -381,6 +384,16 @@ impl Cart {
         }
 
         timing::SLOW_MEM_ACCESS
+    }
+
+    // Read from expansion port slot.
+    pub fn read_exp(&mut self, addr: u16) -> u8 {
+        self.expansion.as_mut().map_or(0, |e| e.read(0, addr))
+    }
+
+    // Write to expansion port slot.
+    pub fn write_exp(&mut self, addr: u16, data: u8) {
+        self.expansion.as_mut().map_or((), |e| e.write(0, addr, data));
     }
 
     pub fn flush(&mut self) {
