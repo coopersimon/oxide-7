@@ -532,27 +532,27 @@ impl Registers {
         regions
     }
 
-    pub fn get_pattern_table_height(&self, bg: BG) -> u16 {
-        const TILE_SIZE_2BPP: u16 = 16;
-        const TILE_SIZE_4BPP: u16 = 32;
-        const TILE_SIZE_8BPP: u16 = 64;
+    // Size in tiles
+    pub fn get_pattern_table_size(&self, bg: BG) -> u16 {
+        const TILE_SIZE_2BPP: u32 = 16;
+        const TILE_SIZE_4BPP: u32 = 32;
+        const TILE_SIZE_8BPP: u32 = 64;
 
         let max_space = 0x10000 - (self.bg_pattern_addr(bg) as u32);
-        let rows = (max_space / 16) as u16;
-        match bg {
+        (match bg {
             BG::_1 => match self.get_mode() {
-                0 => std::cmp::min(64, rows / TILE_SIZE_2BPP),
-                1 | 2 | 5 | 6 => std::cmp::min(64, rows / TILE_SIZE_4BPP),
-                3 | 4 => std::cmp::min(64, rows / TILE_SIZE_8BPP),
+                0 => std::cmp::min(1024, max_space / TILE_SIZE_2BPP),
+                1 | 2 | 5 | 6 => std::cmp::min(1024, max_space / TILE_SIZE_4BPP),
+                3 | 4 => std::cmp::min(1024, max_space / TILE_SIZE_8BPP),
                 _ => 0
             },
             BG::_2 => match self.get_mode() {
-                0 | 4 | 5 => std::cmp::min(64, rows / TILE_SIZE_2BPP),
-                _ => std::cmp::min(64, rows / TILE_SIZE_4BPP),
+                0 | 4 | 5 => std::cmp::min(1024, max_space / TILE_SIZE_2BPP),
+                _ => std::cmp::min(1024, max_space / TILE_SIZE_4BPP),
             },
-            BG::_3 => std::cmp::min(64, rows / TILE_SIZE_2BPP),
-            BG::_4 => std::cmp::min(64, rows / TILE_SIZE_2BPP),
-        }
+            BG::_3 => std::cmp::min(1024, max_space / TILE_SIZE_2BPP),
+            BG::_4 => std::cmp::min(1024, max_space / TILE_SIZE_2BPP),
+        }) as u16
     }
 }
 

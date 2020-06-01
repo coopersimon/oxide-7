@@ -92,8 +92,8 @@ impl Renderer {
         let regs = mem.get_bg_registers();
         for (bg_pattern, bg) in self.bg_pattern_mem.iter_mut().take(num_bgs).zip(BG::all().iter().cloned()) {
             if bg_pattern.get_start_addr() != regs.bg_pattern_addr(bg) {
-                let height = regs.get_pattern_table_height(bg);
-                bg_pattern.set_addr(regs.bg_pattern_addr(bg), height);
+                let num_tiles = regs.get_pattern_table_size(bg);
+                bg_pattern.set_addr(regs.bg_pattern_addr(bg), num_tiles);
                 recreate_regions = true;
             }
         }

@@ -268,7 +268,7 @@ impl WindowRegisters {
         if self.enable_bg(bg, screen) {                 // Check if this bg is enabled for the screen.
             if self.enable_masking_bg(bg, screen) {     // Check if masking is enabled for this background.
                 for (x, w) in window_line.iter_mut().enumerate() {
-                    *w = self.show_masked_bg_pixel(bg, x as u8);
+                    *w = !self.mask_bg_pixel(bg, x as u8);
                 }
             }
         } else {
@@ -282,7 +282,7 @@ impl WindowRegisters {
     pub fn show_obj_pixel(&self, screen: Screen, x: u8) -> bool {
         if self.enable_obj(screen) {    // Check if objects are enabled for the screen.
             if self.enable_masking_obj(screen) {    // Check if masking is enabled for objects.
-                self.show_masked_obj_pixel(x)
+                !self.mask_obj_pixel(x)
             } else {
                 true
             }
@@ -345,51 +345,51 @@ impl WindowRegisters {
 
 // internal helpers
 impl WindowRegisters {
-    // Returns true if the bg pixel specified is inside the window
-    fn show_masked_bg_pixel(&self, bg: BG, x: u8) -> bool {
+    // Returns true if the bg pixel specified is inside the mask.
+    fn mask_bg_pixel(&self, bg: BG, x: u8) -> bool {
         let enable_1 = self.enable_window_1_bg(bg);
         let enable_2 = self.enable_window_2_bg(bg);
         match (enable_1, enable_2) {
             (true, true) => {   // Use op to combine
-                let win_1 = self.test_inside_window_1(x) == self.invert_window_1_bg(bg);
-                let win_2 = self.test_inside_window_2(x) == self.invert_window_2_bg(bg);
+                let win_1 = self.test_inside_window_1(x) != self.invert_window_1_bg(bg);
+                let win_2 = self.test_inside_window_2(x) != self.invert_window_2_bg(bg);
                 self.window_op_bg(bg).combine(win_1, win_2)
             },
             (true, false) => {  // Just use window 1
-                self.test_inside_window_1(x) == self.invert_window_1_bg(bg)
+                self.test_inside_window_1(x) != self.invert_window_1_bg(bg)
             },
             (false, true) => {  // Just use window 2
-                self.test_inside_window_2(x) == self.invert_window_2_bg(bg)
+                self.test_inside_window_2(x) != self.invert_window_2_bg(bg)
             },
             (false, false) => { // No windows enabled for bg.
-                true
+                false
             }
         }
     }
 
-    // Returns true if the obj pixel specified is inside the window
-    fn show_masked_obj_pixel(&self, x: u8) -> bool {
+    // Returns true if the obj pixel specified is inside the mask.
+    fn mask_obj_pixel(&self, x: u8) -> bool {
         let enable_1 = self.enable_window_1_obj();
         let enable_2 = self.enable_window_2_obj();
         match (enable_1, enable_2) {
             (true, true) => {   // Use op to combine
-                let win_1 = self.test_inside_window_1(x) == self.invert_window_1_obj();
-                let win_2 = self.test_inside_window_2(x) == self.invert_window_2_obj();
+                let win_1 = self.test_inside_window_1(x) != self.invert_window_1_obj();
+                let win_2 = self.test_inside_window_2(x) != self.invert_window_2_obj();
                 self.window_op_obj().combine(win_1, win_2)
             },
             (true, false) => {  // Just use window 1
-                self.test_inside_window_1(x) == self.invert_window_1_obj()
+                self.test_inside_window_1(x) != self.invert_window_1_obj()
             },
             (false, true) => {  // Just use window 2
-                self.test_inside_window_2(x) == self.invert_window_2_obj()
+                self.test_inside_window_2(x) != self.invert_window_2_obj()
             },
             (false, false) => { // No windows enabled for objects
-                true
+                false
             }
         }
     }
 
-    // Returns true if the colour math pixel specified is inside the window
+    // Returns true if the colour math pixel specified is inside the colour mask.
     fn col_window_pixel(&self, x: u8) -> bool {
         let enable_1 = self.enable_window_1_col();
         let enable_2 = self.enable_window_2_col();

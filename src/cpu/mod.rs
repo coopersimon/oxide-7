@@ -393,19 +393,19 @@ impl<B: MemBus> CPU<B> {
             0xDB => self.stp(),
             0xCB => self.wai(),
 
-            0xAA => self.x = self.transfer(self.a, self.x, self.is_x_set(), true),  // TAX
-            0xA8 => self.y = self.transfer(self.a, self.y, self.is_x_set(), true),  // TAY
-            0xBA => self.x = self.transfer(self.s, self.x, self.is_x_set(), true),  // TSX
-            0x8A => self.a = self.transfer(self.x, self.a, self.is_m_set(), true),  // TXA
-            0x9A => self.s = self.transfer(self.x, 0, self.is_x_set() && !self.pe, false),  // TXS
-            0x9B => self.y = self.transfer(self.x, self.y, self.is_x_set(), true),  // TXY
-            0x98 => self.a = self.transfer(self.y, self.a, self.is_m_set(), true),  // TYA
-            0xBB => self.x = self.transfer(self.y, self.x, self.is_x_set(), true),  // TYX
+            0xAA => self.x = self.transfer(self.a, self.x, self.is_x_set()),  // TAX
+            0xA8 => self.y = self.transfer(self.a, self.y, self.is_x_set()),  // TAY
+            0xBA => self.x = self.transfer(self.s, self.x, self.is_x_set()),  // TSX
+            0x8A => self.a = self.transfer(self.x, self.a, self.is_m_set()),  // TXA
+            0x9A => self.txs(),
+            0x9B => self.y = self.transfer(self.x, self.y, self.is_x_set()),  // TXY
+            0x98 => self.a = self.transfer(self.y, self.a, self.is_m_set()),  // TYA
+            0xBB => self.x = self.transfer(self.y, self.x, self.is_x_set()),  // TYX
 
-            0x5B => self.dp = self.transfer(self.a, 0, false, true),                // TCD
-            0x1B => self.s = self.transfer(self.a, 0x0100, self.pe, false), // TCS
-            0x7B => self.a = self.transfer(self.dp, 0, false, true),                // TDC
-            0x3B => self.a = self.transfer(self.s, 0, false, true),                 // TSC
+            0x5B => self.dp = self.transfer(self.a, 0, false),                // TCD
+            0x1B => self.tcs(),
+            0x7B => self.a = self.transfer(self.dp, 0, false),                // TDC
+            0x3B => self.a = self.transfer(self.s, 0, false),                 // TSC
 
             0xEB => self.xba(),
             0xFB => self.xce(),
@@ -963,12 +963,8 @@ impl<B: MemBus> CPU<B> {
         self.clock_inc(self.internal_op_cycles);
     }
 
-    fn transfer(&mut self, from: u16, to: u16, byte: bool, set_flags: bool) -> u16 {
-        let result = if set_flags {
-            self.set_nz(from, byte)
-        } else {
-            from
-        };
+    fn transfer(&mut self, from: u16, to: u16, byte: bool) -> u16 {
+        let result = self.set_nz(from, byte);
 
         self.clock_inc(self.internal_op_cycles);
 
@@ -977,6 +973,22 @@ impl<B: MemBus> CPU<B> {
         } else {
             result
         }
+    }
+
+    fn txs(&mut self) {
+        self.s = if self.pe {
+            make16!(0x01, lo!(self.x))
+        } else {
+            self.x
+        };
+    }
+
+    fn tcs(&mut self) {
+        self.s = if self.pe {
+            make16!(0x01, lo!(self.a))
+        } else {
+            self.a
+        };
     }
 }
 

@@ -61,8 +61,7 @@ impl PatternMem {
     }
 
     // Set the address, plus height in TILES.
-    pub fn set_addr(&mut self, start_addr: u16, height: u16) {
-        let num_tiles = PATTERN_MEM_WIDTH_TILES * height;
+    pub fn set_addr(&mut self, start_addr: u16, num_tiles: u16) {
         let size = num_tiles * match self.bits_per_pixel {
             BitsPerPixel::_2 => 16,
             BitsPerPixel::_4 => 32,
