@@ -15,7 +15,7 @@ bitflags! {
 
 bitflags! {
     #[derive(Default)]
-    pub struct ObjectSettings: u8 {
+    struct ObjectSettings: u8 {
         const SIZE      = bits![7, 6, 5];
         const SELECT    = bits![4, 3];
         const BASE      = bits![2, 1, 0];
@@ -335,8 +335,19 @@ impl Registers {
         self.bg_mode.contains(BGMode::BG3_PRIORITY)
     }
 
-    pub fn get_object_settings(&self) -> u8 {
-        self.object_settings.bits()
+    pub fn obj_sizes(&self) -> ((i16, u8), (i16, u8)) {
+        let size = (self.object_settings & ObjectSettings::SIZE).bits() >> 5;
+        match size {
+            0 => ((8, 8), (16, 16)),
+            1 => ((8, 8), (32, 32)),
+            2 => ((8, 8), (64, 64)),
+            3 => ((16, 16), (32, 32)),
+            4 => ((16, 16), (64, 64)),
+            5 => ((32, 32), (64, 64)),
+            6 => ((16, 32), (32, 64)),
+            7 => ((16, 32), (32, 32)),
+            _ => unreachable!()
+        }
     }
 
     pub fn obj0_pattern_addr(&self) -> u16 {

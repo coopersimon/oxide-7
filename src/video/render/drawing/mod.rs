@@ -8,7 +8,6 @@ use crate::video::{
     VideoMem,
     ram::{
         Mode7Extend,
-        ObjectSettings,
         Screen,
         SpritePriority,
         WindowRegisters
@@ -583,9 +582,7 @@ impl Renderer {
 impl Renderer {
     // TODO: lots of cleanup here
     fn draw_sprites_to_line(&self, mem: &VideoMem, main_line: &mut [SpritePixel], sub_line: &mut [SpritePixel], y: u8) {
-        // TODO: get this elsewhere..?
-        let obj_regs = ObjectSettings::from_bits_truncate(mem.get_bg_registers().get_object_settings());
-        let (small, large) = sprite_size_lookup((obj_regs & ObjectSettings::SIZE).bits() >> 5);
+        let (small, large) = mem.get_bg_registers().obj_sizes();
 
         let actual_y = y + 1;
 
