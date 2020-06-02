@@ -5,16 +5,12 @@ mod gain;
 use adsr::*;
 use gain::*;
 
-const MAX_GAIN: i16 = (bit!(11, u16) as i16) - 1; // 2047
-const MAX_ATTACK: i16 = 0x7FF;
+const MAX_GAIN: i16 = 0x7E0;
+const MAX_ATTACK: i16 = 0x7E0;
 const GAIN_STEP: i16 = 32;      // Linear increase/decrease gain adjustment per step.
 const BENT_STEP: i16 = 8;     // Bent line slow increase gain adjustment per step.
-//const EXP_STEP: f32 = 255.0 / 256.0;    // Exponential factor decrease gain adjustment per step.
 
 const BENT_MAX: i16 = 1536;        // Point at which bent line switches from fast to slow increase.
-//const EXP_MARGIN: f32 = 0.0001;         // Margin of error for exponential switching.
-
-const FADE_STEP_SIZE: usize = 32;
 
 pub struct Envelope {
     // sample_rate:    f64, 32_000
@@ -50,7 +46,7 @@ impl Envelope {
 
     pub fn off(&mut self) {
         self.count = 0;
-        self.state = EnvelopeState::Fade(FADE_STEP_SIZE);
+        self.state = EnvelopeState::Fade;
     }
 }
 
@@ -68,6 +64,7 @@ impl Iterator for Envelope {
                     self.count = 0;
                 }
                 if self.gain >= MAX_ATTACK {
+                    self.gain = MAX_ATTACK;
                     self.state = EnvelopeState::Decay(self.adsr.decay());
                 }
                 Some(out)
@@ -97,6 +94,7 @@ impl Iterator for Envelope {
                     self.count = 0;
                 }
                 if self.gain <= 0 {
+                    self.gain = 0;
                     self.state = EnvelopeState::Static(0);
                 }
                 Some(out)
@@ -110,6 +108,7 @@ impl Iterator for Envelope {
                     self.count = 0;
                 }
                 if self.gain >= MAX_GAIN {
+                    self.gain = MAX_GAIN;
                     self.state = EnvelopeState::Static(MAX_GAIN);
                 }
                 Some(out)
@@ -126,6 +125,7 @@ impl Iterator for Envelope {
                     self.count = 0;
                 }
                 if self.gain >= MAX_GAIN {
+                    self.gain = MAX_GAIN;
                     self.state = EnvelopeState::Static(MAX_GAIN);
                 }
                 Some(out)
@@ -138,6 +138,7 @@ impl Iterator for Envelope {
                     self.count = 0;
                 }
                 if self.gain <= 0 {
+                    self.gain = 0;
                     self.state = EnvelopeState::Static(0);
                 }
                 Some(out)
@@ -151,19 +152,16 @@ impl Iterator for Envelope {
                     self.count = 0;
                 }
                 if self.gain <= 0 {
+                    self.gain = 0;
                     self.state = EnvelopeState::Static(0);
                 }
                 Some(out)
             },
 
             // Fade
-            EnvelopeState::Fade(fade_len) => {
+            EnvelopeState::Fade => {
                 let out = self.gain;
-                self.count += 1;
-                if self.count >= fade_len { // 32
-                    self.gain -= BENT_STEP;
-                    self.count = 0;
-                }
+                self.gain -= BENT_STEP;
                 if self.gain <= 0 {
                     None
                 } else {
@@ -191,7 +189,7 @@ pub enum EnvelopeState {
     LinearDecrease(usize),    // Decrease of 1/64 per step.
     ExpDecrease(usize),       // Gn = G(n-1) * (255/256) per step, G0 = 1.0.
     // STATIC
-    Fade(usize),    // On key off. Decrease of 1/256 per step.
+    Fade,           // On key off. Decrease of 1/256 per step.
     Static(i16),    // Static gain or sustain. This assoc value is the LEVEL, not the step size.
 }
 

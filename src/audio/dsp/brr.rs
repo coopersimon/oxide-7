@@ -110,7 +110,7 @@ fn sign_extend_4(val: u8) -> i8 {
 
 // Take the lower 15 bits of a value and sign extend to 16 bits.
 fn sign_extend_15(val: i16) -> i16 {
-    let clipped = val & 0x7FFF;
+    let clipped = clamp!(val, -0x4000, 0x3FFF);
     let top_bit = clipped & (bit!(14, u16) as i16);
     clipped | (top_bit << 1)
 }

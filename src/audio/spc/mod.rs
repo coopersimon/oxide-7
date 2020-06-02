@@ -453,19 +453,6 @@ impl<B: SPCMem> SPC<B> {
         self.set_ya(final_result);
     }
 
-    /*fn arithw(&mut self, op1: u32, op2: u32) -> u16 {
-        let result = op1.wrapping_add(op2).wrapping_add(self.carry() as u32);
-        let final_result = lo32!(result);
-
-        self.ps.set(PSFlags::N, test_bit!(result, 15, u32));
-        self.ps.set(PSFlags::V, test_bit!(!(op1 ^ op2) & (op1 ^ result), 15, u32));
-        self.ps.set(PSFlags::H, test_bit!((op1 & 0xFFF) + (op2 & 0xFFF) + (self.carry() as u32), 12, u32));
-        self.ps.set(PSFlags::Z, final_result == 0);
-        self.ps.set(PSFlags::C, test_bit!(result, 16, u32));
-
-        final_result
-    }*/
-
     fn mul(&mut self) {
         let result = (self.a as u16).wrapping_mul(self.y as u16);
 
@@ -486,15 +473,16 @@ impl<B: SPCMem> SPC<B> {
             self.a = 0xFF;
         } else {
             let ya = self.get_ya();
-            let result = lo!(ya.wrapping_div(self.x as u16));
-            let modulo = lo!(ya % (self.x as u16));
+            let result = ya.wrapping_div(self.x as u16);
+            let result8 = lo!(result);
+            let modulo = ya % (self.x as u16);
 
-            self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
-            //self.ps.set(PSFlags::V, test_bit!(!(op1 ^ op2) & (op1 ^ result), 7)); // TODO
-            self.ps.set(PSFlags::Z, result == 0);
+            self.ps.set(PSFlags::N, test_bit!(result8, 7, u8));
+            self.ps.set(PSFlags::V, test_bit!(modulo, 8));
+            self.ps.set(PSFlags::Z, result8 == 0);
 
-            self.y = modulo;
-            self.a = result;
+            self.y = lo!(modulo);
+            self.a = result8;
         }
 
         self.clock_inc(SPC_OP * 11);

@@ -1,11 +1,9 @@
-// Run test files
+// Run blargg's test files
 
 use std::{
     io::{
         BufReader,
         Read,
-        Seek,
-        SeekFrom
     },
     fs::File
 };
@@ -90,10 +88,10 @@ fn run_test(name: &str) {
 #[test]
 fn run_all_tests() {
     let test_names = vec![
-        //"./test/spc/tests/CPU Instructions_Edge arith",
-        //"./test/spc/tests/CPU Instructions_Full DAA DAS",
-        //"./test/spc/tests/CPU Instructions_Full CMP",
-        //"./test/spc/tests/CPU_addw and subw",
+        "./test/spc/tests/CPU Instructions_Edge arith",
+        "./test/spc/tests/CPU Instructions_Full DAA DAS",
+        "./test/spc/tests/CPU Instructions_Full CMP",
+        "./test/spc/tests/CPU_addw and subw",
         "./test/spc/tests/CPU_wrap-around mem",
     ];
 
