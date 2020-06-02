@@ -316,7 +316,7 @@ impl WindowRegisters {
     }
 
     // Combine colours.
-    pub fn calc_colour_math_bg(&self, main: Colour, sub: Colour, bg: BG, x: u8) -> Colour {
+    pub fn calc_colour_math_bg(&self, main: Colour, sub: Option<Colour>, bg: BG, x: u8) -> Colour {
         if self.enable_bg_colour_math(bg) {
             self.do_colour_math(main, sub, x)
         } else {
@@ -325,7 +325,7 @@ impl WindowRegisters {
     }
 
     // Combine colours.
-    pub fn calc_colour_math_obj(&self, main: Colour, sub: Colour, x: u8) -> Colour {
+    pub fn calc_colour_math_obj(&self, main: Colour, sub: Option<Colour>, x: u8) -> Colour {
         if self.enable_obj_colour_math() {
             self.do_colour_math(main, sub, x)
         } else {
@@ -334,7 +334,7 @@ impl WindowRegisters {
     }
 
     // Combine colours.
-    pub fn calc_colour_math_backdrop(&self, main: Colour, sub: Colour, x: u8) -> Colour {
+    pub fn calc_colour_math_backdrop(&self, main: Colour, sub: Option<Colour>, x: u8) -> Colour {
         if self.enable_backdrop_colour_math() {
             self.do_colour_math(main, sub, x)
         } else {
@@ -597,26 +597,31 @@ impl WindowRegisters {
         }
     }
 
-    fn do_colour_math(&self, main: Colour, sub: Colour, x: u8) -> Colour {
-        let main_col = if self.clip_to_black(x) {Colour::zero()} else {main};
+    fn do_colour_math(&self, main: Colour, sub: Option<Colour>, x: u8) -> Colour {
+        let clip_colour = self.clip_to_black(x);
+        let main_col = if clip_colour {Colour::zero()} else {main};
+        let sub_col = sub.unwrap_or(self.get_fixed_colour());
         if self.should_do_colour_math(x) {
             let (r, g, b) = if !self.colour_math_desg.contains(ColourMathDesignation::ADD_SUB) {
-                let i_r = main_col.r as u16 + sub.r as u16;
-                let i_g = main_col.g as u16 + sub.g as u16;
-                let i_b = main_col.b as u16 + sub.b as u16;
+                let i_r = main_col.r as u16 + sub_col.r as u16;
+                let i_g = main_col.g as u16 + sub_col.g as u16;
+                let i_b = main_col.b as u16 + sub_col.b as u16;
                 (i_r, i_g, i_b)
             } else {
-                let i_r = main_col.r as i16 - sub.r as i16;
-                let i_g = main_col.g as i16 - sub.g as i16;
-                let i_b = main_col.b as i16 - sub.b as i16;
+                let i_r = main_col.r as i16 - sub_col.r as i16;
+                let i_g = main_col.g as i16 - sub_col.g as i16;
+                let i_b = main_col.b as i16 - sub_col.b as i16;
                 (
                     if i_r < 0 {0} else {i_r as u16},
                     if i_g < 0 {0} else {i_g as u16},
                     if i_b < 0 {0} else {i_b as u16},
                 )
             };
-    
-            if self.colour_math_desg.contains(ColourMathDesignation::HALF) {
+
+            let sub_backdrop = self.colour_add_select.contains(ColourAddSelect::USE_SUB) && sub.is_none();
+            if self.colour_math_desg.contains(ColourMathDesignation::HALF) &&
+                !clip_colour &&
+                !sub_backdrop {
                 Colour::new(lo!(r >> 1), lo!(g >> 1), lo!(b >> 1))
             } else {
                 Colour::new(
