@@ -1263,14 +1263,22 @@ impl<B: MemBus> CPU<B> {
 
     // Pop a byte from the stack.
     fn stack_pop(&mut self) -> u8 {
-        self.s = self.s.wrapping_add(1);
+        self.s = if self.pe {
+            make16!(0x01, lo!(self.s).wrapping_add(1))
+        } else {
+            self.s.wrapping_add(1)
+        };
         self.read_data(self.s as u32)
     }
 
     // Push a byte to the stack.
     fn stack_push(&mut self, data: u8) {
         self.write_data(self.s as u32, data);
-        self.s = self.s.wrapping_sub(1);
+        self.s = if self.pe {
+            make16!(0x01, lo!(self.s).wrapping_sub(1))
+        } else {
+            self.s.wrapping_sub(1)
+        };
     }
 
     // Read one or two bytes.

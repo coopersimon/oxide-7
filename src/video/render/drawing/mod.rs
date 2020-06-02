@@ -1005,21 +1005,6 @@ impl Renderer {
     }
 }
 
-#[inline]
-fn sprite_size_lookup(size: u8) -> ((i16, u8), (i16, u8)) {
-    match size {
-        0 => ((8, 8), (16, 16)),
-        1 => ((8, 8), (32, 32)),
-        2 => ((8, 8), (64, 64)),
-        3 => ((16, 16), (32, 32)),
-        4 => ((16, 16), (64, 64)),
-        5 => ((32, 32), (64, 64)),
-        6 => ((16, 32), (32, 64)),
-        7 => ((16, 32), (32, 32)),
-        _ => unreachable!()
-    }
-}
-
 // Lookup mode 7 texel using background coords.
 // X and Y must be in range 0-1023.
 // TODO: cache? This could be a lot faster.

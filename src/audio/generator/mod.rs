@@ -53,14 +53,14 @@ pub fn start(rx: Receiver<super::SamplePacket>) {
                 Output { buffer: U16(mut buffer) } => {
                     for (out, frame) in buffer.chunks_exact_mut(2).zip(&mut resampler) {
                         for (elem, f) in out.iter_mut().zip(frame.iter()) {
-                            *elem = (f * u16::max_value() as f32) as u16
+                            *elem = (f * u16::max_value() as f32) as u16;
                         }
                     }
                 },
                 Output { buffer: I16(mut buffer) } => {
                     for (out, frame) in buffer.chunks_exact_mut(2).zip(&mut resampler) {
                         for (elem, f) in out.iter_mut().zip(frame.iter()) {
-                            *elem = (f * i16::max_value() as f32) as i16
+                            *elem = (f * i16::max_value() as f32) as i16;
                         }
                     }
                 },
