@@ -10,8 +10,8 @@ enum SampleSource {
 }
 
 pub struct Voice {
-    left_vol:   u8, // Signed magnitude representation
-    right_vol:  u8,
+    left_vol:   i8,
+    right_vol:  i8,
 
     pitch:      u16,
 
@@ -68,8 +68,8 @@ impl Voice {
     // Uses a 4-bit address to index registers.
     pub fn read(&self, addr: u8) -> u8 {
         match addr & 0xF {
-            0x0 => self.left_vol,
-            0x1 => self.right_vol,
+            0x0 => self.left_vol as u8,
+            0x1 => self.right_vol as u8,
             0x2 => lo!(self.pitch),
             0x3 => hi!(self.pitch),
             0x4 => self.src_num,
@@ -78,14 +78,14 @@ impl Voice {
             0x7 => self.gain,
             0x8 => self.envx,
             0x9 => self.outx,
-            _ => 0,
+            _ => panic!("Reading from DSP {:X}", addr),
         }
     }
 
     pub fn write(&mut self, addr: u8, data: u8) {
         match addr & 0xF {
-            0x0 => self.left_vol = data,
-            0x1 => self.right_vol = data,
+            0x0 => self.left_vol = data as i8,
+            0x1 => self.right_vol = data as i8,
             0x2 => self.pitch = set_lo!(self.pitch, data),
             0x3 => self.pitch = set_hi!(self.pitch, data & 0x3F),
             0x4 => self.src_num = data,
@@ -94,7 +94,7 @@ impl Voice {
             0x7 => self.gain = data,
             0x8 => self.envx = data,
             0x9 => self.outx = data,
-            _ => {},
+            _ => panic!("Writing to DSP {:X}", addr),
         }
     }
 
@@ -143,12 +143,12 @@ impl Voice {
         }
     }
 
-    pub fn read_left_vol(&self) -> f32 {
-        ((self.left_vol as i8) as f32) / 128.0
+    pub fn read_left_vol(&self) -> i32 {
+        self.left_vol as i32
     }
 
-    pub fn read_right_vol(&self) -> f32 {
-        ((self.right_vol as i8) as f32) / 128.0
+    pub fn read_right_vol(&self) -> i32 {
+        self.right_vol as i32
     }
 }
 
@@ -161,7 +161,7 @@ impl Voice {
                 let step = if self.pitch_mod {
                     let factor = ((pitch_mod >> 4) + 0x400) as u32;
                     let step = ((self.pitch as u32) * factor) >> 10;
-                    clamp!(step, 0, 0x3FFF)
+                    step & 0x3FFF
                 } else {
                     self.pitch as u32
                 };
@@ -187,7 +187,7 @@ impl Voice {
         let samples = self.get_samples();
         let mut out = (samples[3] * GAUSS_TABLE[0xFF - gauss_index]) >> 10;
         out += (samples[2] * GAUSS_TABLE[0x1FF - gauss_index]) >> 10;
-        out += (samples[1] * GAUSS_TABLE[0x100 + gauss_index]) >> 10;
+        out += clamp!((samples[1] * GAUSS_TABLE[0x100 + gauss_index]) >> 10, MIN, MAX);
         out += (samples[0] * GAUSS_TABLE[gauss_index]) >> 10;
         (clamp!(out, MIN, MAX) >> 1) as i16
     }

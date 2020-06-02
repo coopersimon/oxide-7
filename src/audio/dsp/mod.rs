@@ -75,13 +75,6 @@ pub struct DSP {
     cycle_count:    usize,
     frames:         Vec<Stereo<f32>>,
 
-    main_vol_left:  f32,
-    main_vol_right: f32,
-    echo_vol_left:  f32,
-    echo_vol_right: f32,
-
-    //echo_feedback_samp: Stereo<i16>,
-    //echo_feedback_vol:  f32,
     echo_buffer_size:   u16,
 
     fir_buffer:         [Stereo<i16>; 8],
@@ -98,13 +91,6 @@ impl DSP {
             cycle_count:    0,
             frames:         Vec::with_capacity(SAMPLE_BATCH_SIZE),
 
-            main_vol_left:  0.0,
-            main_vol_right: 0.0,
-            echo_vol_left:  0.0,
-            echo_vol_right: 0.0,
-
-            //echo_feedback_samp: Stereo::equilibrium(),
-            //echo_feedback_vol:  0.0,
             echo_buffer_size:   0,
 
             fir_buffer:         [Stereo::equilibrium(); 8],
@@ -198,39 +184,46 @@ impl DSP {
 impl DSP {
     // Generate a single left-right pair of audio samples.
     fn generate_frame(&mut self, ram: &mut RAM) {
-        let mut main_left = 0.0;    // Main signal
-        let mut main_right = 0.0;
-        let mut prev = 0;           // Previous channel's sample for pitch modulation
-        let mut echo_left = 0.0;    // Echo signal
-        let mut echo_right = 0.0;
+        const MIN: i32 = std::i16::MIN as i32;
+        const MAX: i32 = std::i16::MAX as i32;
+
+        let mut main_left = 0;  // Main signal
+        let mut main_right = 0;
+        let mut prev = 0;       // Previous channel's sample for pitch modulation
+        let mut echo_left = 0;  // Echo signal
+        let mut echo_right = 0;
 
         for voice in &mut self.voices {
             if let Some(v) = voice.generate(prev) {
                 prev = v;
 
-                let v_samp = (v as f32) / 32_768.0;
-                let voice_left = v_samp * voice.read_left_vol();
-                let voice_right = v_samp * voice.read_right_vol();
-                main_left += voice_left / 8.0;
-                main_right += voice_right / 8.0;
+                let v_samp = v as i32;
+                let voice_left = clamp!((v_samp * voice.read_left_vol()) >> 6, MIN, MAX);
+                let voice_right = clamp!((v_samp * voice.read_right_vol()) >> 6, MIN, MAX);
+                main_left += voice_left;
+                main_right += voice_right;
 
                 if voice.is_echo_enabled() {
-                    echo_left += voice_left / 8.0;
-                    echo_right += voice_right / 8.0;
+                    echo_left += voice_left;
+                    echo_right += voice_right;
                 }
             } else {
                 prev = 0;
             }
         }
 
-        let echo = self.generate_echo(ram, echo_left, echo_right);
+        let echo = self.generate_echo(ram, echo_left as i16, echo_right as i16);
 
         let frame = if self.is_mute() {
             Stereo::equilibrium()
         } else {
-            let left = (main_left * self.main_vol_left) + (echo[0] * self.echo_vol_left);
-            let right = (main_right * self.main_vol_right) + (echo[1] * self.echo_vol_right);
-            [left, right]
+            let mut left = clamp!((main_left * (self.regs.main_vol_left as i32)) >> 7, MIN, MAX);
+            let mut right = clamp!((main_right * (self.regs.main_vol_right as i32)) >> 7, MIN, MAX);
+            left += clamp!(((echo[0] as i32) * (self.regs.echo_vol_left as i32)) >> 7, MIN, MAX);
+            right += clamp!(((echo[1] as i32) * (self.regs.echo_vol_right as i32)) >> 7, MIN, MAX);
+            left = clamp!(left, MIN, MAX);
+            right = clamp!(right, MIN, MAX);
+            [(left as f32) / 32_768.0, (right as f32) / 32_768.0]
         };
 
         self.frames.push(frame);
@@ -238,7 +231,7 @@ impl DSP {
 
     // Generate a single echo frame based on the main output.
     // TODO: use i16 throughout here.
-    fn generate_echo(&mut self, ram: &mut RAM, main_left: f32, main_right: f32) -> Stereo<f32> {
+    fn generate_echo(&mut self, ram: &mut RAM, main_left: i16, main_right: i16) -> Stereo<i16> {
         let echo_buffer_address = make16!(self.regs.echo_offset, 0).wrapping_add(self.regs.echo_internal_counter);
         let buffer_samples = (0..4).map(|i| ram.read(echo_buffer_address.wrapping_add(i) as u32)).collect::<Box<[_]>>();
         let buffer_sample_left = make16!(buffer_samples[1], buffer_samples[0]) as i16;
@@ -252,12 +245,8 @@ impl DSP {
             let feedback_left = (((echo_val[0] as i32) * feedback_vol) >> 7) as i16;
             let feedback_right = (((echo_val[1] as i32) * feedback_vol) >> 7) as i16;
 
-            // Convert back to i16.
-            let main_left_in = (main_left * 32_768.0) as i16;
-            let main_right_in = (main_right * 32_768.0) as i16;
-
-            let buffer_input_left = main_left_in + feedback_left;
-            let buffer_input_right = main_right_in + feedback_right;
+            let buffer_input_left = main_left + feedback_left;
+            let buffer_input_right = main_right + feedback_right;
 
             ram.write(echo_buffer_address as u32, lo!(buffer_input_left));
             ram.write(echo_buffer_address.wrapping_add(1) as u32, hi!(buffer_input_left));
@@ -270,7 +259,7 @@ impl DSP {
             self.regs.echo_internal_counter = 0;
         }
 
-        [(echo_val[0] as f32) / 32_768.0, (echo_val[1] as f32) / 32_768.0]
+        echo_val
     }
 
     fn calculate_fir(&mut self, new_sample: Stereo<i16>) -> Stereo<i16> {
@@ -372,22 +361,18 @@ impl DSP {
 
     fn set_main_vol_left(&mut self, val: u8) {
         self.regs.main_vol_left = val;
-        self.main_vol_left = ((val as i8) as f32) / 128.0;
     }
 
     fn set_main_vol_right(&mut self, val: u8) {
         self.regs.main_vol_right = val;
-        self.main_vol_right = ((val as i8) as f32) / 128.0;
     }
 
     fn set_echo_vol_left(&mut self, val: u8) {
         self.regs.echo_vol_left = val;
-        self.echo_vol_left = ((val as i8) as f32) / 128.0;
     }
 
     fn set_echo_vol_right(&mut self, val: u8) {
         self.regs.echo_vol_right = val;
-        self.echo_vol_right = ((val as i8) as f32) / 128.0;
     }
 
     fn set_echo_enable(&mut self, val: u8) {
