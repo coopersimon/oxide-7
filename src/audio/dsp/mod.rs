@@ -82,6 +82,7 @@ pub struct DSP {
 
     noise_level:        i16,
     noise_step:         Option<usize>,
+    noise_count:        usize,
 
     regs:           DSPRegisters,
     voices:         [Voice; 8],
@@ -101,6 +102,7 @@ impl DSP {
 
             noise_level:        -0x4000,
             noise_step:         None,
+            noise_count:        0,
 
             regs:           DSPRegisters::default(),
             voices:         [
@@ -294,9 +296,14 @@ impl DSP {
 
     fn step_noise(&mut self) {
         if let Some(step) = self.noise_step {
-            let new_top_bit = (self.noise_level ^ (self.noise_level >> 1)) & 1;
-            let new_level = ((self.noise_level >> 1) & 0x3FFF) | (new_top_bit << 14) | (new_top_bit << 15);
-            self.noise_level = new_level;
+            self.noise_count += 1;
+            if self.noise_count >= step {
+                self.noise_count = 0;
+
+                let new_top_bit = (self.noise_level ^ (self.noise_level >> 1)) & 1;
+                let new_level = ((self.noise_level >> 1) & 0x3FFF) | (new_top_bit << 14) | (new_top_bit << 15);
+                self.noise_level = new_level;
+            }
         }
     }
 }
