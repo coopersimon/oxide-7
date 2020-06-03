@@ -80,6 +80,9 @@ pub struct DSP {
     fir_buffer:         [Stereo<i16>; 8],
     fir_buffer_index:   usize,
 
+    noise_level:        i16,
+    noise_step:         Option<usize>,
+
     regs:           DSPRegisters,
     voices:         [Voice; 8],
 }
@@ -95,6 +98,9 @@ impl DSP {
 
             fir_buffer:         [Stereo::equilibrium(); 8],
             fir_buffer_index:   0,
+
+            noise_level:        -0x4000,
+            noise_step:         None,
 
             regs:           DSPRegisters::default(),
             voices:         [
@@ -194,7 +200,7 @@ impl DSP {
         let mut echo_right = 0;
 
         for voice in &mut self.voices {
-            if let Some(v) = voice.generate(prev) {
+            if let Some(v) = voice.generate(prev, self.noise_level) {
                 prev = v;
 
                 let v_samp = v as i32;
@@ -211,6 +217,8 @@ impl DSP {
                 prev = 0;
             }
         }
+
+        self.step_noise();
 
         let echo = self.generate_echo(ram, echo_left as i16, echo_right as i16);
 
@@ -230,7 +238,6 @@ impl DSP {
     }
 
     // Generate a single echo frame based on the main output.
-    // TODO: use i16 throughout here.
     fn generate_echo(&mut self, ram: &mut RAM, main_left: i16, main_right: i16) -> Stereo<i16> {
         let echo_buffer_address = make16!(self.regs.echo_offset, 0).wrapping_add(self.regs.echo_internal_counter);
         let buffer_samples = (0..4).map(|i| ram.read(echo_buffer_address.wrapping_add(i) as u32)).collect::<Box<[_]>>();
@@ -283,6 +290,14 @@ impl DSP {
         self.fir_buffer_index = (self.fir_buffer_index + 1) & 7;
 
         [left_clamped, right_clamped]
+    }
+
+    fn step_noise(&mut self) {
+        if let Some(step) = self.noise_step {
+            let new_top_bit = (self.noise_level ^ (self.noise_level >> 1)) & 1;
+            let new_level = ((self.noise_level >> 1) & 0x3FFF) | (new_top_bit << 14) | (new_top_bit << 15);
+            self.noise_level = new_level;
+        }
     }
 }
 
@@ -339,6 +354,7 @@ impl DSP {
         if self.regs.flags.contains(DSPFlags::SOFT_RESET) {
             self.set_key_off(0xFF);
         }
+        self.noise_step = envelope::step_size((self.regs.flags & DSPFlags::NOISE_FREQ).bits());
     }
 
     fn is_mute(&self) -> bool {

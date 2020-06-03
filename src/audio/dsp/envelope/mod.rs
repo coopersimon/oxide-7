@@ -2,6 +2,8 @@
 mod adsr;
 mod gain;
 
+pub use gain::step_size;
+
 use adsr::*;
 use gain::*;
 

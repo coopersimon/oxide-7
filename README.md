@@ -25,7 +25,7 @@ A SNES emulator written in Rust.
 * Kirby's Super Star (Unrecognised ROM config (SA-1))
 * Donkey Kong Country (looks good. audio sounds great now.)
 * Donkey Kong Country 2 (same as above.)
-* Chrono Trigger (works pretty well. Audio sounds a lot better - birds in opening are a bit bugged (also lacking white noise). Audio has some artifacts and seems to non-deterministically cut out / lose voices from time to time.)
+* Chrono Trigger (works pretty well. Audio sounds a lot better - birds in opening are a bit bugged. Audio has some artifacts and seems to non-deterministically cut out / lose voices from time to time.)
 * Pilotwings (Title looks good, menu looks a bit broken. Gameplay doesn't work however looks mostly OK. no crashable offences.)
 * Super Baseball 2020 (looks and sounds good)
 * Dragon Quest 3 (now works. Graphics look good. Audio is mostly good.)
@@ -69,10 +69,9 @@ A SNES emulator written in Rust.
 
 ##### Audio
 - Echo: test
-- Noise
 - Pitch modulation: test
-- Ensure sample correctness!
 - Fix the slight lag on audio (resampler delay?)
+- SPC timing is still off - most noticeable in Chrono Trigger but some games have occasional random notes.
 
 ##### System
 - Cleanup BCD mode

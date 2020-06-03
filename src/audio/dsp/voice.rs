@@ -154,22 +154,18 @@ impl Voice {
 
 // Generator
 impl Voice {
-    pub fn generate(&mut self, pitch_mod: i16) -> Option<i16> {
-        if !self.noise {
-            if let Some(s) = self.current_s {
-                let sample = self.generate_sample();
-                let step = if self.pitch_mod {
-                    let factor = ((pitch_mod >> 4) + 0x400) as u32;
-                    let step = ((self.pitch as u32) * factor) >> 10;
-                    step & 0x3FFF
-                } else {
-                    self.pitch as u32
-                };
-                self.freq_step(s, step);
-                self.apply_envelope(sample)
+    pub fn generate(&mut self, pitch_mod: i16, noise: i16) -> Option<i16> {
+        if let Some(s) = self.current_s {
+            let sample = self.generate_sample();
+            let step = if self.pitch_mod {
+                let factor = ((pitch_mod >> 4) + 0x400) as u32;
+                let step = ((self.pitch as u32) * factor) >> 10;
+                step & 0x3FFF
             } else {
-                None
-            }
+                self.pitch as u32
+            };
+            self.freq_step(s, step);
+            self.apply_envelope(if self.noise {noise} else {sample})
         } else {
             None
         }
