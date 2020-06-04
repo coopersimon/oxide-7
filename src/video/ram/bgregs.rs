@@ -15,7 +15,7 @@ bitflags! {
 
 bitflags! {
     #[derive(Default)]
-    pub struct ObjectSettings: u8 {
+    struct ObjectSettings: u8 {
         const SIZE      = bits![7, 6, 5];
         const SELECT    = bits![4, 3];
         const BASE      = bits![2, 1, 0];
@@ -335,8 +335,19 @@ impl Registers {
         self.bg_mode.contains(BGMode::BG3_PRIORITY)
     }
 
-    pub fn get_object_settings(&self) -> u8 {
-        self.object_settings.bits()
+    pub fn obj_sizes(&self) -> ((i16, u8), (i16, u8)) {
+        let size = (self.object_settings & ObjectSettings::SIZE).bits() >> 5;
+        match size {
+            0 => ((8, 8), (16, 16)),
+            1 => ((8, 8), (32, 32)),
+            2 => ((8, 8), (64, 64)),
+            3 => ((16, 16), (32, 32)),
+            4 => ((16, 16), (64, 64)),
+            5 => ((32, 32), (64, 64)),
+            6 => ((16, 32), (32, 64)),
+            7 => ((16, 32), (32, 32)),
+            _ => unreachable!()
+        }
     }
 
     pub fn obj0_pattern_addr(&self) -> u16 {
@@ -532,27 +543,27 @@ impl Registers {
         regions
     }
 
-    pub fn get_pattern_table_height(&self, bg: BG) -> u16 {
-        const TILE_SIZE_2BPP: u16 = 16;
-        const TILE_SIZE_4BPP: u16 = 32;
-        const TILE_SIZE_8BPP: u16 = 64;
+    // Size in tiles
+    pub fn get_pattern_table_size(&self, bg: BG) -> u16 {
+        const TILE_SIZE_2BPP: u32 = 16;
+        const TILE_SIZE_4BPP: u32 = 32;
+        const TILE_SIZE_8BPP: u32 = 64;
 
         let max_space = 0x10000 - (self.bg_pattern_addr(bg) as u32);
-        let rows = (max_space / 16) as u16;
-        match bg {
+        (match bg {
             BG::_1 => match self.get_mode() {
-                0 => std::cmp::min(64, rows / TILE_SIZE_2BPP),
-                1 | 2 | 5 | 6 => std::cmp::min(64, rows / TILE_SIZE_4BPP),
-                3 | 4 => std::cmp::min(64, rows / TILE_SIZE_8BPP),
+                0 => std::cmp::min(1024, max_space / TILE_SIZE_2BPP),
+                1 | 2 | 5 | 6 => std::cmp::min(1024, max_space / TILE_SIZE_4BPP),
+                3 | 4 => std::cmp::min(1024, max_space / TILE_SIZE_8BPP),
                 _ => 0
             },
             BG::_2 => match self.get_mode() {
-                0 | 4 | 5 => std::cmp::min(64, rows / TILE_SIZE_2BPP),
-                _ => std::cmp::min(64, rows / TILE_SIZE_4BPP),
+                0 | 4 | 5 => std::cmp::min(1024, max_space / TILE_SIZE_2BPP),
+                _ => std::cmp::min(1024, max_space / TILE_SIZE_4BPP),
             },
-            BG::_3 => std::cmp::min(64, rows / TILE_SIZE_2BPP),
-            BG::_4 => std::cmp::min(64, rows / TILE_SIZE_2BPP),
-        }
+            BG::_3 => std::cmp::min(1024, max_space / TILE_SIZE_2BPP),
+            BG::_4 => std::cmp::min(1024, max_space / TILE_SIZE_2BPP),
+        }) as u16
     }
 }
 

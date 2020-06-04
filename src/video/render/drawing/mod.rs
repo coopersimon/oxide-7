@@ -8,7 +8,6 @@ use crate::video::{
     VideoMem,
     ram::{
         Mode7Extend,
-        ObjectSettings,
         Screen,
         SpritePriority,
         WindowRegisters
@@ -92,8 +91,8 @@ impl Renderer {
         let regs = mem.get_bg_registers();
         for (bg_pattern, bg) in self.bg_pattern_mem.iter_mut().take(num_bgs).zip(BG::all().iter().cloned()) {
             if bg_pattern.get_start_addr() != regs.bg_pattern_addr(bg) {
-                let height = regs.get_pattern_table_height(bg);
-                bg_pattern.set_addr(regs.bg_pattern_addr(bg), height);
+                let num_tiles = regs.get_pattern_table_size(bg);
+                bg_pattern.set_addr(regs.bg_pattern_addr(bg), num_tiles);
                 recreate_regions = true;
             }
         }
@@ -250,9 +249,9 @@ impl Renderer {
     }
 
     #[inline]
-    fn write_pixel(&self, window_regs: &WindowRegisters, out: &mut [u8], main: Pixel, sub: Colour, brightness: u8, x: u8) {
+    fn write_pixel(&self, window_regs: &WindowRegisters, out: &mut [u8], main: Pixel, sub: Option<Colour>, brightness: u8, x: u8) {
         if window_regs.use_pseudo_hires() {
-            self.write_hires_pixel(out, main, sub, brightness);
+            self.write_hires_pixel(out, main, sub.unwrap_or(window_regs.get_fixed_colour()), brightness);
         } else {
             let colour = match main {
                 Pixel::BG1(c) => window_regs.calc_colour_math_bg(c, sub, BG::_1, x),
@@ -314,9 +313,8 @@ impl Renderer {
                 let bg3_pix = sub_bg3_pixels[x];
                 let bg4_pix = main_bg4_pixels[x];
                 self.eval_mode_0(sprite_pix, bg1_pix, bg2_pix, bg3_pix, bg4_pix).any()
-                    .unwrap_or(window_regs.get_fixed_colour())
             } else {
-                window_regs.get_fixed_colour()
+                None
             };
 
             self.write_pixel(window_regs, out, main, sub, brightness, x as u8);
@@ -355,9 +353,8 @@ impl Renderer {
                 let bg2_pix = sub_bg2_pixels[x];
                 let bg3_pix = sub_bg3_pixels[x];
                 self.eval_mode_1(mem.get_bg_registers().get_bg3_priority(), sprite_pix, bg1_pix, bg2_pix, bg3_pix).any()
-                    .unwrap_or(window_regs.get_fixed_colour())
             } else {
-                window_regs.get_fixed_colour()
+                None
             };
 
             self.write_pixel(window_regs, out, main, sub, brightness, x as u8);
@@ -391,9 +388,8 @@ impl Renderer {
                 let bg1_pix = sub_bg1_pixels[x];
                 let bg2_pix = sub_bg2_pixels[x];
                 self.eval_mode_2(sprite_pix, bg1_pix, bg2_pix).any()
-                    .unwrap_or(window_regs.get_fixed_colour())
             } else {
-                window_regs.get_fixed_colour()
+                None
             };
 
             self.write_pixel(window_regs, out, main, sub, brightness, x as u8);
@@ -427,9 +423,8 @@ impl Renderer {
                 let bg1_pix = sub_bg1_pixels[x];
                 let bg2_pix = sub_bg2_pixels[x];
                 self.eval_mode_3(window_regs.use_direct_colour(), sprite_pix, bg1_pix, bg2_pix).any()
-                    .unwrap_or(window_regs.get_fixed_colour())
             } else {
-                window_regs.get_fixed_colour()
+                None
             };
 
             self.write_pixel(window_regs, out, main, sub, brightness, x as u8);
@@ -463,9 +458,8 @@ impl Renderer {
                 let bg1_pix = sub_bg1_pixels[x];
                 let bg2_pix = sub_bg2_pixels[x];
                 self.eval_mode_4(window_regs.use_direct_colour(), sprite_pix, bg1_pix, bg2_pix).any()
-                    .unwrap_or(window_regs.get_fixed_colour())
             } else {
-                window_regs.get_fixed_colour()
+                None
             };
 
             self.write_pixel(window_regs, out, main, sub, brightness, x as u8);
@@ -569,9 +563,8 @@ impl Renderer {
                 let bg1_pix = sub_bg1_pixels[x];
                 let bg2_pix = sub_bg2_pixels[x];
                 self.eval_mode_7(window_regs.use_direct_colour(), ext_bg, sprite_pix, bg1_pix, bg2_pix).any()
-                    .unwrap_or(window_regs.get_fixed_colour())
             } else {
-                window_regs.get_fixed_colour()
+                None
             };
 
             self.write_pixel(window_regs, out, main, sub, brightness, x as u8);
@@ -583,9 +576,7 @@ impl Renderer {
 impl Renderer {
     // TODO: lots of cleanup here
     fn draw_sprites_to_line(&self, mem: &VideoMem, main_line: &mut [SpritePixel], sub_line: &mut [SpritePixel], y: u8) {
-        // TODO: get this elsewhere..?
-        let obj_regs = ObjectSettings::from_bits_truncate(mem.get_bg_registers().get_object_settings());
-        let (small, large) = sprite_size_lookup((obj_regs & ObjectSettings::SIZE).bits() >> 5);
+        let (small, large) = mem.get_bg_registers().obj_sizes();
 
         let actual_y = y + 1;
 
@@ -1005,21 +996,6 @@ impl Renderer {
         } else {
             Pixel::None
         }
-    }
-}
-
-#[inline]
-fn sprite_size_lookup(size: u8) -> ((i16, u8), (i16, u8)) {
-    match size {
-        0 => ((8, 8), (16, 16)),
-        1 => ((8, 8), (32, 32)),
-        2 => ((8, 8), (64, 64)),
-        3 => ((16, 16), (32, 32)),
-        4 => ((16, 16), (64, 64)),
-        5 => ((32, 32), (64, 64)),
-        6 => ((16, 32), (32, 64)),
-        7 => ((16, 32), (32, 32)),
-        _ => unreachable!()
     }
 }
 

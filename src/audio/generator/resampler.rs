@@ -24,6 +24,7 @@ impl Iterator for Resampler {
     type Item = Stereo<f32>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        while self.converter.is_exhausted() {}
         Some(self.converter.next())
     }
 }

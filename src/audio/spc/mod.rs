@@ -1,10 +1,12 @@
 // SPC-700 Audio processor
 mod types;
+#[cfg(test)]
+mod tests;
 
-use super::mem::SPCBus;
+use super::mem::SPCMem;
 use types::*;
 
-pub struct SPC {
+pub struct SPC<B: SPCMem> {
     a:      u8,         // Accumulator
     x:      u8,         // X-Index
     y:      u8,         // Y-Index
@@ -13,13 +15,13 @@ pub struct SPC {
 
     ps:     PSFlags,    // Program Status Word
 
-    bus:    SPCBus,     // Memory
+    bus:    B,          // Memory
 
     cycle_count:    usize,  // Temp. cycle count for an instruction
 }
 
-impl SPC {
-    pub fn new(bus: SPCBus) -> Self {
+impl<B: SPCMem> SPC<B> {
+    pub fn new(bus: B) -> Self {
         SPC {
             a:      0,
             x:      0,
@@ -45,7 +47,7 @@ impl SPC {
 }
 
 // Internal
-impl SPC {
+impl<B: SPCMem> SPC<B> {
     fn execute_instruction(&mut self) {
         use DataMode::*;
         use AddrMode::*;
@@ -379,7 +381,7 @@ impl SPC {
 }
 
 // Instructions: Arithmetic
-impl SPC {
+impl<B: SPCMem> SPC<B> {
     // op1 = op1 + op2 + C
     fn adc(&mut self, op1_mode: DataMode, op2_mode: DataMode) {
         let op2 = self.read_op(op2_mode);
@@ -441,28 +443,15 @@ impl SPC {
         let final_result = lo32!(result);
 
         self.ps.set(PSFlags::N, test_bit!(result, 15, u32));
-        self.ps.set(PSFlags::V, test_bit!(!(ya ^ op2) & (ya ^ result), 15, u32));
-        self.ps.set(PSFlags::H, test_bit!((ya & 0xFFF) + (op2 & 0xFFF), 12, u32));
+        self.ps.set(PSFlags::V, test_bit!((ya ^ op2) & (ya ^ result), 15, u32));
+        self.ps.set(PSFlags::H, !test_bit!((ya & 0xFFF).wrapping_sub(op2 & 0xFFF), 12, u32));
         self.ps.set(PSFlags::Z, final_result == 0);
-        self.ps.set(PSFlags::C, test_bit!(result, 16, u32));
+        self.ps.set(PSFlags::C, !test_bit!(result, 16, u32));
 
         self.clock_inc(SPC_OP);
 
         self.set_ya(final_result);
     }
-
-    /*fn arithw(&mut self, op1: u32, op2: u32) -> u16 {
-        let result = op1.wrapping_add(op2).wrapping_add(self.carry() as u32);
-        let final_result = lo32!(result);
-
-        self.ps.set(PSFlags::N, test_bit!(result, 15, u32));
-        self.ps.set(PSFlags::V, test_bit!(!(op1 ^ op2) & (op1 ^ result), 15, u32));
-        self.ps.set(PSFlags::H, test_bit!((op1 & 0xFFF) + (op2 & 0xFFF) + (self.carry() as u32), 12, u32));
-        self.ps.set(PSFlags::Z, final_result == 0);
-        self.ps.set(PSFlags::C, test_bit!(result, 16, u32));
-
-        final_result
-    }*/
 
     fn mul(&mut self) {
         let result = (self.a as u16).wrapping_mul(self.y as u16);
@@ -484,15 +473,16 @@ impl SPC {
             self.a = 0xFF;
         } else {
             let ya = self.get_ya();
-            let result = lo!(ya.wrapping_div(self.x as u16));
-            let modulo = lo!(ya % (self.x as u16));
+            let result = ya.wrapping_div(self.x as u16);
+            let result8 = lo!(result);
+            let modulo = ya % (self.x as u16);
 
-            self.ps.set(PSFlags::N, test_bit!(result, 7, u8));
-            //self.ps.set(PSFlags::V, test_bit!(!(op1 ^ op2) & (op1 ^ result), 7)); // TODO
-            self.ps.set(PSFlags::Z, result == 0);
+            self.ps.set(PSFlags::N, test_bit!(result8, 7, u8));
+            self.ps.set(PSFlags::V, test_bit!(modulo, 8));
+            self.ps.set(PSFlags::Z, result8 == 0);
 
-            self.y = modulo;
-            self.a = result;
+            self.y = lo!(modulo);
+            self.a = result8;
         }
 
         self.clock_inc(SPC_OP * 11);
@@ -552,7 +542,7 @@ impl SPC {
 }
 
 // Instructions: bitwise
-impl SPC {
+impl<B: SPCMem> SPC<B> {
     fn and(&mut self, op1_mode: DataMode, op2_mode: DataMode) {
         let op2 = self.read_op(op2_mode);
         let (op1, write_mode) = self.read_op_and_addr(op1_mode);
@@ -681,7 +671,7 @@ impl SPC {
 }
 
 // Instructions: Flags
-impl SPC {
+impl<B: SPCMem> SPC<B> {
     // C = C & m.b / C = C & !m.b
     fn and1(&mut self, not: bool) {
         let (addr, bit) = self.absolute_bit();
@@ -784,7 +774,7 @@ impl SPC {
         let data = self.read_data(addr);
 
         let result = data | self.a;
-        let flag_check = self.a - data;
+        let flag_check = self.a.wrapping_sub(data);
 
         self.ps.set(PSFlags::N, test_bit!(flag_check, 7, u8));
         self.ps.set(PSFlags::Z, flag_check == 0);
@@ -800,7 +790,7 @@ impl SPC {
         let data = self.read_data(addr);
 
         let result = data & !self.a;
-        let flag_check = self.a - data;
+        let flag_check = self.a.wrapping_sub(data);
 
         self.ps.set(PSFlags::N, test_bit!(flag_check, 7, u8));
         self.ps.set(PSFlags::Z, flag_check == 0);
@@ -812,7 +802,7 @@ impl SPC {
 }
 
 // Instructions: moving data
-impl SPC {
+impl<B: SPCMem> SPC<B> {
     // Load into register, and set flags.
     fn mov_set_flags(&mut self, dst_mode: DataMode, src_mode: DataMode) {
         let data = self.read_op(src_mode);
@@ -890,7 +880,7 @@ impl SPC {
 }
 
 // Instructions: branching and jumping
-impl SPC {
+impl<B: SPCMem> SPC<B> {
     // Branch using relative offset.
     fn branch(&mut self, rel: i16) {
         self.pc = self.pc.wrapping_add(rel as u16);
@@ -984,7 +974,7 @@ impl SPC {
 }
 
 // Instructions: calling and returning
-impl SPC {
+impl<B: SPCMem> SPC<B> {
     // Call absolute.
     fn call(&mut self) {
         let new_pc = self.absolute();
@@ -1048,14 +1038,14 @@ impl SPC {
 }
 
 // Instructions: misc
-impl SPC {
+impl<B: SPCMem> SPC<B> {
     fn daa(&mut self) {
         if (self.a > 0x99) || self.ps.contains(PSFlags::C) {
-            self.a += 0x60;
+            self.a = self.a.wrapping_add(0x60);
             self.ps.insert(PSFlags::C);
         }
         if ((self.a & 0xF) > 0x9) || self.ps.contains(PSFlags::H) {
-            self.a += 0x6;
+            self.a = self.a.wrapping_add(0x6);
         }
         self.ps.set(PSFlags::N, test_bit!(self.a, 7, u8));
         self.ps.set(PSFlags::Z, self.a == 0);
@@ -1064,12 +1054,12 @@ impl SPC {
     }
 
     fn das(&mut self) {
-        if self.ps.contains(PSFlags::C) {
-            self.a -= 0x60;
-            //self.ps.insert(PSFlags::C);
+        if (self.a > 0x99) || !self.ps.contains(PSFlags::C) {
+            self.a = self.a.wrapping_sub(0x60);
+            self.ps.remove(PSFlags::C);
         }
-        if self.ps.contains(PSFlags::H) {
-            self.a -= 0x6;
+        if ((self.a & 0xF) > 0x9) || !self.ps.contains(PSFlags::H) {
+            self.a = self.a.wrapping_sub(0x6);
         }
         self.ps.set(PSFlags::N, test_bit!(self.a, 7, u8));
         self.ps.set(PSFlags::Z, self.a == 0);
@@ -1118,12 +1108,12 @@ impl SPC {
 
         self.pc = make16!(pc_hi, pc_lo);
 
-        panic!("BRK should not be called!");
+        //panic!("BRK should not be called!");
     }
 }
 
 // Misc helper functions
-impl SPC {
+impl<B: SPCMem> SPC<B> {
     #[inline]
     fn carry(&self) -> u16 {
         (self.ps & PSFlags::C).bits() as u16
@@ -1147,7 +1137,7 @@ impl SPC {
 }
 
 // Internal data functions
-impl SPC {
+impl<B: SPCMem> SPC<B> {
     // Read data from bus.
     fn read_data(&mut self, addr: u16) -> u8 {
         let data = self.bus.read(addr);
@@ -1262,7 +1252,7 @@ impl SPC {
 }
 
 // Addressing modes
-impl SPC {
+impl<B: SPCMem> SPC<B> {
     // Make 16-bit address using direct page as high byte
     fn direct_page(&self, addr_lo: u8) -> u16 {
         let addr_hi = if self.ps.contains(PSFlags::P) {1} else {0};
@@ -1283,7 +1273,7 @@ impl SPC {
 
     // (X)+
     fn x_indirect_inc(&mut self) -> u16 {
-        let addr = self.direct_page(self.x);
+        let addr = self.x_indirect();
         self.x = self.x.wrapping_add(1);
         self.clock_inc(SPC_OP);
         addr
@@ -1372,5 +1362,18 @@ impl SPC {
         let bit = (abs >> 13) as u8;
 
         (addr, bit)
+    }
+}
+
+// Test
+
+#[cfg(test)]
+impl SPC<tests::TestSPCMem> {
+    pub fn set_pc(&mut self, val: u16) {
+        self.pc = val;
+    }
+
+    pub fn read_mem(&mut self, addr: u16) -> u8 {
+        self.bus.read(addr)
     }
 }

@@ -40,6 +40,12 @@ const IPL_ROM: [u8; 64] = [
    0x5D, 0xD0, 0xDB, 0x1F, 0x00, 0x00, 0xC0, 0xFF
 ];
 
+pub trait SPCMem {
+    fn read(&mut self, addr: u16) -> u8;
+    fn write(&mut self, addr: u16, data: u8);
+    fn clock(&mut self, cycles: usize);
+}
+
 pub struct SPCBus {
     ram:                RAM,
 
@@ -80,8 +86,10 @@ impl SPCBus {
             timer_2:        Timer::new(16),
         }
     }
+}
 
-    pub fn read(&mut self, addr: u16) -> u8 {
+impl SPCMem for SPCBus {
+    fn read(&mut self, addr: u16) -> u8 {
         match addr {
             0xF1 => 0,
 
@@ -121,7 +129,7 @@ impl SPCBus {
         }
     }
 
-    pub fn write(&mut self, addr: u16, data: u8) {
+    fn write(&mut self, addr: u16, data: u8) {
         match addr {
             0xF1 => self.set_control(data),
 
@@ -155,7 +163,7 @@ impl SPCBus {
         }
     }
 
-    pub fn clock(&mut self, cycles: usize) {
+    fn clock(&mut self, cycles: usize) {
         if self.control.contains(SPCControl::ENABLE_TIMER_0) {
             self.timer_0.clock(cycles);
         }
