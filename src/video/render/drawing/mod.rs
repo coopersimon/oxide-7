@@ -695,8 +695,8 @@ impl Renderer {
         window_regs.bg_window(BG::_1, Screen::Sub, &mut sub_window);
 
         for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
-            let x_in = if regs.mode_7_flip_x() {255 - x} else {x};
-            let y_in = if regs.mode_7_flip_y() {224 - actual_y} else {actual_y};
+            let x_in = if regs.mode_7_flip_x() {x ^ 0xFF} else {x};
+            let y_in = if regs.mode_7_flip_y() {actual_y ^ 0xFF} else {actual_y};
             let (bg_x, bg_y) = regs.calc_mode_7(x_in as i16, y_in as i16);
             let lookup_x = if bg_x > 1023 {
                 match regs.mode_7_extend() {

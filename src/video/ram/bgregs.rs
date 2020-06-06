@@ -461,8 +461,8 @@ impl Registers {
     // Provides a background pixel location as output.
     // Note that the output pixel might fall outside the range [0-1023].
     pub fn calc_mode_7(&self, x: i16, y: i16) -> (u16, u16) {
-        let x_0 = I8F8::from_bits(self.mode7_centre_x as i16);
-        let y_0 = I8F8::from_bits(self.mode7_centre_y as i16);
+        let x_0 = I8F8::from_bits(sign_extend(self.mode7_centre_x) as i16);
+        let y_0 = I8F8::from_bits(sign_extend(self.mode7_centre_y) as i16);
         let x_i = I8F8::from_bits(x) + I8F8::from_bits(self.get_mode7_scroll_x()) - x_0;
         let y_i = I8F8::from_bits(y) + I8F8::from_bits(self.get_mode7_scroll_y()) - y_0;
         let x_out = (I8F8::from_bits(self.mode7_matrix_a as i16) * x_i) + (I8F8::from_bits(self.mode7_matrix_b as i16) * y_i) + x_0;
@@ -472,11 +472,11 @@ impl Registers {
     }
 
     pub fn get_mode7_scroll_x(&self) -> i16 {
-        self.mode7_scroll_x as i16  // TODO: sign extend 13th bit and ignore top 3 (same for centre_x)
+        sign_extend(self.mode7_scroll_x) as i16
     }
 
     pub fn get_mode7_scroll_y(&self) -> i16 {
-        self.mode7_scroll_y as i16  // TODO: sign extend 13th bit and ignore top 3 (same for centre_y)
+        sign_extend(self.mode7_scroll_y) as i16
     }
 
     // Returns the extend setting.
