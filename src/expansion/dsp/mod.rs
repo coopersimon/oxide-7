@@ -27,8 +27,8 @@ pub struct DSP {
 
     sr:     StatusFlags,    // Status I/O register
     dr:     u16,    // Parallel I/O register
-    si:     u16,    // Serial I/O data
-    so:     u16,    // Serial I/O data
+    _si:     u16,   // Serial I/O data
+    _so:     u16,   // Serial I/O data
 
     // Memory
     prog_rom:   Vec<u8>, // 2048 * 24-bit instructions
@@ -37,6 +37,7 @@ pub struct DSP {
 
     // Clocking
     pub cycle_fill: f64,
+    wait_for_rqm_clear: bool,
 }
 
 impl DSP {
@@ -64,33 +65,38 @@ impl DSP {
             trb: 0,
             sr: StatusFlags::default(),
             dr: 0,
-            si: 0,
-            so: 0,
+            _si: 0,
+            _so: 0,
 
             prog_rom: Vec::from(&rom_data[0..PROG_ROM_SIZE]),
             data_rom: Vec::from(&rom_data[PROG_ROM_SIZE..(PROG_ROM_SIZE + DATA_ROM_SIZE)]),
 
             ram: vec![0; 512],
 
-            cycle_fill: 0.0
+            cycle_fill: 0.0,
+            wait_for_rqm_clear: true,
         }
     }
 
     pub fn step(&mut self) {
-        let instr = Instruction::from_bits_truncate(self.fetch_instr());
+        //if !self.sr.contains(StatusFlags::RQM) {
+        if !self.wait_for_rqm_clear {
+            let instr = Instruction::from_bits_truncate(self.fetch_instr());
 
-        if instr.is_alu() {
-            self.alu_instr(instr);
-        } else {
-            if instr.is_jp() {
-                self.jp_instr(instr);
+            if instr.is_alu() {
+                self.alu_instr(instr);
             } else {
-                self.ld_instr(instr);
+                if instr.is_jp() {
+                    self.jp_instr(instr);
+                } else {
+                    self.ld_instr(instr);
+                }
             }
         }
     }
 
     // Set RST pin
+    #[allow(dead_code)]
     pub fn trigger_reset(&mut self) {
         self.pc = 0;
         self.flag_a = AccFlags::default();
@@ -102,6 +108,7 @@ impl DSP {
     }
 
     // Set INT pin
+    #[allow(dead_code)]
     pub fn trigger_int(&mut self) {
         const INT_VECTOR: u16 = 0x100;
         if self.sr.contains(StatusFlags::EI) {
@@ -113,6 +120,7 @@ impl DSP {
         if self.sr.contains(StatusFlags::DRC) {
             // 8-bit mode.
             self.sr.remove(StatusFlags::RQM);
+            self.wait_for_rqm_clear = false;
             lo!(self.dr)
         } else {
             // 16-bit mode.
@@ -120,6 +128,7 @@ impl DSP {
                 lo!(self.dr)
             } else {
                 self.sr.remove(StatusFlags::RQM);
+                self.wait_for_rqm_clear = false;
                 hi!(self.dr)
             };
             self.sr.toggle(StatusFlags::DRS);
@@ -131,6 +140,7 @@ impl DSP {
         if self.sr.contains(StatusFlags::DRC) {
             // 8-bit mode.
             self.sr.remove(StatusFlags::RQM);
+            self.wait_for_rqm_clear = false;
             self.dr = set_lo!(self.dr, data);
         } else {
             // 16-bit mode.
@@ -138,6 +148,7 @@ impl DSP {
                 set_lo!(self.dr, data)
             } else {
                 self.sr.remove(StatusFlags::RQM);
+                self.wait_for_rqm_clear = false;
                 set_hi!(self.dr, data)
             };
             self.sr.toggle(StatusFlags::DRS);
@@ -157,12 +168,10 @@ impl DSP {
 // Instruction decoding.
 impl DSP {
     fn alu_instr(&mut self, instr: Instruction) {
+
         // Do move.
         let src_data = self.load_idb(instr);
         let acc_affected = self.store_idb(instr, src_data);
-
-        // Do multiply.
-        let new_m = (self.k as u32) * (self.l as u32) * 2;
 
         // TODO: check if operation should happen if RAM is written to AND used in ALU op.
         if instr.should_do_alu_op(acc_affected) {
@@ -196,6 +205,9 @@ impl DSP {
                 _ => unreachable!()
             }
         }
+
+        // Do multiply.
+        let new_m = (self.k as u32) * (self.l as u32) * 2;
 
         // Modify data pointers.
         self.dp = instr.dp_adjust(self.dp);
@@ -257,7 +269,10 @@ impl DSP {
             0x0BA => panic!("Trying to use serial ACK"),
 
             0x0BC if !self.sr.contains(StatusFlags::RQM) => self.jump(instr),
-            0x0BE if self.sr.contains(StatusFlags::RQM) => self.jump(instr),
+            0x0BE if self.sr.contains(StatusFlags::RQM) => {
+                self.jump(instr);
+                self.wait_for_rqm_clear = true;
+            },
 
             0x0..=0x1FF => {},  // Undefined 9-bit jump op
             _ => unreachable!()
@@ -468,13 +483,13 @@ impl DSP {
 // Jump
 impl DSP {
     fn jump(&mut self, instr: Instruction) {
-        self.pc = instr.jump_destination() * 3;
+        self.pc = instr.jump_destination();
     }
 
     fn call(&mut self, dest: u16) {
         self.stack[self.sp as usize] = self.pc;
         self.sp = (self.sp + 1) & 0x3;
-        self.pc = dest * 3;
+        self.pc = dest;
     }
 
     fn ret(&mut self) {
@@ -485,19 +500,16 @@ impl DSP {
 
 // Helpers
 impl DSP {
-    // Get a single byte from program memory.
-    fn fetch_prog_byte(&mut self) -> u8 {
-        const PC_MASK: u16 = bit!(12, u16) - 1;
-        let data = self.prog_rom[self.pc as usize];
-        self.pc = (self.pc + 1) & PC_MASK;
-        data
-    }
-
     // Get an instructon from program memory.
     fn fetch_instr(&mut self) -> u32 {
-        let lo = self.fetch_prog_byte();
-        let mid = self.fetch_prog_byte();
-        let hi = self.fetch_prog_byte();
+        const PC_MASK: u16 = bit!(12, u16) - 1;
+
+        let byte_addr = (self.pc * 3) as usize;
+        let lo = self.prog_rom[byte_addr];
+        let mid = self.prog_rom[byte_addr + 1];
+        let hi = self.prog_rom[byte_addr + 2];
+
+        self.pc = (self.pc + 1) & PC_MASK;
 
         make24!(hi, mid, lo)
     }
@@ -537,7 +549,7 @@ impl DSP {
             0x4 => self.dp as u16,
             0x5 => self.rp,
             0x6 => self.load_rom(),
-            0x7 => 0, // SGN ??
+            0x7 => 0x8000 - if self.flag_a.contains(AccFlags::S1) {1} else {0},
             0x8 => self.load_dr(false),
             0x9 => self.load_dr(true),
             0xA => self.sr.bits(),
@@ -602,7 +614,7 @@ impl DSP {
     fn store_dr(&mut self, data: u16) {
         self.sr.insert(StatusFlags::RQM);
         if self.sr.contains(StatusFlags::DRC) {
-            self.dr = make16!(0, lo!(data));
+            self.dr = set_lo!(self.dr, lo!(data));
         } else {
             self.dr = data;
         }
@@ -628,12 +640,12 @@ impl DSP {
     }
 
     // Write to serial I/O port MSB first.
-    fn store_s_msb(&mut self, data: u16) {
+    fn store_s_msb(&mut self, _data: u16) {
         
     }
 
     // Write to serial I/O port LSB first.
-    fn store_s_lsb(&mut self, data: u16) {
+    fn store_s_lsb(&mut self, _data: u16) {
         
     }
 }
