@@ -454,7 +454,7 @@ impl Registers {
     }
 
     pub fn bg_mosaic_mask(&self) -> u8 {
-        ((self.mosaic_settings & Mosaic::PIXEL_SIZE).bits() >> 4)
+        (self.mosaic_settings & Mosaic::PIXEL_SIZE).bits() >> 4
     }
 
     // Takes a screen coordinate as input (0-255, 0-224).
@@ -504,16 +504,16 @@ impl Registers {
         let mut regions = Vec::new();
 
         let obj0_pattern_start = self.obj0_pattern_addr();
-        let obj0_pattern_end = std::cmp::min((obj0_pattern_start as usize) - 1 + (16 * ROW_HEIGHT_4BPP), VRAM_MAX) as u16;
+        let obj0_pattern_end = std::cmp::min((obj0_pattern_start as usize) + (16 * ROW_HEIGHT_4BPP) - 1, VRAM_MAX) as u16;
         regions.push((obj0_pattern_start, obj0_pattern_end));
         let objn_pattern_start = self.objn_pattern_addr();
-        let objn_pattern_end = std::cmp::min((objn_pattern_start as usize) - 1 + (16 * ROW_HEIGHT_4BPP), VRAM_MAX) as u16;
+        let objn_pattern_end = std::cmp::min((objn_pattern_start as usize) + (16 * ROW_HEIGHT_4BPP) - 1, VRAM_MAX) as u16;
         regions.push((objn_pattern_start, objn_pattern_end));
 
         let bg1_pattern_start = self.bg_pattern_addr(BG::_1);
         let bg1_pattern_end = match mode {
-            0 => std::cmp::min((bg1_pattern_start as usize) - 1 + (64 * ROW_HEIGHT_2BPP), VRAM_MAX) as u16,
-            1 | 2 | 5 | 6 => std::cmp::min((bg1_pattern_start as usize) - 1 + (64 * ROW_HEIGHT_4BPP), VRAM_MAX) as u16,
+            0 => std::cmp::min((bg1_pattern_start as usize) + (64 * ROW_HEIGHT_2BPP) - 1, VRAM_MAX) as u16,
+            1 | 2 | 5 | 6 => std::cmp::min((bg1_pattern_start as usize) + (64 * ROW_HEIGHT_4BPP) - 1, VRAM_MAX) as u16,
             3 | 4 => std::u16::MAX,
             _ => bg1_pattern_start,
         };
@@ -522,21 +522,21 @@ impl Registers {
         if mode < 6 {
             let bg2_pattern_start = self.bg_pattern_addr(BG::_2);
             let bg2_pattern_end = match mode {
-                0 | 4 | 5 => std::cmp::min((bg2_pattern_start as usize) - 1 + (64 * ROW_HEIGHT_2BPP), VRAM_MAX) as u16,
-                _ => std::cmp::min((bg2_pattern_start as usize) - 1 + (64 * ROW_HEIGHT_4BPP), VRAM_MAX) as u16,
+                0 | 4 | 5 => std::cmp::min((bg2_pattern_start as usize) + (64 * ROW_HEIGHT_2BPP) - 1, VRAM_MAX) as u16,
+                _ => std::cmp::min((bg2_pattern_start as usize) + (64 * ROW_HEIGHT_4BPP) - 1, VRAM_MAX) as u16,
             };
             regions.push((bg2_pattern_start, bg2_pattern_end));
         }
 
         if mode < 2 {
             let bg3_pattern_start = self.bg_pattern_addr(BG::_3);
-            let bg3_pattern_end = std::cmp::min((bg3_pattern_start as usize) - 1 + (64 * ROW_HEIGHT_2BPP), VRAM_MAX) as u16;
+            let bg3_pattern_end = std::cmp::min((bg3_pattern_start as usize) + (64 * ROW_HEIGHT_2BPP) - 1, VRAM_MAX) as u16;
             regions.push((bg3_pattern_start, bg3_pattern_end));
         }
 
         if mode == 0 {
             let bg4_pattern_start = self.bg_pattern_addr(BG::_4);
-            let bg4_pattern_end = std::cmp::min((bg4_pattern_start as usize) - 1 + (64 * ROW_HEIGHT_2BPP), VRAM_MAX) as u16;
+            let bg4_pattern_end = std::cmp::min((bg4_pattern_start as usize) + (64 * ROW_HEIGHT_2BPP) - 1, VRAM_MAX) as u16;
             regions.push((bg4_pattern_start, bg4_pattern_end));
         }
 
