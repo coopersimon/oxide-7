@@ -602,22 +602,10 @@ impl SA1Bus {
                 let hi = hi_nybble!(bank) & 0x3;
                 map_bank(bank, 4 + hi)
             },
-            0xC0..=0xCF => {
-                let mapped_bank = map_bank(bank, self.rom_bank_c);
-                if self.lo_rom {mapped_bank * 2} else {mapped_bank}
-            },
-            0xD0..=0xDF => {
-                let mapped_bank = map_bank(bank, self.rom_bank_d);
-                if self.lo_rom {mapped_bank * 2} else {mapped_bank}
-            },
-            0xE0..=0xEF => {
-                let mapped_bank = map_bank(bank, self.rom_bank_e);
-                if self.lo_rom {mapped_bank * 2} else {mapped_bank}
-            },
-            0xF0..=0xFF => {
-                let mapped_bank = map_bank(bank, self.rom_bank_f);
-                if self.lo_rom {mapped_bank * 2} else {mapped_bank}
-            },
+            0xC0..=0xCF => map_hirom_bank(bank, self.rom_bank_c, self.lo_rom, addr),
+            0xD0..=0xDF => map_hirom_bank(bank, self.rom_bank_d, self.lo_rom, addr),
+            0xE0..=0xEF => map_hirom_bank(bank, self.rom_bank_e, self.lo_rom, addr),
+            0xF0..=0xFF => map_hirom_bank(bank, self.rom_bank_f, self.lo_rom, addr),
             _ => 0,
         };
 
@@ -653,4 +641,17 @@ fn map_bank(in_bank: u8, mapping: u8) -> u8 {
     let lo = lo_nybble!(in_bank);
     let hi = (mapping % 8) << 4;
     hi | lo
+}
+
+fn map_hirom_bank(in_bank: u8, mapping: u8, lo_rom: bool, bank_addr: u16) -> u8 {
+    let mapped_bank = map_bank(in_bank, mapping);
+    if lo_rom {
+        if bank_addr >= 0x8000 {
+            (mapped_bank * 2) + 1
+        } else {
+            mapped_bank * 2
+        }
+    } else {
+        mapped_bank
+    }
 }
