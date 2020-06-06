@@ -16,8 +16,6 @@ pub struct Timer {
 
     h_count:    u16,    // Dot count
     v_count:    u16,    // Line count
-    h_cmp:      u16,    // H compare
-    v_cmp:      u16,    // V compare
     latched_h:  u16,    // Latched dot count
     latched_v:  u16,    // Latched line count
 
@@ -31,8 +29,6 @@ impl Timer {
 
             h_count:    0,
             v_count:    0,
-            h_cmp:      0,
-            v_cmp:      0,
             latched_h:  0,
             latched_v:  0,
 
@@ -46,29 +42,35 @@ impl Timer {
         let to_inc = (self.cycle_count >> 2) as u16;
         self.cycle_count %= 4;
 
+        let mut h_tick = false;
+        let mut v_tick = false;
         self.h_count += to_inc;
         if self.timer_control.contains(TimerControl::TIMER_MODE) {
-            if self.h_count > 511 {
-                self.h_count -= 511;
+            if self.h_count >= 512 {
+                h_tick = true;
+                self.h_count -= 512;
                 self.v_count += 1;
-                if self.v_count > 511 {
-                    self.v_count -= 511;
+                if self.v_count >= 512 {
+                    v_tick = true;
+                    self.v_count -= 512;
                 }
             }
         } else {
-            if self.h_count > 340 {
-                self.h_count -= 340;
+            if self.h_count >= 341 {
+                h_tick = true;
+                self.h_count -= 341;
                 self.v_count += 1;
-                if self.v_count > 223 {
-                    self.v_count -= 223;
+                if self.v_count >= 262 {
+                    v_tick = true;
+                    self.v_count -= 262;
                 }
             }
         }
 
         match (self.timer_control.contains(TimerControl::HEN), self.timer_control.contains(TimerControl::VEN)) {
-            (true, false) if self.h_count == self.h_cmp => true,
-            (false, true) if self.v_count == self.v_cmp => true,
-            (true, true) if self.h_count == self.h_cmp && self.v_count == self.v_cmp => true,
+            (true, false) => h_tick,
+            (false, true) => v_tick,
+            (true, true) => h_tick && v_tick,
 
             _ => false
         }
@@ -88,19 +90,19 @@ impl Timer {
 
 
     pub fn write_h_lo(&mut self, data: u8) {
-        self.h_cmp = set_lo!(self.h_cmp, data);
+        self.h_count = set_lo!(self.h_count, data);
     }
 
     pub fn write_h_hi(&mut self, data: u8) {
-        self.h_cmp = set_hi!(self.h_cmp, data & 1);
+        self.h_count = set_hi!(self.h_count, data & 1);
     }
 
     pub fn write_v_lo(&mut self, data: u8) {
-        self.v_cmp = set_lo!(self.v_cmp, data);
+        self.v_count = set_lo!(self.v_count, data);
     }
 
     pub fn write_v_hi(&mut self, data: u8) {
-        self.v_cmp = set_hi!(self.v_cmp, data & 1);
+        self.v_count = set_hi!(self.v_count, data & 1);
     }
 
     pub fn read_h_lo(&mut self) -> u8 {

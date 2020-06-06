@@ -21,8 +21,8 @@ A SNES emulator written in Rust.
 * Mega Man X (Intro works, and title screen looks ok. The bottom line is incorrect. Audio sounds pretty good but seems to cut out in intro)
 * Tetris & Dr. Mario (fixed anti-piracy screen (SRAM issue), now works great)
 * Super Ghouls 'n Ghosts (Intro and title seem fine, except for mode 7 in intro. Gameplay mostly appears fine but seems to flicker a bit, and the background looks a bit odd sometimes. Audio sounds mostly fine.)
-* Kirby's Dreamland 3 (Unrecognised ROM config (SA-1))
-* Kirby's Super Star (Unrecognised ROM config (SA-1))
+* Kirby's Dreamland 3 (Black screen.)
+* Kirby's Super Star (Works pretty well. Some black vertical bars in tutorial. Need to test further.)
 * Donkey Kong Country (looks good. audio sounds great now.)
 * Donkey Kong Country 2 (same as above.)
 * Chrono Trigger (works pretty well. Audio sounds a lot better - birds in opening are a bit bugged. Audio has some artifacts and seems to non-deterministically cut out / lose voices from time to time.)
@@ -33,7 +33,7 @@ A SNES emulator written in Rust.
 * FZero (looks good now. audio sounds pretty good.)
 * Gradius III (looks mostly ok, some odd graphical glitches, audio sounds pretty good.)
 * Mario Paint (title shows up ok, might need SNES mouse to see anything else. audio also sounds ok.)
-* Super Mario RPG (unrecognised ROM config (SA-1))
+* Super Mario RPG (intro text works, opening music plays (but is skippy - square audio (see chrono trigger & FFVI)). Intro frame appears but then doesn't progress any further)
 * Super Punch-out!! (sound seems to work fine, menu graphics look OK, in game looks completely messed up)
 * Warios Woods (audio seems fine, graphics look ok now.)
 * Prince of Persia (graphics look good, audio sounds good, now gameplay is ok.)
@@ -72,6 +72,7 @@ A SNES emulator written in Rust.
 - Pitch modulation: test
 - Fix the slight lag on audio (resampler delay?)
 - SPC timing is still off - most noticeable in Chrono Trigger but some games have occasional random notes.
+    - Apparently Square games are notorious for this - FF3(VI) and Super Mario RPG also have audio trouble.
 
 ##### System
 - Cleanup BCD mode
@@ -84,6 +85,9 @@ A SNES emulator written in Rust.
 - DSP
     - Bugfixes
 - SA-1
+    - DMA
+    - Variable-length decoding
+    - Save data
 - SuperFX
 
 ### Style guide (?)
