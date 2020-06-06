@@ -17,8 +17,8 @@ use crate::{
     }
 };
 
-const RST_VECTOR_LO: u16 = int::RESET_VECTOR as u16;
-const RST_VECTOR_HI: u16 = (int::RESET_VECTOR as u16) + 1;
+const RST_VECTOR_LO: u16 = int::RESET_VECTOR_EMU as u16;
+const RST_VECTOR_HI: u16 = (int::RESET_VECTOR_EMU as u16) + 1;
 const NMI_VECTOR_LO: u16 = int::NMI_VECTOR as u16;
 const NMI_VECTOR_HI: u16 = (int::NMI_VECTOR as u16) + 1;
 const IRQ_VECTOR_LO: u16 = int::IRQ_VECTOR as u16;
@@ -122,10 +122,10 @@ pub struct SA1Bus {
     sa1_iram_write: u8,
 
     // SNES Status
-    cpu_int: Interrupt,         // Pending interrupts from SNES CPU.
+    //cpu_int: Interrupt,         // Pending interrupts from SNES CPU.
     snes_cpu_control: SNESControl,
     snes_int_enable: SNESCPUInt,
-    snes_int_pending: SNESCPUInt,
+    //snes_int_pending: SNESCPUInt,
     snes_nmi_vector: u16,       // Custom NMI Vector
     snes_irq_vector: u16,       // Custom IRQ Vector
     snes_bw_map: u8,            // BW-RAM mapped to SNES CPU.
@@ -137,6 +137,8 @@ pub struct SA1Bus {
     timer:      Timer,
     arith:      Arithmetic,
     cycle_count:    usize,
+    reset_latch: bool,
+    wait_latch: bool,
 }
 
 impl SA1Bus {
@@ -147,9 +149,9 @@ impl SA1Bus {
             bwram:      RAM::new(0x20000),
 
             rom_bank_c: 0,
-            rom_bank_d: 0,
-            rom_bank_e: 0,
-            rom_bank_f: 0,
+            rom_bank_d: 1,
+            rom_bank_e: 2,
+            rom_bank_f: 3,
             bwram_bitmap: 0,
             dma_bitmap_regs: [0; 16],
 
@@ -169,10 +171,10 @@ impl SA1Bus {
             sa1_bw_write_enable: 0,
             sa1_iram_write: 0,
 
-            cpu_int:    Interrupt::default(),
+            //cpu_int:    Interrupt::default(),
             snes_cpu_control: SNESControl::default(),
             snes_int_enable: SNESCPUInt::default(),
-            snes_int_pending: SNESCPUInt::default(),
+            //snes_int_pending: SNESCPUInt::default(),
             snes_nmi_vector: NMI_VECTOR_LO,
             snes_irq_vector: IRQ_VECTOR_LO,
             snes_bw_map: 0,
@@ -183,6 +185,8 @@ impl SA1Bus {
             timer:      Timer::new(),
             arith:      Arithmetic::new(),
             cycle_count:    0,
+            reset_latch:    true,
+            wait_latch: false,
         }
     }
 
@@ -194,18 +198,14 @@ impl SA1Bus {
                 IRQ_VECTOR_LO if self.snes_cpu_control.contains(SNESControl::IRQ_VEC) => lo!(self.snes_irq_vector),
                 IRQ_VECTOR_HI if self.snes_cpu_control.contains(SNESControl::IRQ_VEC) => hi!(self.snes_irq_vector),
                 0x2200..=0x23FF => self.read_snes_port(addr),
-                0x3000..=0x37FF => self.iram.read(addr as u32),
+                0x3000..=0x37FF => self.iram.read((addr - 0x3000) as u32),
                 0x6000..=0x7FFF => self.read_snes_mapped_bwram(addr - 0x6000),
-                0x8000..=0xFFFF => self.read_rom(bank, addr),/*if self.lo_rom {
-                    self.rom.read(bank % 0x80, addr - 0x8000)
-                } else {
-                    self.rom.read(bank % 0x40, addr)
-                }*/
+                0x8000..=0xFFFF => self.read_rom(bank, addr),
                 _ => 0
             },
             0x01..=0x3F | 0x80..=0xBF => match addr {
                 0x2200..=0x23FF => self.read_snes_port(addr),
-                0x3000..=0x37FF => self.iram.read(addr as u32),
+                0x3000..=0x37FF => self.iram.read((addr - 0x3000) as u32),
                 0x6000..=0x7FFF => self.read_snes_mapped_bwram(addr - 0x6000),
                 0x8000..=0xFFFF => self.read_rom(bank, addr),
                 _ => 0
@@ -237,7 +237,8 @@ impl SA1Bus {
     }
 
     pub fn check_snes_interrupts(&mut self) -> Interrupt {
-        if self.snes_cpu_control.intersects(SNESControl::IRQ | SNESControl::DMA_IRQ) {
+        if (self.snes_cpu_control.contains(SNESControl::IRQ) && self.snes_int_enable.contains(SNESCPUInt::SA1_IRQ)) ||
+            (self.snes_cpu_control.contains(SNESControl::DMA_IRQ) && self.snes_int_enable.contains(SNESCPUInt::DMA_IRQ)) {
             Interrupt::IRQ
         } else {
             Interrupt::default()
@@ -251,7 +252,7 @@ impl SA1Bus {
 
 impl MemBus for SA1Bus {
     fn read(&mut self, addr: u32) -> (u8, usize) {
-        let bank = hi24!(addr) % 80;
+        let bank = hi24!(addr);
         let offset = lo24!(addr);
 
         match bank {
@@ -264,32 +265,27 @@ impl MemBus for SA1Bus {
                 IRQ_VECTOR_HI => (hi!(self.sa1_irq_vector), 2),
                 0x0000..=0x07FF => (self.iram.read(offset as u32), 2),
                 0x2200..=0x23FF => (self.read_sa1_port(offset), 2),
-                0x3000..=0x37FF => (self.iram.read(offset as u32), 2),
+                0x3000..=0x37FF => (self.iram.read((offset - 0x3000) as u32), 2),
                 0x6000..=0x7FFF => (self.read_sa1_mapped_bwram(offset - 0x6000), 2),
                 0x8000..=0xFFFF => (self.read_rom(bank, offset), 2),
                 _ => (0, 2),
             },
-            0x01..=0x3F => match offset {
+            0x01..=0x3F | 0x80..=0xBF => match offset {
                 0x0000..=0x07FF => (self.iram.read(offset as u32), 2),
                 0x2200..=0x23FF => (self.read_sa1_port(offset), 2),
-                0x3000..=0x37FF => (self.iram.read(offset as u32), 2),
+                0x3000..=0x37FF => (self.iram.read((offset - 0x3000) as u32), 2),
                 0x6000..=0x7FFF => (self.read_sa1_mapped_bwram(offset - 0x6000), 2),
                 0x8000..=0xFFFF => (self.read_rom(bank, offset), 2),
                 _ => (0, 2),
             },
-            0x40..=0x4F => (self.bwram.read(addr - 0x400000), 2),
-            0x60..=0x6F => (self.read_sa1_bitmapped_bwram(addr - 0x600000), 2),
-            0x40..=0x7F => (if self.lo_rom {
-                self.rom.read(bank, offset - 0x8000)
-            } else {
-                self.rom.read(bank - 0x40, offset)
-            }, 6),
-            _ => (0, 2),
+            0x40..=0x4F => (self.bwram.read(addr - 0x40_0000), 2),
+            0x60..=0x6F => (self.read_sa1_bitmapped_bwram(addr - 0x60_0000), 2),
+            0x40..=0x7F | 0xC0..=0xFF => (self.read_rom(bank, offset), 2),
         }
     }
 
     fn write(&mut self, addr: u32, data: u8) -> usize {
-        let bank = hi24!(addr) % 80;
+        let bank = hi24!(addr);
         let offset = lo24!(addr);
 
         match bank {
@@ -300,34 +296,50 @@ impl MemBus for SA1Bus {
                 0x6000..=0x7FFF => self.write_sa1_mapped_bwram(offset - 0x6000, data),
                 _ => {},
             },
-            0x40..=0x4F if test_bit!(self.sa1_bw_write_enable, 7, u8) => self.bwram.write(addr - 0x400000, data),
-            0x60..=0x6F => self.write_sa1_bitmapped_bwram(addr - 0x600000, data),
+            0x40..=0x4F if test_bit!(self.sa1_bw_write_enable, 7, u8) => self.bwram.write(addr - 0x40_0000, data),
+            0x60..=0x6F => self.write_sa1_bitmapped_bwram(addr - 0x60_0000, data),
             _ => {},
         }
 
         2
     }
 
+    // Clocking from SA-1 CPU.
     fn clock(&mut self, cycles: usize) -> Interrupt {
         let mut ret = Interrupt::default();
+
+        // Timer
         if self.timer.clock(cycles) && self.sa1_int_enable.contains(SA1CPUInt::TIMER_IRQ) {
             self.sa1_int_pending |= SA1CPUInt::TIMER_IRQ;
             ret |= Interrupt::IRQ;
         }
 
-        // Check SNES interrupts
-        if self.sa1_cpu_control.contains(SA1Control::NMI) {
+        // DMA
+
+        // Check SNES-sourced interrupts
+        if self.sa1_cpu_control.contains(SA1Control::NMI) && self.sa1_int_enable.contains(SA1CPUInt::NMI) {
+            self.sa1_cpu_control.remove(SA1Control::NMI);   // TODO: how to stop this repeatedly being called?
             ret |= Interrupt::NMI;
         }
-        if self.sa1_cpu_control.contains(SA1Control::RST) {
+        if !self.reset_latch && self.sa1_cpu_control.contains(SA1Control::RST) {
+            self.reset_latch = true;
+        }
+        if self.reset_latch && !self.sa1_cpu_control.contains(SA1Control::RST) {
+            self.reset_latch = false;
             ret |= Interrupt::RESET;
         }
-        if self.sa1_cpu_control.contains(SA1Control::IRQ) {
+        if self.sa1_cpu_control.contains(SA1Control::WAIT) && !self.wait_latch {
+            ret |= Interrupt::WAIT;
+        }
+        if self.wait_latch && !self.sa1_cpu_control.contains(SA1Control::WAIT) {    // TODO: better way of ending wait?
+            ret |= Interrupt::WAIT;
+        }
+        if self.sa1_cpu_control.contains(SA1Control::IRQ) && self.sa1_int_enable.contains(SA1CPUInt::SNES_IRQ) {
             ret |= Interrupt::IRQ;
         }
 
         self.cycle_count += cycles;
-        
+
         ret
     }
 }
@@ -335,6 +347,7 @@ impl MemBus for SA1Bus {
 // Internal: SNES side
 impl SA1Bus {
     fn read_snes_port(&mut self, addr: u16) -> u8 {
+        //println!("Reading from {:X}", addr);
         match addr {
             0x2300 => self.snes_cpu_control.bits(),
             0x230E => 0,    // SNES VC
@@ -343,13 +356,11 @@ impl SA1Bus {
     }
 
     fn write_snes_port(&mut self, addr: u16, data: u8) {
+        //println!("Writing {:X} to {:X}", data, addr);
         match addr {
             0x2200 => self.sa1_cpu_control = SA1Control::from_bits_truncate(data),
             0x2201 => self.snes_int_enable = SNESCPUInt::from_bits_truncate(data),
-            0x2202 => {
-                let to_clear = SNESCPUInt::from_bits_truncate(data);
-                self.snes_int_pending.remove(to_clear);
-            },
+            0x2202 => self.clear_snes_ints(data),
             0x2203 => self.sa1_rst_vector = set_lo!(self.sa1_rst_vector, data),
             0x2204 => self.sa1_rst_vector = set_hi!(self.sa1_rst_vector, data),
             0x2205 => self.sa1_nmi_vector = set_lo!(self.sa1_nmi_vector, data),
@@ -363,7 +374,7 @@ impl SA1Bus {
             0x2223 => self.rom_bank_f = data,
             0x2224 => self.snes_bw_map = data & 0x1F,
             0x2226 => self.snes_bw_write_enable = data,
-            0x2228 => {},   // BW-RAM write-protected area
+            0x2228 => {},   // BW-RAM write-protected area (default = 0xFF)
             0x2229 => self.snes_iram_write = data,
 
             0x2231 => self.cdma_params = CDMA::from_bits_truncate(data),
@@ -375,6 +386,16 @@ impl SA1Bus {
             0x2237 => self.write_dma_dst_addr_hi(data),
 
             _ => {}
+        }
+    }
+
+    fn clear_snes_ints(&mut self, data: u8) {
+        let to_clear = SNESCPUInt::from_bits_truncate(data);
+        if to_clear.contains(SNESCPUInt::SA1_IRQ) {
+            self.snes_cpu_control.remove(SNESControl::IRQ);
+        }
+        if to_clear.contains(SNESCPUInt::DMA_IRQ) {
+            self.snes_cpu_control.remove(SNESControl::DMA_IRQ);
         }
     }
 
@@ -403,8 +424,13 @@ impl SA1Bus {
 // Internal: SA-1 side
 impl SA1Bus {
     fn read_sa1_port(&mut self, addr: u16) -> u8 {
+        //println!("SA Reading from {:X}", addr);
         match addr {
-            0x2301 => self.sa1_cpu_control.bits(),
+            0x2301 => {
+                let message = self.sa1_cpu_control.bits() & 0xF;
+                let ints = self.sa1_int_pending.bits() & 0xF0;
+                ints | message
+            },
             0x2302 => self.timer.read_h_lo(),
             0x2303 => self.timer.read_h_hi(),
             0x2304 => self.timer.read_v_lo(),
@@ -425,6 +451,7 @@ impl SA1Bus {
     }
 
     fn write_sa1_port(&mut self, addr: u16, data: u8) {
+        //println!("SA Writing {:X} to {:X}", data, addr);
         match addr {
             0x2209 => {
                 let dma_irq = self.snes_cpu_control.contains(SNESControl::DMA_IRQ);
@@ -432,10 +459,7 @@ impl SA1Bus {
                 self.snes_cpu_control.set(SNESControl::DMA_IRQ, dma_irq);
             },
             0x220A => self.sa1_int_enable = SA1CPUInt::from_bits_truncate(data),
-            0x220B => {
-                let to_clear = SA1CPUInt::from_bits_truncate(data);
-                self.sa1_int_pending.remove(to_clear);
-            },
+            0x220B => self.clear_sa1_ints(data),
             0x220C => self.snes_nmi_vector = set_lo!(self.snes_nmi_vector, data),
             0x220D => self.snes_nmi_vector = set_hi!(self.snes_nmi_vector, data),
             0x220E => self.snes_irq_vector = set_lo!(self.snes_irq_vector, data),
@@ -477,6 +501,17 @@ impl SA1Bus {
             0x225B => {},
 
             _ => {}
+        }
+    }
+
+    fn clear_sa1_ints(&mut self, data: u8) {
+        let to_clear = SA1CPUInt::from_bits_truncate(data);
+        self.sa1_int_pending.remove(to_clear);
+        if to_clear.contains(SA1CPUInt::SNES_IRQ) {
+            self.sa1_cpu_control.remove(SA1Control::IRQ);
+        }
+        if to_clear.contains(SA1CPUInt::NMI) {
+            self.sa1_cpu_control.remove(SA1Control::NMI);
         }
     }
 
@@ -554,7 +589,7 @@ impl SA1Bus {
                 let hi = hi_nybble!(bank);
                 map_bank(bank, hi)
             },
-            0x40..=0x7F => if self.lo_rom {bank} else {bank % 0x40},
+            //0x40..=0x7F => if self.lo_rom {bank} else {bank % 0x40},
             0x80..=0x9F => if test_bit!(self.rom_bank_e, 7, u8) {
                 map_bank(bank, self.rom_bank_e)
             } else {
@@ -567,13 +602,26 @@ impl SA1Bus {
                 let hi = hi_nybble!(bank) & 0x3;
                 map_bank(bank, 4 + hi)
             },
-            0xC0..=0xCF => map_bank(bank, self.rom_bank_c),
-            0xD0..=0xDF => map_bank(bank, self.rom_bank_d),
-            0xE0..=0xEF => map_bank(bank, self.rom_bank_e),
-            0xF0..=0xFF => map_bank(bank, self.rom_bank_f),
+            0xC0..=0xCF => {
+                let mapped_bank = map_bank(bank, self.rom_bank_c);
+                if self.lo_rom {mapped_bank * 2} else {mapped_bank}
+            },
+            0xD0..=0xDF => {
+                let mapped_bank = map_bank(bank, self.rom_bank_d);
+                if self.lo_rom {mapped_bank * 2} else {mapped_bank}
+            },
+            0xE0..=0xEF => {
+                let mapped_bank = map_bank(bank, self.rom_bank_e);
+                if self.lo_rom {mapped_bank * 2} else {mapped_bank}
+            },
+            0xF0..=0xFF => {
+                let mapped_bank = map_bank(bank, self.rom_bank_f);
+                if self.lo_rom {mapped_bank * 2} else {mapped_bank}
+            },
+            _ => 0,
         };
 
-        self.rom.read(mapped_bank, if self.lo_rom {addr - 0x8000} else {addr})
+        self.rom.read(mapped_bank, if self.lo_rom {addr % 0x8000} else {addr})
     }
 
     // Starts the transfer in the case of I-RAM
@@ -593,7 +641,7 @@ impl SA1Bus {
     }
 
     fn dma_transfer(&mut self) {
-        for i in 0..self.dma_counter {
+        for _i in 0..self.dma_counter {
             // transfer
         }
 

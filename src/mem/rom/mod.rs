@@ -120,9 +120,7 @@ enum CartMappingMode {
     Lo,
     LoLarge,
     Hi,
-    LoSA,
-    LoLargeSA,
-    HiSA
+    SA
 }
 
 type CartMappingFn = fn(u8, u16) -> CartDevice;
@@ -215,12 +213,7 @@ impl CartBuilder {
         let sa1 = Box::new(SA1::new(self.rom.take().unwrap(), true));
         self.expansion = Some(sa1);
 
-        self.mapping_mode = match self.mapping_mode {
-            Lo => LoSA,
-            LoLarge => LoLargeSA,
-            Hi => HiSA,
-            _ => panic!("Cannot attach multiple SA-1 expansions")
-        };
+        self.mapping_mode = SA;
 
         self
     }
@@ -231,57 +224,43 @@ impl CartBuilder {
         match self.mapping_mode {
             Lo => {
                 self.mappings.push(CartMapping::new(0x00, 0x3F, 0x8000, |bank, addr| CartDevice::ROM(bank, addr % 0x8000)));
+                self.mappings.push(CartMapping::new(0x80, 0xBF, 0x8000, |bank, addr| CartDevice::ROM(bank - 0x80, addr % 0x8000)));
 
-                self.mappings.push(CartMapping::new(0x40, 0x6F, 0, |bank, addr| CartDevice::ROM(bank % 0x40, addr % 0x8000)));
+                self.mappings.push(CartMapping::new(0x40, 0x6F, 0, |bank, addr| CartDevice::ROM(bank - 0x40, addr % 0x8000)));
+                self.mappings.push(CartMapping::new(0xC0, 0xFF, 0, |bank, addr| CartDevice::ROM(bank - 0xC0, addr % 0x8000)));
             },
             LoLarge => {
                 self.mappings.push(CartMapping::new(0x00, 0x3F, 0x8000, |bank, addr| CartDevice::ROM(bank, addr % 0x8000)));
+                self.mappings.push(CartMapping::new(0x80, 0xBF, 0x8000, |bank, addr| CartDevice::ROM(bank - 0x80, addr % 0x8000)));
 
                 self.mappings.push(CartMapping::new(0x40, 0x6F, 0, |bank, addr| CartDevice::ROM(bank, addr % 0x8000)));
+                self.mappings.push(CartMapping::new(0xC0, 0xFF, 0, |bank, addr| CartDevice::ROM(bank - 0x80, addr % 0x8000)));
             },
             Hi => {
                 self.mappings.insert(0, CartMapping::new(0x00, 0x3F, 0x8000, |bank, addr| CartDevice::ROM(bank, addr)));
+                self.mappings.insert(1, CartMapping::new(0x80, 0xBF, 0x8000, |bank, addr| CartDevice::ROM(bank - 0x80, addr)));
 
-                self.mappings.insert(1, CartMapping::new(0x40, 0x7F, 0, |bank, addr| CartDevice::ROM(bank % 0x40, addr)));
+                self.mappings.insert(2, CartMapping::new(0x40, 0x7F, 0, |bank, addr| CartDevice::ROM(bank - 0x40, addr)));
+                self.mappings.insert(3, CartMapping::new(0xC0, 0xFF, 0, |bank, addr| CartDevice::ROM(bank - 0xC0, addr)));
             },
-            LoSA => {
-                self.mappings.push(CartMapping::new(0x00, 0x3F, 0x8000, |bank, addr| {
-                    CartDevice::Expansion(bank, addr % 0x8000)
-                }));
+            SA => {
+                self.mappings.push(CartMapping::new(0x00, 0x3F, 0x2200, |bank, addr| CartDevice::Expansion(bank, addr)));
+                self.mappings.push(CartMapping::new(0x80, 0xBF, 0x2200, |bank, addr| CartDevice::Expansion(bank, addr)));
 
-                self.mappings.push(CartMapping::new(0x40, 0x6F, 0, |bank, addr| {
-                    CartDevice::Expansion(bank % 0x40, addr % 0x8000)
-                }));
+                self.mappings.push(CartMapping::new(0x40, 0x6F, 0, |bank, addr| CartDevice::Expansion(bank, addr)));
+                self.mappings.push(CartMapping::new(0xC0, 0xFF, 0, |bank, addr| CartDevice::Expansion(bank, addr)));
             },
-            LoLargeSA => {
-                self.mappings.push(CartMapping::new(0x00, 0x3F, 0x8000, |bank, addr| {
-                    CartDevice::Expansion(bank, addr % 0x8000)
-                }));
-
-                self.mappings.push(CartMapping::new(0x40, 0x6F, 0, |bank, addr| {
-                    CartDevice::Expansion(bank, addr % 0x8000)
-                }));
-            },
-            HiSA => {
-                self.mappings.insert(0, CartMapping::new(0x00, 0x3F, 0x8000, |bank, addr| {
-                    CartDevice::Expansion(bank, addr)
-                }));
-
-                self.mappings.insert(1, CartMapping::new(0x40, 0x7F, 0, |bank, addr| {
-                    CartDevice::Expansion(bank % 0x40, addr)
-                }));
-            }
         }
 
         // SRAM
         match self.mapping_mode {
-            Lo | LoLarge | LoSA | LoLargeSA => {
+            Lo | LoLarge | SA => {  // TODO: move to SA
                 self.mappings.push(CartMapping::new(0x70, 0x7F, 0, |bank, addr| {
                     let ram_bank = ((bank - 0x70) as u32) * LOROM_RAM_BANK_SIZE;
                     CartDevice::RAM(ram_bank + addr as u32)
                 }));
             },
-            Hi | HiSA => {
+            Hi => {
                 self.mappings.push(CartMapping::new(0x20, 0x3F, 0x6000, |bank, addr| {
                     let ram_bank = ((bank % 0x10) as u32) * HIROM_RAM_BANK_SIZE;
                     CartDevice::RAM(ram_bank + (addr as u32 - 0x6000))
@@ -344,18 +323,15 @@ impl Cart {
 
 impl Cart {
     pub fn read(&mut self, bank: u8, addr: u16) -> (u8, usize) {
-        let internal_bank = bank % 0x80;
-
         for mapping in self.mappings.iter() {
-            if (internal_bank >= mapping.start_bank) &&
-                (internal_bank <= mapping.end_bank) &&
+            if (bank >= mapping.start_bank) &&
+                (bank <= mapping.end_bank) &&
                 (addr >= mapping.start_addr) {
-                return match (mapping.addr_mapping)(internal_bank, addr) {
+                return match (mapping.addr_mapping)(bank, addr) {
                     CartDevice::ROM(bank, addr) => (self.rom.as_mut().map_or(0, |r| r.read(bank, addr)), self.rom_speed),
                     CartDevice::RAM(addr) => (self.ram.read(addr), timing::SLOW_MEM_ACCESS),
                     CartDevice::Expansion(bank, addr) => {
                         let data = self.expansion.as_mut().map_or(0, |e| e.read(bank, addr));
-                        //println!("Reading {:X} from {:X}", data, addr);
                         (data, timing::SLOW_MEM_ACCESS)
                     },
                 };

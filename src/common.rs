@@ -190,5 +190,7 @@ bitflags! {
         const VBLANK = bit!(2); // Indicates that V-Blank without NMI happened.
 
         const RESET = bit!(3);  // Indicates a RST was triggered.
+
+        const WAIT = bit!(4);   // SA-1 only: force halt.
     }
 }

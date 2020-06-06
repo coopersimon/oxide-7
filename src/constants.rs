@@ -39,7 +39,7 @@ pub mod int {
     pub const BRK_VECTOR: u32   = 0xFFE6;
     //pub const ABORT_VECTOR: u32 = 0xFFE8;
     pub const NMI_VECTOR: u32   = 0xFFEA;
-    pub const RESET_VECTOR: u32 = 0xFFEC;
+    //pub const RESET_VECTOR: u32 = 0xFFEC;
     pub const IRQ_VECTOR: u32   = 0xFFEE;
 
     pub const COP_VECTOR_EMU: u32   = 0xFFF4;

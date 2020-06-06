@@ -72,6 +72,7 @@ impl<B: MemBus> CPU<B> {
     pub fn step(&mut self) -> bool {
         // Check for interrupts.
         if self.int.contains(Interrupt::RESET) {
+            self.int.remove(Interrupt::RESET);
             self.reset();
         } else if self.int.contains(Interrupt::NMI) {
             self.trigger_interrupt(if self.pe {int::NMI_VECTOR_EMU} else {int::NMI_VECTOR});
@@ -87,6 +88,9 @@ impl<B: MemBus> CPU<B> {
             }
             self.int.remove(Interrupt::IRQ);
             self.halt = false;
+        } else if self.int.contains(Interrupt::WAIT) {
+            self.int.remove(Interrupt::WAIT);
+            self.halt = !self.halt;
         } else if !self.halt {
             self.execute_instruction();
         } else {

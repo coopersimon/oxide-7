@@ -92,7 +92,7 @@ impl MemBus for AddrBusA {
                 0x2180          => self.read_wram(),
                 0x2100..=0x21FF => (0, FAST_MEM_ACCESS),
                 0x2200..=0x23FF => (self.cart.read_exp(offset), FAST_MEM_ACCESS),
-                0x3000..=0x3FFF => (0, FAST_MEM_ACCESS),                                // Extensions
+                0x3000..=0x3FFF => (self.cart.read_exp(offset), FAST_MEM_ACCESS),                                // Extensions
 
                 0x4000..=0x4015 |
                 0x4000..=0x41FF => (self.joypads.read(offset), XSLOW_MEM_ACCESS),
@@ -130,7 +130,7 @@ impl MemBus for AddrBusA {
                 0x2183          => {self.wram_addr = set_hi24!(self.wram_addr, data & 1); FAST_MEM_ACCESS},
                 0x2100..=0x21FF => FAST_MEM_ACCESS,
                 0x2200..=0x23FF => {self.cart.write_exp(offset, data); FAST_MEM_ACCESS}
-                0x3000..=0x3FFF => FAST_MEM_ACCESS, // Extensions
+                0x3000..=0x3FFF => {self.cart.write_exp(offset, data); FAST_MEM_ACCESS}, // Extensions
 
                 0x4000..=0x4015 |
                 0x4017..=0x41FF => XSLOW_MEM_ACCESS,
