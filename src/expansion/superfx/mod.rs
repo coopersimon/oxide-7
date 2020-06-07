@@ -59,11 +59,13 @@ bitflags! {
     }
 }
 
+const ROM_PTR_REG: usize = 14;
 const PC_REG: usize = 15;
 
 pub struct SuperFX {
     regs:       [u16; 16],
     regs_latch: u8,
+    pc:         u16, // PC of next instruction.
 
     flags:      FXFlags,
     pb:         u8,
@@ -72,6 +74,7 @@ pub struct SuperFX {
     cbr:        u16,
     //bram:       u8,
     cfg:        Config,
+    last_ram_addr:  u16,
 
     src:        usize,
     dst:        usize,
@@ -87,6 +90,8 @@ pub struct SuperFX {
 
     cache:          [u8; 0x200],
     mem:            FXMem,
+
+    cycle_count:    isize,
 }
 
 impl SuperFX {
@@ -94,6 +99,7 @@ impl SuperFX {
         SuperFX {
             regs:       [0; 16],
             regs_latch: 0,
+            pc:         0,
 
             flags:      FXFlags::default(),
             pb:         0,
@@ -102,6 +108,7 @@ impl SuperFX {
             cbr:        0,
             //bram:       0,
             cfg:        Config::default(),
+            last_ram_addr:  0,
 
             src:        0,
             dst:        0,
@@ -116,11 +123,13 @@ impl SuperFX {
 
             cache:          [0; 0x200],
             mem:            FXMem::new(rom, sram),
+
+            cycle_count:    0,
         }
     }
 
     fn step(&mut self) {
-        
+        self.execute_instruction();
     }
 }
 
@@ -140,7 +149,14 @@ impl Expansion for SuperFX {
     }
 
     fn clock(&mut self, cycles: usize) -> Interrupt {
-        // TODO
+        // Convert master cycles to FX cycles.
+        let fx_cycles = if self.clock_select {cycles} else {cycles / 2};
+        self.cycle_count -= fx_cycles as isize;
+
+        while self.cycle_count <= 0 {
+            self.step();
+        }
+
         Interrupt::default()
     }
 
@@ -207,13 +223,661 @@ impl SuperFX {
         self.flags.set(FXFlags::S, test_bit!(data, 3, u8));
         self.flags.set(FXFlags::OV, test_bit!(data, 4, u8));
         self.flags.set(FXFlags::GO, test_bit!(data, 5, u8));    // TODO: start/stop
+        if !test_bit!(data, 5, u8) {
+            self.cbr = 0;
+        }
+    }
+}
+
+// Instructions
+impl SuperFX {
+    fn execute_instruction(&mut self) {
+        let instr = self.fetch();
+
+        match hi_nybble!(instr) {
+            0x0 => match lo_nybble!(instr) {
+                0x0 => self.stop(),
+                0x1 => self.nop(),
+                0x2 => self.cache(),
+                0x3 => self.lsr(),
+                0x4 => self.rol(),
+                0x5..=0xF => self.branch(instr),
+                _ => unreachable!(),
+            },
+            0x1 => if self.flags.contains(FXFlags::B) {
+                self.mov(instr)
+            } else {
+                self.to(instr)
+            },
+            0x2 => self.with(instr),
+            0x3 => match lo_nybble!(instr) {
+                n @ 0x0..=0xB => self.st(n as usize),
+                0xC => self.loop_(),
+                0xD => self.flags.insert(FXFlags::ALT1),
+                0xE => self.flags.insert(FXFlags::ALT2),
+                0xF => self.flags.insert(FXFlags::ALT1 | FXFlags::ALT2),
+                _ => unreachable!(),
+            },
+            0x4 => match lo_nybble!(instr) {
+                n @ 0x0..=0xB => self.ld(n as usize),
+                0xC => self.pix(),
+                0xD => self.swap(),
+                0xE => self.creg(),
+                0xF => self.not(),
+                _ => unreachable!(),
+            },
+            0x5 => self.add(instr),
+            0x6 => self.sub(instr),
+            0x7 => match lo_nybble!(instr) {
+                0 => self.merge(),
+                n => self.logic_7(n),
+            },
+            0x8 => self.mult_byte(lo_nybble!(instr)),
+            0x9 => match lo_nybble!(instr) {
+                0x0 => self.sbk(),
+                n @ 0x1..=0x4 => self.link(n),
+                0x5 => self.sex(),
+                0x6 => self.asr(),
+                0x7 => self.ror(),
+                n @ 0x8..=0xD => self.jmp(n),
+                0xE => self.lob(),
+                0xF => self.mult_word(),
+                _ => unreachable!(),
+            },
+            0xA => match self.alt() {
+                0 => self.ibt(instr),
+                1 => self.lms(instr),
+                2 => self.sms(instr),
+                3 => self.reset_prefix(),
+                _ => unreachable!(),
+            },
+            0xB => if self.flags.contains(FXFlags::B) {
+                self.moves(instr)
+            } else {
+                self.from(instr)
+            },
+            0xC => match lo_nybble!(instr) {
+                0 => self.hib(),
+                n => self.logic_c(n),
+            },
+            0xD => match lo_nybble!(instr) {
+                0xF => self.reg_mov(),
+                n => self.inc(n),
+            },
+            0xE => match lo_nybble!(instr) {
+                0xF => self.getb(),
+                n => self.dec(n),
+            },
+            0xF => match self.alt() {
+                0 => self.iwt(instr),
+                1 => self.lm(instr),
+                2 => self.sm(instr),
+                3 => self.reset_prefix(),
+                _ => unreachable!(),
+            },
+
+            _ => unreachable!(),
+        }
+    }
+}
+
+// Prefixes
+impl SuperFX {
+    fn to(&mut self, instr: u8) {
+        let reg = lo_nybble!(instr);
+        self.dst = reg as usize;
+    }
+
+    fn from(&mut self, instr: u8) {
+        let reg = lo_nybble!(instr);
+        self.src = reg as usize;
+    }
+
+    fn with(&mut self, instr: u8) {
+        let reg = lo_nybble!(instr);
+        self.src = reg as usize;
+        self.dst = reg as usize;
+        self.flags.insert(FXFlags::B);
+    }
+
+    fn reset_prefix(&mut self) {
+        self.src = 0;
+        self.dst = 0;
+        self.flags.remove(FXFlags::B | FXFlags::ALT1 | FXFlags::ALT2);
+    }
+}
+
+// Special
+impl SuperFX {
+    fn stop(&mut self) {
+        let _ = self.fetch();
+        self.flags.remove(FXFlags::GO);
+        self.flags.insert(FXFlags::IRQ);
+    }
+
+    fn nop(&mut self) {
+
+    }
+
+    fn cache(&mut self) {
+        self.cbr = self.regs[PC_REG] & 0xFFF0;
+    }
+}
+
+// Jump / branch
+impl SuperFX {
+    fn branch(&mut self, instr: u8) {
+        let offset = self.fetch() as i8;
+        match lo_nybble!(instr) {
+            0x5 => self.do_branch(offset),
+            0x6 => {
+                let s = self.flags.contains(FXFlags::S);
+                let v = self.flags.contains(FXFlags::OV);
+                if s == v {
+                    self.do_branch(offset);
+                }
+            },
+            0x7 => {
+                let s = self.flags.contains(FXFlags::S);
+                let v = self.flags.contains(FXFlags::OV);
+                if s != v {
+                    self.do_branch(offset);
+                }
+            },
+            0x8 if !self.flags.contains(FXFlags::Z) => self.do_branch(offset),
+            0x9 if self.flags.contains(FXFlags::Z) => self.do_branch(offset),
+            0xA if !self.flags.contains(FXFlags::S) => self.do_branch(offset),
+            0xB if self.flags.contains(FXFlags::S) => self.do_branch(offset),
+            0xC if !self.flags.contains(FXFlags::CY) => self.do_branch(offset),
+            0xD if self.flags.contains(FXFlags::CY) => self.do_branch(offset),
+            0xE if !self.flags.contains(FXFlags::OV) => self.do_branch(offset),
+            0xF if self.flags.contains(FXFlags::OV) => self.do_branch(offset),
+            _ => {}
+        }
+    }
+
+    fn do_branch(&mut self, offset: i8) {
+        let offset16 = (offset as i16) as u16;
+        self.regs[PC_REG] = self.regs[PC_REG].wrapping_add(offset16);
+    }
+
+    fn jmp(&mut self, n: u8) {
+        if self.flags.contains(FXFlags::ALT1) {
+            self.regs[PC_REG] = self.regs[self.src];
+            self.pb = lo!(self.regs[n as usize]);
+            // CBR = ?
+        } else {
+            self.regs[PC_REG] = self.regs[n as usize];
+        }
+        self.reset_prefix();
+    }
+
+    fn loop_(&mut self) {
+        let dec = self.regs[12].wrapping_sub(1);
+        self.flags.set(FXFlags::S, test_bit!(dec, 15));
+        self.flags.set(FXFlags::Z, dec == 0);
+        if !self.flags.contains(FXFlags::Z) {
+            self.regs[PC_REG] = self.regs[13];
+        }
+        self.reset_prefix();
+    }
+
+    fn link(&mut self, n: u8) {
+        self.regs[11] = self.regs[PC_REG].wrapping_add(n as u16);
+        self.reset_prefix();
+    }
+}
+
+// Moves
+impl SuperFX {
+    fn mov(&mut self, instr: u8) {
+        self.dst = lo_nybble!(instr) as usize;
+        self.regs[self.dst] = self.regs[self.src];
+        self.reset_prefix();
+    }
+
+    fn moves(&mut self, instr: u8) {
+        self.dst = lo_nybble!(instr) as usize;
+        let data = self.regs[self.src];
+        self.flags.set(FXFlags::OV, test_bit!(data, 7));
+        self.flags.set(FXFlags::S, test_bit!(data, 15));
+        self.flags.set(FXFlags::Z, data == 0);
+        self.regs[self.dst] = data;
+        self.reset_prefix();
+    }
+
+    fn ibt(&mut self, instr: u8) {
+        let dst = lo_nybble!(instr) as usize;
+        let data = (self.fetch() as i8) as i16;
+        self.regs[dst] = data as u16;
+        self.reset_prefix();
+    }
+
+    fn iwt(&mut self, instr: u8) {
+        let dst = lo_nybble!(instr) as usize;
+        let data_lo = self.fetch();
+        let data_hi = self.fetch();
+        self.regs[dst] = make16!(data_hi, data_lo);
+        self.reset_prefix();
+    }
+
+    fn getb(&mut self) {
+        let data = self.read_mem(self.romb, self.regs[ROM_PTR_REG]);
+
+        match self.alt() {
+            0 => self.regs[self.dst] = data as u16,
+            1 => self.regs[self.dst] = set_hi!(self.regs[self.dst], data),
+            2 => self.regs[self.dst] = set_lo!(self.regs[self.dst], data),
+            3 => self.regs[self.dst] = ((data as i8) as i16) as u16,
+            _ => unreachable!(),
+        }
+
+        self.reset_prefix();
+    }
+
+    fn ld(&mut self, n: usize) {
+        self.last_ram_addr = self.regs[n];
+
+        if self.flags.contains(FXFlags::ALT1) {
+            let lo = self.read_mem(self.ramb, self.last_ram_addr);
+            self.regs[self.dst] = make16!(0, lo);
+        } else {
+            let lo = self.read_mem(self.ramb, self.last_ram_addr);
+            let hi = self.read_mem(self.ramb, self.last_ram_addr.wrapping_add(1));
+            self.regs[self.dst] = make16!(hi, lo);
+        }
+
+        self.reset_prefix();
+    }
+
+    fn lm(&mut self, instr: u8) {
+        let lo = self.fetch();
+        let hi = self.fetch();
+        self.last_ram_addr = make16!(hi, lo);
+
+        let dst = lo_nybble!(instr) as usize;
+        let lo = self.read_mem(self.ramb, self.last_ram_addr);
+        let hi = self.read_mem(self.ramb, self.last_ram_addr.wrapping_add(1));
+        self.regs[dst] = make16!(hi, lo);
+
+        self.reset_prefix();
+    }
+
+    fn lms(&mut self, instr: u8) {
+        self.last_ram_addr = (self.fetch() as u16) << 1;
+        
+        let dst = lo_nybble!(instr) as usize;
+        let lo = self.read_mem(self.ramb, self.last_ram_addr);
+        let hi = self.read_mem(self.ramb, self.last_ram_addr.wrapping_add(1));
+        self.regs[dst] = make16!(hi, lo);
+
+        self.reset_prefix();
+    }
+
+    fn st(&mut self, n: usize) {
+        self.last_ram_addr = self.regs[n];
+
+        if self.flags.contains(FXFlags::ALT1) {
+            self.write_mem(self.ramb, self.last_ram_addr, lo!(self.regs[self.src]));
+        } else {
+            self.write_mem(self.ramb, self.last_ram_addr, lo!(self.regs[self.src]));
+            self.write_mem(self.ramb, self.last_ram_addr.wrapping_add(1), hi!(self.regs[self.src]));
+        }
+
+        self.reset_prefix();
+    }
+
+    fn sm(&mut self, instr: u8) {
+        let lo = self.fetch();
+        let hi = self.fetch();
+        self.last_ram_addr = make16!(hi, lo);
+
+        let src = lo_nybble!(instr) as usize;
+        self.write_mem(self.ramb, self.last_ram_addr, lo!(self.regs[src]));
+        self.write_mem(self.ramb, self.last_ram_addr.wrapping_add(1), hi!(self.regs[src]));
+
+        self.reset_prefix();
+    }
+
+    fn sms(&mut self, instr: u8) {
+        self.last_ram_addr = (self.fetch() as u16) << 1;
+
+        let src = lo_nybble!(instr) as usize;
+        self.write_mem(self.ramb, self.last_ram_addr, lo!(self.regs[src]));
+        self.write_mem(self.ramb, self.last_ram_addr.wrapping_add(1), hi!(self.regs[src]));
+
+        self.reset_prefix();
+    }
+
+    fn sbk(&mut self) {
+        self.write_mem(self.ramb, self.last_ram_addr, lo!(self.regs[self.src]));
+        self.write_mem(self.ramb, self.last_ram_addr.wrapping_add(1), hi!(self.regs[self.src]));
+    }
+
+    fn reg_mov(&mut self) {
+        match self.alt() {
+            0 | 1 => self.colr = self.read_mem(self.romb, self.regs[ROM_PTR_REG]),
+            2 => self.ramb = lo!(self.regs[self.src]) & 0x1,
+            3 => self.romb = lo!(self.regs[self.src]),
+            _ => unreachable!(),
+        }
+
+        self.reset_prefix();
+    }
+}
+
+// Byte ops
+impl SuperFX {
+    fn swap(&mut self) {
+        let s = self.regs[self.src];
+        let result = make16!(lo!(s), hi!(s));
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.regs[self.dst] = result;
+
+        self.reset_prefix();
+    }
+
+    fn sex(&mut self) {
+        let s = self.regs[self.src];
+        let result = ((lo!(s) as i8) as i16) as u16;
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.regs[self.dst] = result;
+
+        self.reset_prefix();
+    }
+
+    fn lob(&mut self) {
+        let s = self.regs[self.src];
+        let result = make16!(0, lo!(s));
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.regs[self.dst] = result;
+
+        self.reset_prefix();
+    }
+
+    fn hib(&mut self) {
+        let s = self.regs[self.src];
+        let result = make16!(0, hi!(s));
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.regs[self.dst] = result;
+
+        self.reset_prefix();
+    }
+
+    fn merge(&mut self) {
+        let result = make16!(hi!(self.regs[7]), hi!(self.regs[8]));
+        self.flags.set(FXFlags::Z, (result & 0xF0F0) != 0);
+        self.flags.set(FXFlags::CY, (result & 0xE0E0) != 0);
+        self.flags.set(FXFlags::S, (result & 0x8080) != 0);
+        self.flags.set(FXFlags::OV, (result & 0xC0C0) != 0);
+        self.regs[self.dst] = result;
+
+        self.reset_prefix();
+    }
+}
+
+// Bitmap
+impl SuperFX {
+    fn creg(&mut self) {
+        if self.flags.contains(FXFlags::ALT1) {
+            self.por = PlotOption::from_bits_truncate(lo!(self.regs[self.src]));
+        } else {
+            self.colr = lo!(self.regs[self.src]);
+        }
+
+        self.reset_prefix();
+    }
+
+    fn pix(&mut self) {
+        if self.flags.contains(FXFlags::ALT1) {
+            // RPIX
+        } else {
+            // PLOT
+        }
+
+        self.reset_prefix();
+    }
+}
+
+// Arithmetic
+impl SuperFX {
+    fn add(&mut self, instr: u8) {
+        let n = lo_nybble!(instr);
+        match self.alt() {
+            0 => self.regs[self.dst] = self.bin_arith(self.regs[n as usize], false),
+            1 => self.regs[self.dst] = self.bin_arith(self.regs[n as usize], true),
+            2 => self.regs[self.dst] = self.bin_arith(n as u16, false),
+            3 => self.regs[self.dst] = self.bin_arith(n as u16, true),
+            _ => unreachable!(),
+        }
+        self.reset_prefix();
+    }
+
+    fn sub(&mut self, instr: u8) {
+        let n = lo_nybble!(instr);
+        match self.alt() {
+            0 => self.regs[self.dst] = self.bin_arith(!self.regs[n as usize], false),
+            1 => self.regs[self.dst] = self.bin_arith(!self.regs[n as usize], true),
+            2 => self.regs[self.dst] = self.bin_arith(!(n as u16), false),
+            3 => {let _ = self.bin_arith(!(n as u16), false);}, // CMP
+            _ => unreachable!(),
+        }
+        self.reset_prefix();
+    }
+
+    fn inc(&mut self, n: u8) {
+        let result = self.regs[n as usize].wrapping_add(1);
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.regs[n as usize] = result;
+    }
+
+    fn dec(&mut self, n: u8) {
+        let result = self.regs[n as usize].wrapping_sub(1);
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.regs[n as usize] = result;
+    }
+
+    fn bin_arith(&mut self, op_n: u16, with_carry: bool) -> u16 {
+        let op0 = self.regs[self.src] as u32;
+        let op1 = op_n as u32;
+        let carry = if with_carry && self.flags.contains(FXFlags::CY) {1} else {0};
+        let result = op0.wrapping_add(op1).wrapping_add(carry);
+        self.flags.set(FXFlags::Z, lo32!(result) == 0);
+        self.flags.set(FXFlags::CY, test_bit!(result, 16, u32));
+        self.flags.set(FXFlags::S, test_bit!(result, 15, u32));
+        self.flags.set(FXFlags::OV, test_bit!(!(op0 ^ op1) & (op0 ^ result), 15, u32));
+        lo32!(result)
+    }
+
+}
+
+// Logic
+impl SuperFX {
+
+    // AND and BIC
+    fn logic_7(&mut self, n: u8) {
+        match self.alt() {
+            0 => self.and(self.regs[n as usize]),
+            1 => self.bic(self.regs[n as usize]),
+            2 => self.and(n as u16),
+            3 => self.bic(n as u16),
+            _ => unreachable!(),
+        }
+        self.reset_prefix();
+    }
+
+    // OR and XOR
+    fn logic_c(&mut self, n: u8) {
+        match self.alt() {
+            0 => self.or(self.regs[n as usize]),
+            1 => self.xor(self.regs[n as usize]),
+            2 => self.or(n as u16),
+            3 => self.xor(n as u16),
+            _ => unreachable!(),
+        }
+        self.reset_prefix();
+    }
+
+    fn and(&mut self, op_n: u16) {
+        let result = self.regs[self.src] & op_n;
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.regs[self.dst] = result;
+    }
+
+    fn bic(&mut self, op_n: u16) {
+        let result = self.regs[self.src] & !op_n;
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.regs[self.dst] = result;
+    }
+
+    fn or(&mut self, op_n: u16) {
+        let result = self.regs[self.src] | op_n;
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.regs[self.dst] = result;
+    }
+
+    fn xor(&mut self, op_n: u16) {
+        let result = self.regs[self.src] ^ op_n;
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.regs[self.dst] = result;
+    }
+
+    fn not(&mut self) {
+        self.regs[self.dst] = !self.regs[self.src];
+
+        self.reset_prefix();
+    }
+
+    fn lsr(&mut self) {
+        let s = self.regs[self.src];
+        let result = s >> 1;
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::CY, test_bit!(s, 0));
+        self.flags.set(FXFlags::S, false);
+        self.regs[self.dst] = result;
+
+        self.reset_prefix();
+    }
+
+    fn asr(&mut self) {
+        let s = self.regs[self.src];
+        let result = if self.flags.contains(FXFlags::ALT1) && s == std::u16::MAX {
+            0
+        } else {
+            ((s as i16) >> 1) as u16
+        };
+
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::CY, test_bit!(s as u16, 0));
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.regs[self.dst] = result;
+
+        self.reset_prefix();
+    }
+
+    fn rol(&mut self) {
+        let s = self.regs[self.src];
+        let result = (s << 1) | if self.flags.contains(FXFlags::CY) {1} else {0};
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::CY, test_bit!(s, 15));
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.regs[self.dst] = result;
+
+        self.reset_prefix();
+    }
+
+    fn ror(&mut self) {
+        let s = self.regs[self.src];
+        let result = (s >> 1) | if self.flags.contains(FXFlags::CY) {bit!(15, u16)} else {0};
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::CY, test_bit!(s, 0));
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.regs[self.dst] = result;
+
+        self.reset_prefix();
+    }
+}
+
+// Mult
+impl SuperFX {
+    fn mult_word(&mut self) {
+        let s = (self.regs[self.src] as i16) as i32;
+        let op = (self.regs[6] as i16) as i32;
+        let result = (s * op) as u32;
+        self.flags.set(FXFlags::Z, result == 0);
+        //self.flags.set(FXFlags::CY, test_bit!(s, 0)); ??
+        self.flags.set(FXFlags::S, test_bit!(result, 31, u32));
+
+        if self.flags.contains(FXFlags::ALT1) { // LMULT
+            self.regs[self.dst] = hi32!(result);
+            self.regs[4] = lo32!(result);
+        } else {                                // FMULT
+            self.regs[self.dst] = hi32!(result);
+        }
+
+        self.reset_prefix();
+    }
+
+    fn mult_byte(&mut self, n: u8) {
+        match self.alt() {
+            0 => self.signed_mult(lo!(self.regs[n as usize])),
+            1 => self.unsigned_mult(lo!(self.regs[n as usize])),
+            2 => self.signed_mult(n),
+            3 => self.unsigned_mult(n),
+            _ => unimplemented!(),
+        }
+        self.reset_prefix();
+    }
+
+    fn signed_mult(&mut self, op: u8) {
+        let s = (self.regs[self.src] as i8) as i16;
+        let n = (op as i8) as i16;
+        let result = (s * n) as u16;
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.regs[self.dst] = result;
+    }
+
+    fn unsigned_mult(&mut self, op: u8) {
+        let s = self.regs[self.src] as u16;
+        let n = op as u16;
+        let result = s * n;
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.regs[self.dst] = result;
     }
 }
 
 impl SuperFX {
+    fn read_mem(&mut self, bank: u8, addr: u16) -> u8 {
+        let data = self.mem.fx_read(bank, addr);
+        self.cycle_count += if self.clock_select {5} else {3};
+        data
+    }
+
+    fn write_mem(&mut self, bank: u8, addr: u16, data: u8) {
+        self.mem.fx_write(bank, addr, data);
+        self.cycle_count += if self.clock_select {5} else {3};
+    }
+
     fn fetch(&mut self) -> u8 {
-        let data = self.mem.fx_read(self.pb, self.regs[PC_REG]);
+        let data = self.read_mem(self.pb, self.pc);
+        self.pc = self.regs[PC_REG];
         self.regs[PC_REG] = self.regs[PC_REG].wrapping_add(1);
         data
+    }
+
+    fn alt(&self) -> u16 {
+        (self.flags & (FXFlags::ALT1 | FXFlags::ALT2)).bits() >> 8
     }
 }

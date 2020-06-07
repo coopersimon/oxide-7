@@ -74,8 +74,12 @@ impl ROMHeader {
     /// SRAM size in bytes.
     pub fn sram_size(&self) -> usize {
         if self.rom_type().enhancement_chip() == Some(EnhancementChip::SuperFX) {
-            let expansion_ram_size = 0x400 << self.data[0x0D];
-            std::cmp::max(expansion_ram_size, 1024 * 32)
+            if self.is_extended() {
+                let expansion_ram_size = 0x400 << self.data[0x0D];
+                std::cmp::max(expansion_ram_size, 1024 * 32)
+            } else {
+                1024 * 32
+            }
         } else if self.rom_type().has_sram() {
             let indicated_size = 0x400 << self.data[0x28];
             std::cmp::min(indicated_size, 1024 * 512)
@@ -90,7 +94,6 @@ impl ROMHeader {
     }
 
     /// Check if this uses the extended header format.
-    #[allow(dead_code)]
     pub fn is_extended(&self) -> bool {
         self.data[0x2A] == 0x33
     }
