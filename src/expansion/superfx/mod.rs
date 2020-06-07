@@ -1,6 +1,7 @@
 // MARIO Chip, Super FX and Super FX 2 (GSU)
-mod cache;
 mod mem;
+mod icache;
+mod writecache;
 
 use bitflags::bitflags;
 
@@ -9,8 +10,9 @@ use crate::{
     mem::rom::{ROM, SRAM}
 };
 
-use cache::*;
 use mem::FXMem;
+use icache::*;
+use writecache::*;
 use super::Expansion;
 
 bitflags! {
@@ -89,8 +91,9 @@ pub struct SuperFX {
     version:        u8,
     clock_select:   bool,
 
-    cache:          Cache,
+    cache:          InstructionCache,
     mem:            FXMem,
+    write_cache:    WriteCache,
 
     cycle_count:    isize,
 }
@@ -121,8 +124,9 @@ impl SuperFX {
             version:        0,
             clock_select:   false,
 
-            cache:          Cache::new(),
+            cache:          InstructionCache::new(),
             mem:            FXMem::new(rom, sram),
+            write_cache:    WriteCache::new(),
 
             cycle_count:    0,
         }
@@ -205,7 +209,14 @@ impl SuperFX {
             0x3030 => self.set_status_flags(data),
             0x3034 => self.pb = data,
             0x3037 => self.cfg = Config::from_bits_truncate(data),
-            0x3039 => self.clock_select = test_bit!(data, 0, u8),
+            0x3039 => {
+                self.clock_select = test_bit!(data, 0, u8);
+                if self.clock_select {
+                    self.write_cache.set_writeback_duration(5);
+                } else {
+                    self.write_cache.set_writeback_duration(3);
+                }
+            },
             
             0x3038 => self.screen_base = data,
             0x303A => self.screen_mode = ScreenMode::from_bits_truncate(data),
@@ -213,8 +224,6 @@ impl SuperFX {
             0x3100..=0x32FF => self.cache.write(addr - 0x3100, data),
             _ => {},
         }
-        
-        
     }
 
     fn set_status_flags(&mut self, data: u8) {
@@ -225,7 +234,6 @@ impl SuperFX {
         self.flags.set(FXFlags::GO, test_bit!(data, 5, u8));    // TODO: start/stop
         if !test_bit!(data, 5, u8) {
             self.cache.set_cbr(0);
-            // TODO: fill start?
         }
     }
 }
@@ -531,10 +539,9 @@ impl SuperFX {
         self.last_ram_addr = self.regs[n];
 
         if self.flags.contains(FXFlags::ALT1) {
-            self.write_mem(self.ramb, self.last_ram_addr, lo!(self.regs[self.src]));
+            self.write_mem_byte(self.ramb, self.last_ram_addr, lo!(self.regs[self.src]));
         } else {
-            self.write_mem(self.ramb, self.last_ram_addr, lo!(self.regs[self.src]));
-            self.write_mem(self.ramb, self.last_ram_addr.wrapping_add(1), hi!(self.regs[self.src]));
+            self.write_mem_word(self.ramb, self.last_ram_addr, self.regs[self.src]);
         }
 
         self.reset_prefix();
@@ -546,8 +553,7 @@ impl SuperFX {
         self.last_ram_addr = make16!(hi, lo);
 
         let src = lo_nybble!(instr) as usize;
-        self.write_mem(self.ramb, self.last_ram_addr, lo!(self.regs[src]));
-        self.write_mem(self.ramb, self.last_ram_addr.wrapping_add(1), hi!(self.regs[src]));
+        self.write_mem_word(self.ramb, self.last_ram_addr, self.regs[src]);
 
         self.reset_prefix();
     }
@@ -556,15 +562,13 @@ impl SuperFX {
         self.last_ram_addr = (self.fetch() as u16) << 1;
 
         let src = lo_nybble!(instr) as usize;
-        self.write_mem(self.ramb, self.last_ram_addr, lo!(self.regs[src]));
-        self.write_mem(self.ramb, self.last_ram_addr.wrapping_add(1), hi!(self.regs[src]));
+        self.write_mem_word(self.ramb, self.last_ram_addr, self.regs[src]);
 
         self.reset_prefix();
     }
 
     fn sbk(&mut self) {
-        self.write_mem(self.ramb, self.last_ram_addr, lo!(self.regs[self.src]));
-        self.write_mem(self.ramb, self.last_ram_addr.wrapping_add(1), hi!(self.regs[self.src]));
+        self.write_mem_word(self.ramb, self.last_ram_addr, self.regs[self.src]);
     }
 
     fn reg_mov(&mut self) {
@@ -848,6 +852,8 @@ impl SuperFX {
             self.set_dst_reg(hi32!(result));
         }
 
+        self.clock_inc(if self.cfg.contains(Config::MS0) && !self.clock_select {3} else {7});
+
         self.reset_prefix();
     }
 
@@ -859,6 +865,11 @@ impl SuperFX {
             3 => self.unsigned_mult(n),
             _ => unimplemented!(),
         }
+
+        if !self.cfg.contains(Config::MS0) || self.clock_select {
+            self.clock_inc(1);
+        }
+
         self.reset_prefix();
     }
 
@@ -882,21 +893,44 @@ impl SuperFX {
 }
 
 impl SuperFX {
+    fn clock_inc(&mut self, cycles: isize) {
+        self.cycle_count += cycles;
+        match self.write_cache.clock(cycles) {
+            WritebackData::Byte(d) => self.mem.fx_write(self.write_cache.bank, self.write_cache.addr, d),
+            WritebackData::Word(lo, hi) => {
+                self.mem.fx_write(self.write_cache.bank, self.write_cache.addr, lo);
+                self.mem.fx_write(self.write_cache.bank, self.write_cache.addr.wrapping_add(1), hi);
+            },
+            WritebackData::None => {},
+        }
+    }
+
     fn read_mem(&mut self, bank: u8, addr: u16) -> u8 {
         let data = self.mem.fx_read(bank, addr);
-        self.cycle_count += if self.clock_select {5} else {3};
+        self.clock_inc(if self.clock_select {5} else {3});
         data
     }
 
-    fn write_mem(&mut self, bank: u8, addr: u16, data: u8) {
-        self.mem.fx_write(bank, addr, data);
-        self.cycle_count += if self.clock_select {5} else {3};
+    fn write_mem_byte(&mut self, bank: u8, addr: u16, data: u8) {
+        let writeback_cycles = self.write_cache.write_byte(bank, addr, data);
+        if writeback_cycles > 0 {
+            self.clock_inc(writeback_cycles);
+            let _ = self.write_cache.write_byte(bank, addr, data);  // panic if !0
+        }
+    }
+
+    fn write_mem_word(&mut self, bank: u8, addr: u16, data: u16) {
+        let writeback_cycles = self.write_cache.write_word(bank, addr, data);
+        if writeback_cycles > 0 {
+            self.clock_inc(writeback_cycles);
+            let _ = self.write_cache.write_word(bank, addr, data);  // panic if !0
+        }
     }
 
     fn fetch(&mut self) -> u8 {
         let data = match self.cache.try_read(self.pc) {
             CacheResult::InCache(data) => {
-                self.cycle_count += 1;
+                self.clock_inc(1);
                 data
             },
             CacheResult::Request => {

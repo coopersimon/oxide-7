@@ -37,12 +37,12 @@ pub enum CacheResult {
     OutsideCache    // The requested data is outside the cache.
 }
 
-pub struct Cache {
+pub struct InstructionCache {
     lines:  [CacheLine; 32],
     cbr:    u16,
 }
 
-impl Cache {
+impl InstructionCache {
     pub fn new() -> Self {
         Self {
             lines:  [CacheLine::new(); 32],
