@@ -6,7 +6,7 @@ use super::Expansion;
 use crate::{
     common::Interrupt,
     cpu::CPU,
-    mem::rom::ROM
+    mem::rom::{ROM, SRAM}
 };
 
 use mem::SA1Bus;
@@ -17,8 +17,8 @@ pub struct SA1 {
 }
 
 impl SA1 {
-    pub fn new(rom: ROM, lo_rom: bool) -> Self {
-        let mem = SA1Bus::new(rom, lo_rom);
+    pub fn new(rom: ROM, lo_rom: bool, sram: Box<dyn SRAM>) -> Self {
+        let mem = SA1Bus::new(rom, lo_rom, sram);
         Self {
             cpu: CPU::new(mem, 2),
             cycle_count: 0,
@@ -44,5 +44,9 @@ impl Expansion for SA1 {
         }
 
         self.cpu.get_bus().check_snes_interrupts()
+    }
+
+    fn flush(&mut self) {
+        self.cpu.get_bus().flush();
     }
 }

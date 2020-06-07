@@ -13,7 +13,7 @@ use crate::{
     mem::{
         MemBus,
         RAM,
-        rom::ROM
+        rom::{ROM, SRAM}
     }
 };
 
@@ -91,9 +91,8 @@ bitflags! {
 pub struct SA1Bus {
     // Memory
     rom:    ROM,
-    // SRAM?
     iram:   RAM,
-    bwram:  RAM,
+    bwram:  Box<dyn SRAM>,
 
     // Banking
     rom_bank_c: u8,
@@ -142,11 +141,11 @@ pub struct SA1Bus {
 }
 
 impl SA1Bus {
-    pub fn new(rom: ROM, lo_rom: bool) -> Self {
+    pub fn new(rom: ROM, lo_rom: bool, sram: Box<dyn SRAM>) -> Self {
         Self {
             rom:        rom,
             iram:       RAM::new(0x800),
-            bwram:      RAM::new(0x20000),
+            bwram:      sram,//RAM::new(0x20000),
 
             rom_bank_c: 0,
             rom_bank_d: 1,
@@ -247,6 +246,10 @@ impl SA1Bus {
 
     pub fn get_cycle_count(&mut self) -> usize {
         std::mem::replace(&mut self.cycle_count, 0)
+    }
+
+    pub fn flush(&mut self) {
+        self.bwram.flush();
     }
 }
 

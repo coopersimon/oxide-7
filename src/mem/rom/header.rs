@@ -14,19 +14,19 @@ const SA1_MAPPING_MASK: u8 = 0xEB;
 const ROM_MAPPING_MASK: u8 = 0xE9;
 
 pub struct ROMHeader {
-    data: [u8; 40]
+    data: [u8; 50]
 }
 
 impl ROMHeader {
     pub fn new() -> Self {
         Self {
-            data: [0; 40]
+            data: [0; 50]
         }
     }
 
     /// Set the header to the LOROM position, and check if it is a lorom header.
     pub fn try_lo(&mut self, reader: &mut BufReader<File>) -> bool {
-        const LO_ROM_HEADER_START: u64 = 0x7FC0;
+        const LO_ROM_HEADER_START: u64 = 0x7FB0;
         const LO_ROM: u8 = 0x20;
         const LO_ROM_SA1: u8 = 0x23;
 
@@ -39,7 +39,7 @@ impl ROMHeader {
 
     /// Set the header to the HIROM position, and check if it is a hirom header.
     pub fn try_hi(&mut self, reader: &mut BufReader<File>) -> bool {
-        const HI_ROM_HEADER_START: u64 = 0xFFC0;
+        const HI_ROM_HEADER_START: u64 = 0xFFB0;
         const HI_ROM: u8 = 0x21;
 
         reader.seek(SeekFrom::Start(HI_ROM_HEADER_START)).expect("Couldn't seek to cartridge header.");
@@ -53,28 +53,31 @@ impl ROMHeader {
     /// Name of the game.
     pub fn rom_name(&self) -> String {
         use std::str::FromStr;
-        String::from_str(std::str::from_utf8(&self.data[0..21]).unwrap()).unwrap()
+        String::from_str(std::str::from_utf8(&self.data[0x10..0x25]).unwrap()).unwrap()
     }
 
     /// Mapping type.
     pub fn rom_mapping(&self) -> u8 {
-        self.data[0x15]
+        self.data[0x25]
     }
 
     /// ROM type
     pub fn rom_type(&self) -> ROMType {
-        self.data[0x16].into()
+        self.data[0x26].into()
     }
 
     /// ROM size in bytes.
     pub fn rom_size(&self) -> usize {
-        0x400 << self.data[0x17]
+        0x400 << self.data[0x27]
     }
 
     /// SRAM size in bytes.
     pub fn sram_size(&self) -> usize {
-        if self.rom_type().has_sram() {
-            let indicated_size = 0x400 << self.data[0x18];
+        if self.rom_type().enhancement_chip() == Some(EnhancementChip::SuperFX) {
+            let expansion_ram_size = 0x400 << self.data[0x0D];
+            std::cmp::max(expansion_ram_size, 1024 * 32)
+        } else if self.rom_type().has_sram() {
+            let indicated_size = 0x400 << self.data[0x28];
             std::cmp::min(indicated_size, 1024 * 512)
         } else {
             0
@@ -85,9 +88,15 @@ impl ROMHeader {
     pub fn fast_rom(&self) -> bool {
         (self.rom_mapping() & 0x30) == 0x30
     }
+
+    /// Check if this uses the extended header format.
+    #[allow(dead_code)]
+    pub fn is_extended(&self) -> bool {
+        self.data[0x2A] == 0x33
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum EnhancementChip {
     DSP,
     SuperFX,

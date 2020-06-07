@@ -2,17 +2,20 @@
 
 mod dsp;
 mod sa1;
+mod superfx;
 
 use crate::common::Interrupt;
 
 pub use dsp::DSP;
 pub use sa1::SA1;
+pub use superfx::SuperFX;
 
 pub trait Expansion {
     fn read(&mut self, bank: u8, addr: u16) -> u8;
     fn write(&mut self, bank: u8, addr: u16, data: u8);
 
     fn clock(&mut self, cycles: usize) -> Interrupt;
+    fn flush(&mut self) {}
 }
 
 impl Expansion for DSP {

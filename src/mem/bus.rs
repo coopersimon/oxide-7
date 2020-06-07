@@ -92,9 +92,8 @@ impl MemBus for AddrBusA {
                 0x2180          => self.read_wram(),
                 0x2100..=0x21FF => (0, FAST_MEM_ACCESS),
                 0x2200..=0x23FF => (self.cart.read_exp(offset), FAST_MEM_ACCESS),
-                0x3000..=0x3FFF => (self.cart.read_exp(offset), FAST_MEM_ACCESS),                                // Extensions
+                0x3000..=0x3FFF => (self.cart.read_exp(offset), FAST_MEM_ACCESS),   // Extensions
 
-                0x4000..=0x4015 |
                 0x4000..=0x41FF => (self.joypads.read(offset), XSLOW_MEM_ACCESS),
                 0x4210..=0x421F => (self.read_reg(offset), FAST_MEM_ACCESS),
 
@@ -108,7 +107,7 @@ impl MemBus for AddrBusA {
                 0x4370..=0x437A => (self.dma_channels[7].read((addr as u8) & 0xF), FAST_MEM_ACCESS),
 
                 0x6000..=0xFFFF => self.cart.read(bank, offset),
-                _               => (0, FAST_MEM_ACCESS),                                // Unmapped
+                _               => (0, FAST_MEM_ACCESS),                            // Unmapped
             },
             0x40..=0x7D | 0xC0..=0xFF => self.cart.read(bank, offset),
             0x7E | 0x7F => (self.wram.read(addr - 0x7E0000), SLOW_MEM_ACCESS),
@@ -132,9 +131,8 @@ impl MemBus for AddrBusA {
                 0x2200..=0x23FF => {self.cart.write_exp(offset, data); FAST_MEM_ACCESS}
                 0x3000..=0x3FFF => {self.cart.write_exp(offset, data); FAST_MEM_ACCESS}, // Extensions
 
-                0x4000..=0x4015 |
-                0x4017..=0x41FF => XSLOW_MEM_ACCESS,
                 0x4016          => {self.joypads.latch_all(data); XSLOW_MEM_ACCESS},
+                0x4000..=0x41FF => XSLOW_MEM_ACCESS,
 
                 0x4200..=0x420d => {self.write_reg(offset, data); FAST_MEM_ACCESS},
 

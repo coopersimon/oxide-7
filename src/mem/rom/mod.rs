@@ -21,6 +21,7 @@ use crate::{
 
 use header::*;
 use sram::*;
+pub use sram::SRAM;
 
 const LOROM_RAM_BANK_SIZE: u32 = 0x8000;
 const HIROM_RAM_BANK_SIZE: u32 = 0x2000;
@@ -120,7 +121,8 @@ enum CartMappingMode {
     Lo,
     LoLarge,
     Hi,
-    SA
+    SA,
+    SuperFX
 }
 
 type CartMappingFn = fn(u8, u16) -> CartDevice;
@@ -210,10 +212,19 @@ impl CartBuilder {
     fn with_sa1(mut self) -> Self {
         use CartMappingMode::*;
 
-        let sa1 = Box::new(SA1::new(self.rom.take().unwrap(), true));
+        let sa1 = Box::new(SA1::new(self.rom.take().unwrap(), true, self.ram.take().unwrap()));
         self.expansion = Some(sa1);
 
         self.mapping_mode = SA;
+
+        self
+    }
+
+    fn with_superfx(mut self) -> Self {
+        let super_fx = Box::new(SuperFX::new(self.rom.take().unwrap(), self.ram.take().unwrap()));
+        self.expansion = Some(super_fx);
+
+        self.mapping_mode = CartMappingMode::SuperFX;
 
         self
     }
@@ -250,11 +261,18 @@ impl CartBuilder {
                 self.mappings.push(CartMapping::new(0x40, 0x6F, 0, |bank, addr| CartDevice::Expansion(bank, addr)));
                 self.mappings.push(CartMapping::new(0xC0, 0xFF, 0, |bank, addr| CartDevice::Expansion(bank, addr)));
             },
+            SuperFX => {
+                self.mappings.push(CartMapping::new(0x00, 0x3F, 0x3000, |bank, addr| CartDevice::Expansion(bank, addr)));
+                self.mappings.push(CartMapping::new(0x80, 0xBF, 0x3000, |bank, addr| CartDevice::Expansion(bank, addr)));
+
+                self.mappings.push(CartMapping::new(0x40, 0x5F, 0, |bank, addr| CartDevice::Expansion(bank, addr)));
+                self.mappings.push(CartMapping::new(0xC0, 0xDF, 0, |bank, addr| CartDevice::Expansion(bank, addr)));
+            },
         }
 
         // SRAM
         match self.mapping_mode {
-            Lo | LoLarge | SA => {  // TODO: move to SA
+            Lo | LoLarge => {
                 self.mappings.push(CartMapping::new(0x70, 0x7F, 0, |bank, addr| {
                     let ram_bank = ((bank - 0x70) as u32) * LOROM_RAM_BANK_SIZE;
                     CartDevice::RAM(ram_bank + addr as u32)
@@ -265,13 +283,18 @@ impl CartBuilder {
                     let ram_bank = ((bank % 0x10) as u32) * HIROM_RAM_BANK_SIZE;
                     CartDevice::RAM(ram_bank + (addr as u32 - 0x6000))
                 }));
-            }
+            },
+            SuperFX => {
+                self.mappings.push(CartMapping::new(0x60, 0x7F, 0, |bank, addr| CartDevice::Expansion(bank, addr)));
+                self.mappings.push(CartMapping::new(0xE0, 0xEF, 0, |bank, addr| CartDevice::Expansion(bank, addr)));
+            },
+            _ => {}
         }
 
         Box::new(Cart {
             mappings:   self.mappings,
             rom:        self.rom,
-            ram:        self.ram.expect("Cannot construct cart without RAM"),
+            ram:        self.ram.unwrap_or(Box::new(EmptySRAM::new())),
             expansion:  self.expansion,
 
             fast_rom:   self.fast_rom,
@@ -332,6 +355,7 @@ impl Cart {
                     CartDevice::RAM(addr) => (self.ram.read(addr), timing::SLOW_MEM_ACCESS),
                     CartDevice::Expansion(bank, addr) => {
                         let data = self.expansion.as_mut().map_or(0, |e| e.read(bank, addr));
+                        //println!("Reading {:X} from {:X}", data, addr);
                         (data, timing::SLOW_MEM_ACCESS)
                     },
                 };
@@ -374,6 +398,9 @@ impl Cart {
 
     pub fn flush(&mut self) {
         self.ram.flush();
+        if let Some(e) = self.expansion.as_mut() {
+            e.flush();
+        }
     }
 
     pub fn set_rom_speed(&mut self, data: u8) {

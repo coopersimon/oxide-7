@@ -98,7 +98,7 @@ impl SRAM for SizedSRAM {
 pub struct EmptySRAM {}
 
 impl EmptySRAM {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {}
     }
 }
