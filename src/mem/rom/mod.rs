@@ -66,9 +66,8 @@ pub fn create_cart(cart_path: &str, save_path: &str, dsp_path: Option<&str>) -> 
             dsp_reader.read_exact(&mut buffer).expect("Couldn't read into DSP ROM");
             cart.with_dsp(Box::new(DSP::new(&buffer)))
         },
-        Some(EnhancementChip::SA1) => {
-            cart.with_sa1()
-        },
+        Some(EnhancementChip::SA1) => cart.with_sa1(),
+        Some(EnhancementChip::SuperFX) => cart.with_superfx(),
         Some(e) => panic!("Unsupported enhancement chip {:?}", e),
         None => cart,
     }.build()
