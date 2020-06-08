@@ -1,6 +1,7 @@
 // MARIO Chip, Super FX and Super FX 2 (GSU)
 mod mem;
 mod icache;
+mod pixelcache;
 mod writecache;
 
 use bitflags::bitflags;
@@ -12,6 +13,7 @@ use crate::{
 
 use mem::FXMem;
 use icache::*;
+use pixelcache::*;
 use writecache::*;
 use super::Expansion;
 
@@ -41,28 +43,15 @@ bitflags! {
     }
 }
 
-bitflags! {
-    #[derive(Default)]
-    struct ScreenMode: u8 {
-        const HT1 = bit!(5);
-        const RON = bit!(4);
-        const RAN = bit!(3);
-        const HT0 = bit!(2);
-        const MD = bits![1, 0];
-    }
-}
-
-bitflags! {
-    #[derive(Default)]
-    struct PlotOption: u8 {
-        const OBJ_MODE = bit!(4);
-        const FREEZE_HI = bit!(3);
-        const HI_NYBBLE = bit!(2);
-        const DITHER = bit!(1);
-        const TRANSPARENT = bit!(0);
-    }
-}
-
+const PLOT_X_REG: usize = 1;
+const PLOT_Y_REG: usize = 2;
+const MULT_DST_REG: usize = 4;
+const MULT_OP_REG: usize = 6;
+const MERGE_HI_REG: usize = 7;
+const MERGE_LO_REG: usize = 8;
+const LINK_REG: usize = 11;
+const LOOP_CTR_REG: usize = 12;
+const LOOP_PTR_REG: usize = 13;
 const ROM_PTR_REG: usize = 14;
 const PC_REG: usize = 15;
 
@@ -82,17 +71,12 @@ pub struct SuperFX {
     src:        usize,
     dst:        usize,
 
-    // TODO: move?
-    screen_base:    u8,
-    screen_mode:    ScreenMode,
-    colr:           u8,
-    por:            PlotOption,
-
     version:        u8,
     clock_select:   bool,
 
     cache:          InstructionCache,
     mem:            FXMem,
+    pixel_cache:    PixelCache,
     write_cache:    WriteCache,
 
     cycle_count:    isize,
@@ -116,16 +100,12 @@ impl SuperFX {
             src:        0,
             dst:        0,
 
-            screen_base:    0,
-            screen_mode:    ScreenMode::default(),
-            colr:           0,
-            por:            PlotOption::default(),
-
-            version:        0,
+            version:        4,
             clock_select:   false,
 
             cache:          InstructionCache::new(),
             mem:            FXMem::new(rom, sram),
+            pixel_cache:    PixelCache::new(),
             write_cache:    WriteCache::new(),
 
             cycle_count:    0,
@@ -154,14 +134,22 @@ impl Expansion for SuperFX {
 
     fn clock(&mut self, cycles: usize) -> Interrupt {
         // Convert master cycles to FX cycles.
-        let fx_cycles = if self.clock_select {cycles} else {cycles / 2};
-        self.cycle_count -= fx_cycles as isize;
+        if self.flags.contains(FXFlags::GO) {
+            let fx_cycles = if self.clock_select {cycles} else {cycles / 2};
+            self.cycle_count -= fx_cycles as isize;
 
-        while self.cycle_count <= 0 {
-            self.step();
+            while self.cycle_count <= 0 {
+                self.step();
+            }
+
+            if self.flags.contains(FXFlags::IRQ) {
+                Interrupt::IRQ
+            } else {
+                Interrupt::default()
+            }
+        } else {
+            Interrupt::default()
         }
-
-        Interrupt::default()
     }
 
     fn flush(&mut self) {
@@ -203,8 +191,10 @@ impl SuperFX {
                 self.regs_latch = data;
             },
             0x301F => {
-                self.regs[PC_REG] = make16!(data, self.regs_latch);
-                // start
+                self.pc = make16!(data, self.regs_latch);
+                self.regs[PC_REG] = self.pc.wrapping_add(1);
+                self.flags.insert(FXFlags::GO);
+                //println!("FX GO!");
             },
             0x3030 => self.set_status_flags(data),
             0x3034 => self.pb = data,
@@ -218,8 +208,8 @@ impl SuperFX {
                 }
             },
             
-            0x3038 => self.screen_base = data,
-            0x303A => self.screen_mode = ScreenMode::from_bits_truncate(data),
+            0x3038 => self.pixel_cache.set_screen_base(data),
+            0x303A => self.pixel_cache.set_screen_mode(data),
 
             0x3100..=0x32FF => self.cache.write(addr - 0x3100, data),
             _ => {},
@@ -227,11 +217,12 @@ impl SuperFX {
     }
 
     fn set_status_flags(&mut self, data: u8) {
+        self.flags.remove(FXFlags::IRQ);
         self.flags.set(FXFlags::Z, test_bit!(data, 1, u8));
         self.flags.set(FXFlags::CY, test_bit!(data, 2, u8));
         self.flags.set(FXFlags::S, test_bit!(data, 3, u8));
         self.flags.set(FXFlags::OV, test_bit!(data, 4, u8));
-        self.flags.set(FXFlags::GO, test_bit!(data, 5, u8));    // TODO: start/stop
+        self.flags.set(FXFlags::GO, test_bit!(data, 5, u8));
         if !test_bit!(data, 5, u8) {
             self.cache.set_cbr(0);
         }
@@ -359,18 +350,23 @@ impl SuperFX {
 // Special
 impl SuperFX {
     fn stop(&mut self) {
-        let _ = self.fetch();
+        //let _ = self.fetch();
         self.flags.remove(FXFlags::GO);
-        self.flags.insert(FXFlags::IRQ);
+        if !self.cfg.contains(Config::IRQ) {
+            self.flags.insert(FXFlags::IRQ);
+        }
+        //println!("FX STOP!");
+        self.reset_prefix();
     }
 
     fn nop(&mut self) {
-
+        self.reset_prefix();
     }
 
     fn cache(&mut self) {
         self.cache.set_cbr(self.regs[PC_REG] & 0xFFF0);
         self.fill_cache_line_start();
+        self.reset_prefix();    // TODO: ?
     }
 }
 
@@ -423,17 +419,18 @@ impl SuperFX {
     }
 
     fn loop_(&mut self) {
-        let dec = self.regs[12].wrapping_sub(1);
+        let dec = self.regs[LOOP_CTR_REG].wrapping_sub(1);
         self.flags.set(FXFlags::S, test_bit!(dec, 15));
         self.flags.set(FXFlags::Z, dec == 0);
+        self.regs[LOOP_CTR_REG] = dec;
         if !self.flags.contains(FXFlags::Z) {
-            self.set_pc_reg(self.regs[13]);
+            self.set_pc_reg(self.regs[LOOP_PTR_REG]);
         }
         self.reset_prefix();
     }
 
     fn link(&mut self, n: u8) {
-        self.regs[11] = self.regs[PC_REG].wrapping_add(n as u16);
+        self.regs[LINK_REG] = self.regs[PC_REG].wrapping_add(n as u16);
         self.reset_prefix();
     }
 }
@@ -573,7 +570,10 @@ impl SuperFX {
 
     fn reg_mov(&mut self) {
         match self.alt() {
-            0 | 1 => self.colr = self.read_mem(self.romb, self.regs[ROM_PTR_REG]),
+            0 | 1 => {
+                let data = self.read_mem(self.romb, self.regs[ROM_PTR_REG]);
+                self.pixel_cache.set_colr(data)
+            },
             2 => self.ramb = lo!(self.regs[self.src]) & 0x1,
             3 => self.romb = lo!(self.regs[self.src]),
             _ => unreachable!(),
@@ -626,7 +626,7 @@ impl SuperFX {
     }
 
     fn merge(&mut self) {
-        let result = make16!(hi!(self.regs[7]), hi!(self.regs[8]));
+        let result = make16!(hi!(self.regs[MERGE_HI_REG]), hi!(self.regs[MERGE_LO_REG]));
         self.flags.set(FXFlags::Z, (result & 0xF0F0) != 0);
         self.flags.set(FXFlags::CY, (result & 0xE0E0) != 0);
         self.flags.set(FXFlags::S, (result & 0x8080) != 0);
@@ -641,9 +641,9 @@ impl SuperFX {
 impl SuperFX {
     fn creg(&mut self) {
         if self.flags.contains(FXFlags::ALT1) {
-            self.por = PlotOption::from_bits_truncate(lo!(self.regs[self.src]));
+            self.pixel_cache.set_por(lo!(self.regs[self.src]));
         } else {
-            self.colr = lo!(self.regs[self.src]);
+            self.pixel_cache.set_colr(lo!(self.regs[self.src]));
         }
 
         self.reset_prefix();
@@ -651,12 +651,55 @@ impl SuperFX {
 
     fn pix(&mut self) {
         if self.flags.contains(FXFlags::ALT1) {
-            // RPIX
+            self.rpix();
         } else {
-            // PLOT
+            self.plot();
         }
 
         self.reset_prefix();
+    }
+
+    fn rpix(&mut self) {
+        self.flush_pixel_buffer();
+
+        let addr = self.pixel_cache.calc_tile_addr(lo!(self.regs[PLOT_X_REG]), lo!(self.regs[PLOT_Y_REG]));
+        let tile_x = lo!(self.regs[1]) % 8;
+        let result = (0..self.pixel_cache.bpp()).fold(0, |acc, i| {
+            let sub_bitplane = i % 2;
+            let bitplane_pair = i / 2;
+            let addr = addr + (bitplane_pair * 0x10) + sub_bitplane;
+            let data = self.mem.fx_read(hi24!(addr), lo24!(addr));
+            self.clock_inc(if self.clock_select {5} else {3});
+            let bit = (data >> tile_x) & 1;
+            acc | (bit << i)
+        }) as u16;
+
+        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::S, test_bit!(result, 15));
+        self.set_dst_reg(result);
+    }
+
+    fn plot(&mut self) {
+        if !self.pixel_cache.try_plot(self.regs[PLOT_X_REG], self.regs[PLOT_Y_REG]) {
+            self.flush_pixel_buffer();
+            let _ = self.pixel_cache.try_plot(self.regs[PLOT_X_REG], self.regs[PLOT_Y_REG]);  // panic if false again
+        }
+        self.regs[PLOT_X_REG] = self.regs[PLOT_X_REG].wrapping_add(1);
+    }
+
+    fn flush_pixel_buffer(&mut self) {
+        while self.pixel_cache.needs_flush() {
+            let mut buffer = vec![[0; 2]; self.pixel_cache.flush_bitplane_pairs()];
+            let addr = self.pixel_cache.flush(&mut buffer);
+            for (i, pair) in buffer.iter().enumerate() {
+                let addr = addr + ((i * 0x10) as u32);
+                let bank = hi24!(addr);
+                let offset = lo24!(addr);
+                self.mem.fx_write(bank, offset, pair[0]);
+                self.mem.fx_write(bank, offset.wrapping_add(1), pair[1]);
+                self.clock_inc(if self.clock_select {10} else {6});
+            }
+        }
     }
 }
 
@@ -839,7 +882,7 @@ impl SuperFX {
 impl SuperFX {
     fn mult_word(&mut self) {
         let s = (self.regs[self.src] as i16) as i32;
-        let op = (self.regs[6] as i16) as i32;
+        let op = (self.regs[MULT_OP_REG] as i16) as i32;
         let result = (s * op) as u32;
         self.flags.set(FXFlags::Z, result == 0);
         //self.flags.set(FXFlags::CY, test_bit!(s, 0)); ??
@@ -847,7 +890,7 @@ impl SuperFX {
 
         if self.flags.contains(FXFlags::ALT1) { // LMULT
             self.set_dst_reg(hi32!(result));
-            self.regs[4] = lo32!(result);
+            self.regs[MULT_DST_REG] = lo32!(result);
         } else {                                // FMULT
             self.set_dst_reg(hi32!(result));
         }
