@@ -58,13 +58,14 @@ const PC_REG: usize = 15;
 pub struct SuperFX {
     regs:       [u16; 16],
     regs_latch: u8,
-    pc:         u16, // PC of next instruction.
+    pc_next:    u16, // PC of next instruction.
+    pb_next:    u8,
 
     flags:      FXFlags,
     pb:         u8,
     romb:       u8,
     ramb:       u8,
-    //bram:       u8,
+    backup:     u8,
     cfg:        Config,
     last_ram_addr:  u16,
 
@@ -87,13 +88,14 @@ impl SuperFX {
         SuperFX {
             regs:       [0; 16],
             regs_latch: 0,
-            pc:         0,
+            pc_next:    0,
+            pb_next:    0,
 
             flags:      FXFlags::default(),
             pb:         0,
             romb:       0,
             ramb:       0,
-            //bram:       0,
+            backup:     0,
             cfg:        Config::default(),
             last_ram_addr:  0,
 
@@ -153,7 +155,9 @@ impl Expansion for SuperFX {
     }
 
     fn flush(&mut self) {
-        self.mem.flush();
+        if test_bit!(self.backup, 0, u8) {
+            self.mem.flush();
+        }
     }
 }
 
@@ -169,7 +173,11 @@ impl SuperFX {
                 lo!(self.regs[addr as usize])
             },
             0x3030 => lo!(self.flags.bits()),
-            0x3031 => hi!(self.flags.bits()),
+            0x3031 => {
+                let ret = hi!(self.flags.bits());
+                self.flags.remove(FXFlags::IRQ);
+                ret
+            },
             0x3034 => self.pb,
             0x3036 => self.romb,
             0x303B => self.version,
@@ -191,13 +199,17 @@ impl SuperFX {
                 self.regs_latch = data;
             },
             0x301F => {
-                self.pc = make16!(data, self.regs_latch);
-                self.regs[PC_REG] = self.pc.wrapping_add(1);
+                self.regs[PC_REG] = make16!(data, self.regs_latch);
+                self.pc_next = self.regs[PC_REG].wrapping_add(1);
                 self.flags.insert(FXFlags::GO);
-                //println!("FX GO!");
+                println!("FX GO!");
             },
             0x3030 => self.set_status_flags(data),
-            0x3034 => self.pb = data,
+            0x3033 => self.backup = data,
+            0x3034 => {
+                self.pb = data;
+                self.pb_next = data;
+            },
             0x3037 => self.cfg = Config::from_bits_truncate(data),
             0x3039 => {
                 self.clock_select = test_bit!(data, 0, u8);
@@ -217,7 +229,6 @@ impl SuperFX {
     }
 
     fn set_status_flags(&mut self, data: u8) {
-        self.flags.remove(FXFlags::IRQ);
         self.flags.set(FXFlags::Z, test_bit!(data, 1, u8));
         self.flags.set(FXFlags::CY, test_bit!(data, 2, u8));
         self.flags.set(FXFlags::S, test_bit!(data, 3, u8));
@@ -286,9 +297,8 @@ impl SuperFX {
             },
             0xA => match self.alt() {
                 0 => self.ibt(instr),
-                1 => self.lms(instr),
+                1 | 3 => self.lms(instr),
                 2 => self.sms(instr),
-                3 => self.reset_prefix(),
                 _ => unreachable!(),
             },
             0xB => if self.flags.contains(FXFlags::B) {
@@ -310,9 +320,8 @@ impl SuperFX {
             },
             0xF => match self.alt() {
                 0 => self.iwt(instr),
-                1 => self.lm(instr),
+                1 | 3 => self.lm(instr),
                 2 => self.sm(instr),
-                3 => self.reset_prefix(),
                 _ => unreachable!(),
             },
 
@@ -355,7 +364,7 @@ impl SuperFX {
         if !self.cfg.contains(Config::IRQ) {
             self.flags.insert(FXFlags::IRQ);
         }
-        //println!("FX STOP!");
+        println!("FX STOP!");
         self.reset_prefix();
     }
 
@@ -365,8 +374,8 @@ impl SuperFX {
 
     fn cache(&mut self) {
         self.cache.set_cbr(self.regs[PC_REG] & 0xFFF0);
-        self.fill_cache_line_start();
-        self.reset_prefix();    // TODO: ?
+        self.fill_cache_line_start(self.regs[PC_REG]);
+        self.reset_prefix();
     }
 }
 
@@ -409,9 +418,9 @@ impl SuperFX {
 
     fn jmp(&mut self, n: u8) {
         if self.flags.contains(FXFlags::ALT1) {
-            self.regs[PC_REG] = self.regs[self.src];
-            self.pb = lo!(self.regs[n as usize]);
-            self.cache();
+            self.pc_next = self.regs[self.src];
+            self.pb_next = lo!(self.regs[n as usize]);
+            self.cache.set_cbr(0);
         } else {
             self.set_pc_reg(self.regs[n as usize]);
         }
@@ -566,6 +575,8 @@ impl SuperFX {
 
     fn sbk(&mut self) {
         self.write_mem_word(self.ramb, self.last_ram_addr, self.regs[self.src]);
+
+        self.reset_prefix();
     }
 
     fn reg_mov(&mut self) {
@@ -744,6 +755,7 @@ impl SuperFX {
         self.flags.set(FXFlags::Z, result == 0);
         self.flags.set(FXFlags::S, test_bit!(result, 15));
         self.regs[n as usize] = result;
+        self.reset_prefix();
     }
 
     fn dec(&mut self, n: u8) {
@@ -751,6 +763,7 @@ impl SuperFX {
         self.flags.set(FXFlags::Z, result == 0);
         self.flags.set(FXFlags::S, test_bit!(result, 15));
         self.regs[n as usize] = result;
+        self.reset_prefix();
     }
 
     fn bin_arith(&mut self, op_n: u16, with_carry: bool) -> u16 {
@@ -764,7 +777,6 @@ impl SuperFX {
         self.flags.set(FXFlags::OV, test_bit!(!(op0 ^ op1) & (op0 ^ result), 15, u32));
         lo32!(result)
     }
-
 }
 
 // Logic
@@ -885,7 +897,7 @@ impl SuperFX {
         let op = (self.regs[MULT_OP_REG] as i16) as i32;
         let result = (s * op) as u32;
         self.flags.set(FXFlags::Z, result == 0);
-        //self.flags.set(FXFlags::CY, test_bit!(s, 0)); ??
+        self.flags.set(FXFlags::CY, test_bit!(result, 15, u32));
         self.flags.set(FXFlags::S, test_bit!(result, 31, u32));
 
         if self.flags.contains(FXFlags::ALT1) { // LMULT
@@ -939,8 +951,12 @@ impl SuperFX {
     fn clock_inc(&mut self, cycles: isize) {
         self.cycle_count += cycles;
         match self.write_cache.clock(cycles) {
-            WritebackData::Byte(d) => self.mem.fx_write(self.write_cache.bank, self.write_cache.addr, d),
+            WritebackData::Byte(d) => {
+                //println!("Writeback to {:X} {:X}", self.write_cache.bank, self.write_cache.addr);
+                self.mem.fx_write(self.write_cache.bank, self.write_cache.addr, d);
+            },
             WritebackData::Word(lo, hi) => {
+                //println!("Write word to {:X} {:X}", self.write_cache.bank, self.write_cache.addr);
                 self.mem.fx_write(self.write_cache.bank, self.write_cache.addr, lo);
                 self.mem.fx_write(self.write_cache.bank, self.write_cache.addr.wrapping_add(1), hi);
             },
@@ -971,20 +987,22 @@ impl SuperFX {
     }
 
     fn fetch(&mut self) -> u8 {
-        let data = match self.cache.try_read(self.pc) {
+        let data = match self.cache.try_read(self.regs[PC_REG]) {
             CacheResult::InCache(data) => {
                 self.clock_inc(1);
                 data
             },
             CacheResult::Request => {
-                let data = self.read_mem(self.pb, self.pc);
-                self.cache.fill(self.pc, data);
+                let data = self.read_mem(self.pb, self.regs[PC_REG]);
+                self.cache.fill(self.regs[PC_REG], data);
                 data
             },
-            CacheResult::OutsideCache => self.read_mem(self.pb, self.pc)
+            CacheResult::OutsideCache => self.read_mem(self.pb, self.regs[PC_REG])
         };
-        self.pc = self.regs[PC_REG];
-        self.regs[PC_REG] = self.regs[PC_REG].wrapping_add(1);
+        
+        self.regs[PC_REG] = self.pc_next;
+        self.pb = self.pb_next;
+        self.pc_next = self.pc_next.wrapping_add(1);
         data
     }
 
@@ -1007,16 +1025,16 @@ impl SuperFX {
             }
         }
 
-        self.regs[PC_REG] = data;
+        self.pc_next = data;
 
         // Check if we need to fill new line.
-        if self.regs[PC_REG] & 0xF != 0 {
-            match self.cache.try_read(self.regs[PC_REG]) {
+        //if self.pc_next & 0xF != 0 {
+            match self.cache.try_read(self.pc_next) {
                 CacheResult::InCache(_) => {},      // Cache line is already loaded.
-                CacheResult::Request => self.fill_cache_line_start(),
+                CacheResult::Request => self.fill_cache_line_start(self.pc_next),
                 CacheResult::OutsideCache => {},    // We are outisde the cache and don't care.
             }
-        }
+        //}
     }
 
     // Fill to the end of the current cache line.
@@ -1030,9 +1048,8 @@ impl SuperFX {
         }
     }
 
-    // Fill the current cache line up to the current PC.
-    fn fill_cache_line_start(&mut self) {
-        let pc = self.regs[PC_REG];
+    // Fill the current cache line up to the specified point.
+    fn fill_cache_line_start(&mut self, pc: u16) {
         let line_start_addr = pc & 0xFFF0;
         for i in line_start_addr..pc {
             let data = self.read_mem(self.pb, i);
