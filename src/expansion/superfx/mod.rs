@@ -243,7 +243,12 @@ impl SuperFX {
 // Instructions
 impl SuperFX {
     fn execute_instruction(&mut self) {
+        //let p = self.regs[PC_REG];
         let instr = self.fetch();
+
+        //println!("Instr {:X} at {:X}_{:X}", instr, self.pb, p);
+        //#[cfg(feature = "debug")]
+        //self.print_state();
 
         match hi_nybble!(instr) {
             0x0 => match lo_nybble!(instr) {
@@ -673,27 +678,31 @@ impl SuperFX {
     fn rpix(&mut self) {
         self.flush_pixel_buffer();
 
-        let addr = self.pixel_cache.calc_tile_addr(lo!(self.regs[PLOT_X_REG]), lo!(self.regs[PLOT_Y_REG]));
-        let tile_x = lo!(self.regs[1]) % 8;
-        let result = (0..self.pixel_cache.bpp()).fold(0, |acc, i| {
-            let sub_bitplane = i % 2;
-            let bitplane_pair = i / 2;
+        let x = lo!(self.regs[PLOT_X_REG]);
+        let y = lo!(self.regs[PLOT_Y_REG]);
+        let addr = self.pixel_cache.calc_tile_addr(x, y);
+        let bytes = (0..self.pixel_cache.bpp()).map(|bitplane| {
+            let sub_bitplane = bitplane % 2;
+            let bitplane_pair = bitplane / 2;
             let addr = addr + (bitplane_pair * 0x10) + sub_bitplane;
-            let data = self.mem.fx_read(hi24!(addr), lo24!(addr));
             self.clock_inc(if self.clock_select {5} else {3});
-            let bit = (data >> tile_x) & 1;
-            acc | (bit << i)
-        }) as u16;
+            self.mem.fx_read(hi24!(addr), lo24!(addr))
+        }).collect::<Box<_>>();
+        self.pixel_cache.fill(x, y, &bytes);
 
+        let result = self.pixel_cache.read_pixel(x % 8);
         self.flags.set(FXFlags::Z, result == 0);
-        self.flags.set(FXFlags::S, test_bit!(result, 15));
-        self.set_dst_reg(result);
+        self.flags.set(FXFlags::S, test_bit!(result, 7, u8));
+        self.set_dst_reg(result as u16);
     }
 
     fn plot(&mut self) {
         if !self.pixel_cache.try_plot(self.regs[PLOT_X_REG], self.regs[PLOT_Y_REG]) {
             self.flush_pixel_buffer();
-            let _ = self.pixel_cache.try_plot(self.regs[PLOT_X_REG], self.regs[PLOT_Y_REG]);  // panic if false again
+            let ok = self.pixel_cache.try_plot(self.regs[PLOT_X_REG], self.regs[PLOT_Y_REG]);  // panic if false again
+            if !ok {
+                panic!("FX Plot");
+            }
         }
         self.regs[PLOT_X_REG] = self.regs[PLOT_X_REG].wrapping_add(1);
     }
@@ -733,7 +742,8 @@ impl SuperFX {
         let n = lo_nybble!(instr);
         match self.alt() {
             0 => {
-                let data = self.bin_arith(!self.regs[n as usize], false);
+                let op = (!self.regs[n as usize]).wrapping_add(1);
+                let data = self.bin_arith(op, false);
                 self.set_dst_reg(data);
             },
             1 => {
@@ -741,10 +751,14 @@ impl SuperFX {
                 self.set_dst_reg(data);
             },
             2 => {
-                let data = self.bin_arith(!(n as u16), false);
+                let op = (!(n as u16)).wrapping_add(1);
+                let data = self.bin_arith(op, false);
                 self.set_dst_reg(data);
             },
-            3 => {let _ = self.bin_arith(!(n as u16), false);}, // CMP
+            3 => { // CMP
+                let op = (!self.regs[n as usize]).wrapping_add(1);
+                let _ = self.bin_arith(op, false);
+            },
             _ => unreachable!(),
         }
         self.reset_prefix();
@@ -974,7 +988,10 @@ impl SuperFX {
         let writeback_cycles = self.write_cache.write_byte(bank, addr, data);
         if writeback_cycles > 0 {
             self.clock_inc(writeback_cycles);
-            let _ = self.write_cache.write_byte(bank, addr, data);  // panic if !0
+            let c = self.write_cache.write_byte(bank, addr, data);
+            if c != 0 {
+                panic!("FX Writeback");
+            }
         }
     }
 
@@ -982,7 +999,10 @@ impl SuperFX {
         let writeback_cycles = self.write_cache.write_word(bank, addr, data);
         if writeback_cycles > 0 {
             self.clock_inc(writeback_cycles);
-            let _ = self.write_cache.write_word(bank, addr, data);  // panic if !0
+            let c = self.write_cache.write_word(bank, addr, data);
+            if c != 0 {
+                panic!("FX Writeback");
+            }
         }
     }
 
@@ -999,7 +1019,7 @@ impl SuperFX {
             },
             CacheResult::OutsideCache => self.read_mem(self.pb, self.regs[PC_REG])
         };
-        
+
         self.regs[PC_REG] = self.pc_next;
         self.pb = self.pb_next;
         self.pc_next = self.pc_next.wrapping_add(1);
@@ -1059,5 +1079,13 @@ impl SuperFX {
 
     fn alt(&self) -> u16 {
         (self.flags & (FXFlags::ALT1 | FXFlags::ALT2)).bits() >> 8
+    }
+}
+
+// Debug functions.
+#[cfg(feature = "debug")]
+impl SuperFX {
+    fn print_state(&self) {
+        println!("Regs: {:?}, PB: {:X}, ROM: {:X}, RAM: {:X}, flags: {:016b}", self.regs, self.pb, self.romb, self.ramb, self.flags);
     }
 }

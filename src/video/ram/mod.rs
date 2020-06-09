@@ -63,12 +63,14 @@ impl VideoMem {
                 self.h_hi_byte = true;
                 lo!(self.h_pos)
             } else {
+                self.h_hi_byte = false;
                 hi!(self.h_pos)
             },
             0x3D => if !self.v_hi_byte {
                 self.v_hi_byte = true;
                 lo!(self.v_pos)
             } else {
+                self.v_hi_byte = false;
                 hi!(self.v_pos)
             },
             0x3E => 1,  // PPU Status

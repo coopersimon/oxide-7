@@ -74,16 +74,16 @@ impl InstructionCache {
     // Read whatever happens to be at the cache location.
     // Addr should be between 0 and 0x1FF
     pub fn read(&self, addr: u16) -> u8 {
-        let offset = self.cbr & 0x1FF;
-        let cache_addr = (addr + offset) & 0x1FF;
+        let offset = self.cbr % CACHE_SIZE;
+        let cache_addr = (addr - offset) % CACHE_SIZE;
         self.lines[(cache_addr >> 4) as usize].data[(cache_addr & 0xF) as usize]
     }
 
     // Write to the location specified.
     // Addr should be between 0 and 0x1FF
     pub fn write(&mut self, addr: u16, data: u8) {
-        let offset = self.cbr & 0x1FF;
-        let cache_addr = (addr + offset) & 0x1FF;
+        let offset = self.cbr % CACHE_SIZE;
+        let cache_addr = (addr - offset) % CACHE_SIZE;
         self.lines[(cache_addr >> 4) as usize].data[(cache_addr & 0xF) as usize] = data;
     }
 

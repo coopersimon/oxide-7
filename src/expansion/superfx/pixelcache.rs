@@ -65,30 +65,34 @@ impl From<ScreenMode> for ScreenHeight {
 #[derive(Clone)]
 struct CacheLine {
     data:   [u8; 8],
+    bitp:   u8, // Bit-pending flags
     tile_x: u8,
     y:      u8,
-    dirty:  bool,
 }
 
 impl CacheLine {
     fn new() -> Self {
         Self {
             data:   [0; 8],
+            bitp:   0,
             tile_x: 0,
             y:      0,
-            dirty:  false,
         }
     }
 
     fn init(&mut self, x: u8, y: u8) {
+        for d in self.data.iter_mut() {
+            *d = 0; // TODO: should this happen?
+        }
+        self.bitp = 0;
         self.tile_x = x;
         self.y = y;
-        self.dirty = true;
     }
 
     // Write a pixel to the cache from an x address.
     fn write_pix(&mut self, x: u8, data: u8) {
         self.data[x as usize] = data;
+        self.bitp |= bit!(x);
     }
 
     // Flush the cache.
@@ -106,7 +110,11 @@ impl CacheLine {
                 });
             }
         }
-        self.dirty = false;
+        self.bitp = 0;
+    }
+
+    fn is_dirty(&self) -> bool {
+        self.bitp != 0
     }
 }
 
@@ -140,7 +148,7 @@ impl PixelCache {
     }
 
     pub fn set_screen_base(&mut self, data: u8) {
-        self.screen_base = 0x70_0000 + (0x400 << data);
+        self.screen_base = 0x70_0000 + (0x400 * (data as u32));
     }
 
     pub fn set_screen_mode(&mut self, data: u8) {
@@ -173,17 +181,15 @@ impl PixelCache {
         let pix_y = lo!(y);
         let tile_x = lo!(x) / 8;
         if self.primary.y == pix_y && self.primary.tile_x == tile_x {
-            let pix_x = lo!(x) % 8;
-            self.primary.write_pix(pix_x, self.colr);
+            self.do_plot(lo!(x) % 8, pix_y);
             true
-        } else if self.secondary.dirty {
+        } else if self.secondary.is_dirty() {
             false
         } else {
-            self.secondary = self.primary.clone();
+            self.transfer_to_secondary();
             self.primary.init(tile_x, pix_y);
 
-            let pix_x = lo!(x) % 8;
-            self.primary.write_pix(pix_x, self.colr);
+            self.do_plot(lo!(x) % 8, pix_y);
             true
         }
     }
@@ -207,11 +213,15 @@ impl PixelCache {
 
         let y_idx = ((y % 8) * 2) as u32;
         
-        self.screen_base + match self.bpp {
+        let data = self.screen_base + match self.bpp {
             BPP::_2 => (tile_num * 0x10),
             BPP::_4 => (tile_num * 0x20),
             BPP::_8 => (tile_num * 0x40),
-        } + y_idx
+        } + y_idx;
+
+        //println!("Addr for {}, {}: {:X}", x, y, data);
+
+        data
     }
 }
 
@@ -219,18 +229,17 @@ impl PixelCache {
 impl PixelCache {
     // While this is true, keep calling flush.
     pub fn needs_flush(&self) -> bool {
-        self.secondary.dirty || self.primary.dirty
+        self.secondary.is_dirty()
     }
 
     // Flushes a single cache line.
     // Also returns base address to flush to.
     pub fn flush(&mut self, buffer: &mut [[u8; 2]]) -> u32 {
-        if self.secondary.dirty {
+        if self.secondary.is_dirty() {
             self.secondary.flush(buffer);
-            self.calc_tile_addr(self.secondary.tile_x, self.secondary.y)
-        } else if self.primary.dirty {
-            self.primary.flush(buffer);
-            self.calc_tile_addr(self.primary.tile_x, self.primary.y)
+            let addr = self.calc_tile_addr(self.secondary.tile_x, self.secondary.y);
+            self.transfer_to_secondary();
+            addr
         } else {
             0
         }
@@ -250,6 +259,51 @@ impl PixelCache {
             BPP::_2 => 2,
             BPP::_4 => 4,
             BPP::_8 => 8,
+        }
+    }
+}
+
+// RPIX
+impl PixelCache {
+
+    // Fills the primary cache line.
+    // Assumes it has already been flushed!
+    pub fn fill(&mut self, x: u8, y: u8, buffer: &[u8]) {
+        self.primary.init(x, y);
+        for (i, d) in buffer.iter().enumerate() {
+            for (x, cache_data) in self.primary.data.iter_mut().enumerate() {
+                let bit = (*d >> x) & 1;
+                *cache_data |= bit << i;
+            }
+        }
+    }
+
+    // Reads pixel from the primary cache.
+    pub fn read_pixel(&self, x: u8) -> u8 {
+        self.primary.data[x as usize]
+    }
+}
+
+// internal
+impl PixelCache {
+    fn transfer_to_secondary(&mut self) {
+        self.secondary = self.primary.clone();
+        self.primary.bitp = 0;
+    }
+
+    // TODO: mask colour bits depending on mode
+    fn do_plot(&mut self, x: u8, y: u8) {
+        let colour = if self.por.contains(PlotOption::DITHER) {
+            if test_bit!(x ^ y, 0, u8) {
+                hi_nybble!(self.colr)
+            } else {
+                lo_nybble!(self.colr)
+            }
+        } else {
+            self.colr
+        };
+        if self.por.contains(PlotOption::TRANSPARENT) || colour != 0 {
+            self.primary.write_pix(x, colour);
         }
     }
 }
