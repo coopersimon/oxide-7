@@ -151,10 +151,12 @@ impl PixelCache {
         self.screen_base = 0x70_0000 + (0x400 * (data as u32));
     }
 
-    pub fn set_screen_mode(&mut self, data: u8) {
+    // Returns true if RON is set.
+    pub fn set_screen_mode(&mut self, data: u8) -> bool {
         self.screen_mode = ScreenMode::from_bits_truncate(data);
         self.bpp = self.screen_mode.into();
         self.height = self.screen_mode.into();
+        self.screen_mode.contains(ScreenMode::RON)
     }
 
     pub fn set_colr(&mut self, data: u8) {

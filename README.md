@@ -53,6 +53,10 @@ A SNES emulator written in Rust.
 * Breath of Fire (looks mostly ok, menu text is a bit glitchy, audio is mostly ok. seem unable to open in-game menu?)
 * Breath of Fire 2 (looks mostly ok, very laggy intro, audio sounds ok.)
 * Tetris Attack (sounds good. Title looks ok, regular gameplay is ok. vs mode just shows a black screen.)
+* Yoshi's Island (black screen.)
+* StarFox (non-FX graphics look ok. FX graphics are completely wrong but they do appear. Music/sound effects sounds ok)
+* Doom (title loads up ok. Intro music sounds mostly good. FX tries to write to offset mem addr (not necessarily a bug))
+* Stunt Race FX (non-FX graphics look ok. FX graphics are completely broken. Music/effects sound ok)
 
 ### TODO:
 
@@ -77,9 +81,7 @@ A SNES emulator written in Rust.
 ##### System
 - Cleanup BCD mode
 - Ensure timing is correct
-
-##### Carts
-- Fix bug related to incorrect loading with LoROMs (see MegaManX, Ultima VI) - this _seems_ to have gone and I'm not sure when that happened.
+    - Should internal cycles take the same amount of time as a data load? (6 cycles for fast rom, 8 for slow)?
 
 ##### Extensions
 - DSP
@@ -89,6 +91,10 @@ A SNES emulator written in Rust.
     - Variable-length decoding
     - Save data
 - SuperFX
+    - Graphics
+    - Re-implement write buffer
+    - ROM read buffer (?)
+    - Save data
 
 ### Style guide (?)
 Order:
