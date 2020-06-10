@@ -53,10 +53,10 @@ A SNES emulator written in Rust.
 * Breath of Fire (looks mostly ok, menu text is a bit glitchy, audio is mostly ok. seem unable to open in-game menu?)
 * Breath of Fire 2 (looks mostly ok, very laggy intro, audio sounds ok.)
 * Tetris Attack (sounds good. Title looks ok, regular gameplay is ok. vs mode just shows a black screen.)
-* Yoshi's Island (black screen.)
-* StarFox (non-FX graphics look ok. FX graphics are completely wrong but they do appear. Music/sound effects sounds ok)
-* Doom (title loads up ok. Intro music sounds mostly good. FX tries to write to offset mem addr (not necessarily a bug))
-* Stunt Race FX (non-FX graphics look ok. FX graphics are completely broken. Music/effects sound ok)
+* Yoshi's Island (audio sounds good. title looks good. some odd lines on screen. gameplay doesn't seem to work at all yet.)
+* StarFox (intro stars look ok but it ends too early. Ship is not visible in title or in control select. Starting main game seems to break completely. Training works ok, frame rate is very questionable. Music/sound effects sounds ok)
+* Doom (title loads up ok. Intro music sounds mostly good. Main game is very broken (LJMP?))
+* Stunt Race FX (non-FX graphics look ok. FX graphics are completely broken. Music/effects sound ok. Main game uses interlace so it crashes.)
 
 ### TODO:
 

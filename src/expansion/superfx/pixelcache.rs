@@ -106,7 +106,8 @@ impl CacheLine {
                 let bitplane = bitplane_base + bitplane_offset;
                 *out = self.data.iter().enumerate().fold(0, |acc, (i, data)| {
                     let bit = (data >> bitplane) & 1;
-                    acc | (bit << i)
+                    let shift_amt = 7 - i;
+                    acc | (bit << shift_amt)
                 });
             }
         }
@@ -155,7 +156,11 @@ impl PixelCache {
     pub fn set_screen_mode(&mut self, data: u8) -> bool {
         self.screen_mode = ScreenMode::from_bits_truncate(data);
         self.bpp = self.screen_mode.into();
-        self.height = self.screen_mode.into();
+        self.height = if self.por.contains(PlotOption::OBJ_MODE) {
+            ScreenHeight::Obj
+        } else {
+            self.screen_mode.into()
+        };
         self.screen_mode.contains(ScreenMode::RON)
     }
 
@@ -175,24 +180,22 @@ impl PixelCache {
 
     pub fn set_por(&mut self, data: u8) {
         self.por = PlotOption::from_bits_truncate(data);
+        self.height = if self.por.contains(PlotOption::OBJ_MODE) {
+            ScreenHeight::Obj
+        } else {
+            self.screen_mode.into()
+        };
     }
 
     // Plot the pixel.
-    // If false is returned, the cache needs to be flushed.
-    pub fn try_plot(&mut self, x: u16, y: u16) -> bool {
-        let pix_y = lo!(y);
-        let tile_x = lo!(x) / 8;
-        if self.primary.y == pix_y && self.primary.tile_x == tile_x {
-            self.do_plot(lo!(x) % 8, pix_y);
+    // If false is returned, the pixel could not be written.
+    pub fn try_plot(&mut self, x: u8, y: u8) -> bool {
+        let tile_x = x / 8;
+        if self.primary.y == y && self.primary.tile_x == tile_x {
+            self.do_plot(lo!(x) % 8, y);
             true
-        } else if self.secondary.is_dirty() {
-            false
         } else {
-            self.transfer_to_secondary();
-            self.primary.init(tile_x, pix_y);
-
-            self.do_plot(lo!(x) % 8, pix_y);
-            true
+            false
         }
     }
 
@@ -215,15 +218,11 @@ impl PixelCache {
 
         let y_idx = ((y % 8) * 2) as u32;
         
-        let data = self.screen_base + match self.bpp {
+        self.screen_base + match self.bpp {
             BPP::_2 => (tile_num * 0x10),
             BPP::_4 => (tile_num * 0x20),
             BPP::_8 => (tile_num * 0x40),
-        } + y_idx;
-
-        //println!("Addr for {}, {}: {:X}", x, y, data);
-
-        data
+        } + y_idx
     }
 }
 
@@ -239,9 +238,7 @@ impl PixelCache {
     pub fn flush(&mut self, buffer: &mut [[u8; 2]]) -> u32 {
         if self.secondary.is_dirty() {
             self.secondary.flush(buffer);
-            let addr = self.calc_tile_addr(self.secondary.tile_x, self.secondary.y);
-            self.transfer_to_secondary();
-            addr
+            self.calc_tile_addr(self.secondary.tile_x * 8, self.secondary.y)
         } else {
             0
         }
@@ -271,13 +268,16 @@ impl PixelCache {
     // Fills the primary cache line.
     // Assumes it has already been flushed!
     pub fn fill(&mut self, x: u8, y: u8, buffer: &[u8]) {
-        self.primary.init(x, y);
+        self.transfer_to_secondary();
+        self.primary.init(x / 8, y);
         for (i, d) in buffer.iter().enumerate() {
             for (x, cache_data) in self.primary.data.iter_mut().enumerate() {
-                let bit = (*d >> x) & 1;
+                let shift_amt = 7 - x;
+                let bit = (*d >> shift_amt) & 1;
                 *cache_data |= bit << i;
             }
         }
+        self.primary.bitp = 0xFF;
     }
 
     // Reads pixel from the primary cache.
@@ -293,7 +293,6 @@ impl PixelCache {
         self.primary.bitp = 0;
     }
 
-    // TODO: mask colour bits depending on mode
     fn do_plot(&mut self, x: u8, y: u8) {
         let colour = if self.por.contains(PlotOption::DITHER) {
             if test_bit!(x ^ y, 0, u8) {
@@ -304,8 +303,18 @@ impl PixelCache {
         } else {
             self.colr
         };
-        if self.por.contains(PlotOption::TRANSPARENT) || colour != 0 {
-            self.primary.write_pix(x, colour);
+        let masked_colour = match self.bpp {
+            BPP::_2 => colour & 0x3,
+            BPP::_4 => colour & 0xF,
+            BPP::_8 => colour,
+        };
+        if self.should_plot(masked_colour) {
+            self.primary.write_pix(x, masked_colour);
         }
+    }
+
+    fn should_plot(&self, col: u8) -> bool {
+        let mask = if self.por.contains(PlotOption::FREEZE_HI) {0xF} else {0xFF};
+        self.por.contains(PlotOption::TRANSPARENT) || (col & mask) != 0
     }
 }
