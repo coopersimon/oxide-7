@@ -54,9 +54,9 @@ A SNES emulator written in Rust.
 * Breath of Fire 2 (looks mostly ok, very laggy intro, audio sounds ok.)
 * Tetris Attack (sounds good. Title looks ok, regular gameplay is ok. vs mode just shows a black screen.)
 * Yoshi's Island (audio sounds good. title looks good. some odd lines on screen. gameplay doesn't seem to work at all yet.)
-* StarFox (intro stars look ok but it ends too early. Ship is not visible in title or in control select. Starting main game seems to break completely. Training works ok, frame rate is very questionable. Music/sound effects sounds ok)
+* StarFox (intro stars look ok but it ends too early. Ship is not visible in title or in control select. Starting main game seems to break completely. Training works ok, frame rate is very questionable. Music/sound effects sounds ok, but are heavily delayed.)
 * Doom (title loads up ok. Intro music sounds mostly good. Main game is very broken (LJMP?))
-* Stunt Race FX (non-FX graphics look ok. FX graphics are completely broken. Music/effects sound ok. Main game uses interlace so it crashes.)
+* Stunt Race FX (all graphics look good, including rotating 3d car models. Music/effects sound ok. Main game uses interlace so it crashes.)
 
 ### TODO:
 
@@ -91,7 +91,9 @@ A SNES emulator written in Rust.
     - Variable-length decoding
     - Save data
 - SuperFX
-    - Graphics
+    - Timing:
+        - Pixel writes need to be buffered properly.
+        - Currently has the effect of making the video appear too quickly when there are few polygons, too slowly when there are lots.
     - Re-implement write buffer
     - ROM read buffer (?)
     - Save data
