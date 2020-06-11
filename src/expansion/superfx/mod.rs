@@ -392,14 +392,14 @@ impl SuperFX {
             0x6 => {
                 let s = self.flags.contains(FXFlags::S);
                 let v = self.flags.contains(FXFlags::OV);
-                if s != v {
+                if s == v {
                     self.do_branch(offset);
                 }
             },
             0x7 => {
                 let s = self.flags.contains(FXFlags::S);
                 let v = self.flags.contains(FXFlags::OV);
-                if s == v {
+                if s != v {
                     self.do_branch(offset);
                 }
             },
@@ -735,10 +735,10 @@ impl SuperFX {
     fn add(&mut self, instr: u8) {
         let n = lo_nybble!(instr);
         let result = match self.alt() {
-            0 => self.bin_arith(self.regs[n as usize], false),
-            1 => self.bin_arith(self.regs[n as usize], true),
-            2 => self.bin_arith(n as u16, false),
-            3 => self.bin_arith(n as u16, true),
+            0 => self.do_add(self.regs[n as usize], false),
+            1 => self.do_add(self.regs[n as usize], true),
+            2 => self.do_add(n as u16, false),
+            3 => self.do_add(n as u16, true),
             _ => unreachable!(),
         };
         self.set_dst_reg(result);
@@ -749,34 +749,19 @@ impl SuperFX {
         let n = lo_nybble!(instr);
         match self.alt() {
             0 => {
-                let op = (!self.regs[n as usize]).wrapping_add(1);
-                let data = self.bin_arith(op, false);
-                //println!("SUB {:X} - {:X} = {:X}", self.regs[self.src], self.regs[n as usize], data);
-                //self.print_state();
+                let data = self.do_sub(self.regs[n as usize], false);
                 self.set_dst_reg(data);
-                //self.flags.toggle(FXFlags::CY);
             },
             1 => {
-                let data = self.bin_arith(!self.regs[n as usize], true);
-                //self.flags.toggle(FXFlags::CY);
-                //println!("SBC {:X} - {:X} (carry: {}) = {:X}", self.regs[self.src], self.regs[n as usize], self.flags.contains(FXFlags::CY), data);
-                //self.print_state();
+                let data = self.do_sub(self.regs[n as usize], true);
                 self.set_dst_reg(data);
             },
             2 => {
-                let op = (!(n as u16)).wrapping_add(1);
-                let data = self.bin_arith(op, false);
-                //println!("SUBn {:X} - {:X} = {:X}", self.regs[self.src], n, data);
-                //self.print_state();
+                let data = self.do_sub(n as u16, false);
                 self.set_dst_reg(data);
-                //self.flags.toggle(FXFlags::CY);
             },
             3 => { // CMP
-                let op = (!self.regs[n as usize]).wrapping_add(1);
-                let _ = self.bin_arith(op, false);
-                //println!("CMP {:X}, {:X}", self.regs[self.src], self.regs[n as usize]);
-                //self.print_state();
-                //self.flags.toggle(FXFlags::CY);
+                let _ = self.do_sub(self.regs[n as usize], false);
             },
             _ => unreachable!(),
         }
@@ -799,7 +784,7 @@ impl SuperFX {
         self.reset_prefix();
     }
 
-    fn bin_arith(&mut self, op_n: u16, with_carry: bool) -> u16 {
+    fn do_add(&mut self, op_n: u16, with_carry: bool) -> u16 {
         let op0 = self.regs[self.src] as u32;
         let op1 = op_n as u32;
         let carry = if with_carry && self.flags.contains(FXFlags::CY) {1} else {0};
@@ -808,6 +793,18 @@ impl SuperFX {
         self.flags.set(FXFlags::CY, test_bit!(result, 16, u32));
         self.flags.set(FXFlags::S, test_bit!(result, 15, u32));
         self.flags.set(FXFlags::OV, test_bit!(!(op0 ^ op1) & (op0 ^ result), 15, u32));
+        lo32!(result)
+    }
+
+    fn do_sub(&mut self, op_n: u16, with_carry: bool) -> u16 {
+        let op0 = self.regs[self.src] as u32;
+        let op1 = op_n as u32;
+        let carry = if with_carry && !self.flags.contains(FXFlags::CY) {1} else {0};
+        let result = op0.wrapping_sub(op1).wrapping_sub(carry);
+        self.flags.set(FXFlags::Z, lo32!(result) == 0);
+        self.flags.set(FXFlags::CY, !test_bit!(result, 16, u32));
+        self.flags.set(FXFlags::S, test_bit!(result, 15, u32));
+        self.flags.set(FXFlags::OV, test_bit!((op0 ^ op1) & (op0 ^ result), 15, u32));
         lo32!(result)
     }
 }
@@ -932,7 +929,7 @@ impl SuperFX {
         let s = (self.regs[self.src] as i16) as i32;
         let op = (self.regs[MULT_OP_REG] as i16) as i32;
         let result = (s * op) as u32;
-        self.flags.set(FXFlags::Z, result == 0);
+        self.flags.set(FXFlags::Z, hi32!(result) == 0);
         self.flags.set(FXFlags::CY, test_bit!(result, 15, u32));
         self.flags.set(FXFlags::S, test_bit!(result, 31, u32));
 
@@ -952,8 +949,8 @@ impl SuperFX {
         match self.alt() {
             0 => self.signed_mult(lo!(self.regs[n as usize])),
             1 => self.unsigned_mult(lo!(self.regs[n as usize])),
-            2 => self.signed_mult(n),
-            3 => self.unsigned_mult(n),
+            2 => self.signed_mult(n & 0xF),
+            3 => self.unsigned_mult(n & 0xF),
             _ => unimplemented!(),
         }
 

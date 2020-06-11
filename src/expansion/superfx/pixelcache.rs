@@ -82,7 +82,7 @@ impl CacheLine {
 
     fn init(&mut self, x: u8, y: u8) {
         for d in self.data.iter_mut() {
-            *d = 0; // TODO: should this happen?
+            *d = 0;
         }
         self.bitp = 0;
         self.tile_x = x;
@@ -161,6 +161,7 @@ impl PixelCache {
         } else {
             self.screen_mode.into()
         };
+        //println!("Screen mode: {:X}", data);
         self.screen_mode.contains(ScreenMode::RON)
     }
 
@@ -179,6 +180,7 @@ impl PixelCache {
     }
 
     pub fn set_por(&mut self, data: u8) {
+        //println!("Plot option: {:X}", data);
         self.por = PlotOption::from_bits_truncate(data);
         self.height = if self.por.contains(PlotOption::OBJ_MODE) {
             ScreenHeight::Obj
@@ -192,7 +194,7 @@ impl PixelCache {
     pub fn try_plot(&mut self, x: u8, y: u8) -> bool {
         let tile_x = x / 8;
         if self.primary.y == y && self.primary.tile_x == tile_x {
-            self.do_plot(lo!(x) % 8, y);
+            self.do_plot(x % 8, y);
             true
         } else {
             false
@@ -210,8 +212,8 @@ impl PixelCache {
             ScreenHeight::Obj => {
                 let hi_x = (tile_x / 0x10) * 0x100;
                 let hi_y = (tile_y / 0x10) * 0x200;
-                let lo_x = tile_x & 0xF;
-                let lo_y = (tile_y & 0xF) * 0x10;
+                let lo_x = tile_x % 0x10;
+                let lo_y = (tile_y % 0x10) * 0x10;
                 lo_x + lo_y + hi_x + hi_y
             },
         };
@@ -277,7 +279,6 @@ impl PixelCache {
                 *cache_data |= bit << i;
             }
         }
-        self.primary.bitp = 0xFF;
     }
 
     // Reads pixel from the primary cache.
@@ -308,6 +309,12 @@ impl PixelCache {
             BPP::_4 => colour & 0xF,
             BPP::_8 => colour,
         };
+        /*let masked_colour = match self.height {
+            ScreenHeight::_128 => 0,
+            ScreenHeight::_160 => 3,
+            ScreenHeight::_192 => 0,
+            ScreenHeight::Obj => 5
+        };*/
         if self.should_plot(masked_colour) {
             self.primary.write_pix(x, masked_colour);
         }
