@@ -7,7 +7,7 @@ A SNES emulator written in Rust.
 ### Games tested:
 * Super Mario World (video: some bugged sprites, audio sounds good.)
 * Super Metroid (Looks good. Audio sounds good.)
-* Link to the Past (Intro triforce is glitched, gameplay seems ok. Audio sounds good.)
+* Link to the Past (Graphics seems ok. Audio sounds good.)
 * Final Fantasy 2 (IV) (There is some sort of corrupted overlay (I think BG3 in Mode 1). Otherwise video looks fine. Audio sounds good.)
 * Final Fantasy 3 (VI) (Title looks ok, reads out of bounds after. If this is ignored then the first "scene" doesn't show as memory reads are too slow. Then they look _mostly_ ok. Audio is ok, but some serious ringing artifacts.)
 * Earthbound (Works pretty well. Audio sounds good. Lowest line of pixels looks odd (might not be a bug - this appears in a few games. Might just need to mask this line).)
@@ -53,7 +53,7 @@ A SNES emulator written in Rust.
 * Breath of Fire (looks mostly ok, menu text is a bit glitchy, audio is mostly ok. seem unable to open in-game menu?)
 * Breath of Fire 2 (looks mostly ok, very laggy intro, audio sounds ok.)
 * Tetris Attack (sounds good. Title looks ok, regular gameplay is ok. vs mode just shows a black screen.)
-* Yoshi's Island (audio sounds good. title looks good. some odd lines on screen. gameplay doesn't seem to work at all yet.)
+* Yoshi's Island (intro looks ok in some scenes, BG3 is offset strangely though. audio sounds good. title looks good, with some odd lines on screen. gameplay doesn't seem to work at all yet.)
 * StarFox (intro stars look ok but it ends too early. Ship is not visible in title or in control select. Starting main game seems to break completely. Training works ok, frame rate is very questionable. Music/sound effects sounds ok, but are heavily delayed.)
 * Doom (title loads up ok. Intro music sounds mostly good. Main game is very broken (LJMP?))
 * Stunt Race FX (all graphics look good, including rotating 3d car models. Music/effects sound ok. Main game uses interlace so it crashes.)

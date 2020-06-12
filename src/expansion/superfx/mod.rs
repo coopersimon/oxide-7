@@ -423,8 +423,8 @@ impl SuperFX {
     fn jmp(&mut self, n: u8) {
         if self.flags.contains(FXFlags::ALT1) {
             println!("LJMP");
-            self.pc_next = self.regs[n as usize];//self.regs[self.src];
-            self.pb_next = lo!(self.regs[self.src]);//lo!(self.regs[n as usize]);
+            self.pc_next = self.regs[self.src];
+            self.pb_next = lo!(self.regs[n as usize]);
             self.cache.set_cbr(0);
         } else {
             self.set_pc_reg(self.regs[n as usize]);
@@ -1079,7 +1079,7 @@ impl SuperFX {
             match self.cache.try_read(self.regs[PC_REG]) {
                 CacheResult::InCache(_) => {},      // Cache line is already loaded.
                 CacheResult::Request => self.fill_cache_line_end(),
-                CacheResult::OutsideCache => {},    // We are outisde the cache and don't care.
+                CacheResult::OutsideCache => {},    // We are outside the cache and don't care.
             }
         }
 
@@ -1089,7 +1089,7 @@ impl SuperFX {
         match self.cache.try_read(self.pc_next) {
             CacheResult::InCache(_) => {},      // Cache line is already loaded.
             CacheResult::Request => self.fill_cache_line_start(self.pc_next),
-            CacheResult::OutsideCache => {},    // We are outisde the cache and don't care.
+            CacheResult::OutsideCache => {},    // We are outside the cache and don't care.
         }
     }
 

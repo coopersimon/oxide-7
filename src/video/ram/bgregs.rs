@@ -293,17 +293,23 @@ impl Registers {
 
     // Getters (CPU side)
     pub fn read_mult_result_lo(&self) -> u8 {
-        let result = (self.mode7_matrix_a as i32) * (hi!(self.mode7_matrix_b) as i32);
+        let a = (self.mode7_matrix_a as i16) as i32;
+        let b = (hi!(self.mode7_matrix_b) as i8) as i32;
+        let result = a * b;
         lo24!(result as u32, u8)
     }
 
     pub fn read_mult_result_mid(&self) -> u8 {
-        let result = (self.mode7_matrix_a as i32) * (hi!(self.mode7_matrix_b) as i32);
+        let a = (self.mode7_matrix_a as i16) as i32;
+        let b = (hi!(self.mode7_matrix_b) as i8) as i32;
+        let result = a * b;
         mid24!(result as u32)
     }
 
     pub fn read_mult_result_hi(&self) -> u8 {
-        let result = (self.mode7_matrix_a as i32) * (hi!(self.mode7_matrix_b) as i32);
+        let a = (self.mode7_matrix_a as i16) as i32;
+        let b = (hi!(self.mode7_matrix_b) as i8) as i32;
+        let result = a * b;
         hi24!(result as u32)
     }
 }
