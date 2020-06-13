@@ -23,6 +23,7 @@ bitflags! {
     }
 }
 
+#[derive(PartialEq)]
 enum BPP {
     _2,
     _4,
@@ -161,7 +162,6 @@ impl PixelCache {
         } else {
             self.screen_mode.into()
         };
-        //println!("Screen mode: {:X}", data);
         self.screen_mode.contains(ScreenMode::RON)
     }
 
@@ -180,7 +180,6 @@ impl PixelCache {
     }
 
     pub fn set_por(&mut self, data: u8) {
-        //println!("Plot option: {:X}", data);
         self.por = PlotOption::from_bits_truncate(data);
         self.height = if self.por.contains(PlotOption::OBJ_MODE) {
             ScreenHeight::Obj
@@ -225,6 +224,14 @@ impl PixelCache {
             BPP::_4 => (tile_num * 0x20),
             BPP::_8 => (tile_num * 0x40),
         } + y_idx
+    }
+
+    pub fn is_ron_set(&self) -> bool {
+        self.screen_mode.contains(ScreenMode::RON)
+    }
+
+    pub fn is_ran_set(&self) -> bool {
+        self.screen_mode.contains(ScreenMode::RAN)
     }
 }
 
@@ -295,7 +302,7 @@ impl PixelCache {
     }
 
     fn do_plot(&mut self, x: u8, y: u8) {
-        let colour = if self.por.contains(PlotOption::DITHER) {
+        let colour = if self.por.contains(PlotOption::DITHER) && self.bpp != BPP::_8 {
             if test_bit!(x ^ y, 0, u8) {
                 hi_nybble!(self.colr)
             } else {
@@ -309,12 +316,6 @@ impl PixelCache {
             BPP::_4 => colour & 0xF,
             BPP::_8 => colour,
         };
-        /*let masked_colour = match self.height {
-            ScreenHeight::_128 => 0,
-            ScreenHeight::_160 => 3,
-            ScreenHeight::_192 => 0,
-            ScreenHeight::Obj => 5
-        };*/
         if self.should_plot(masked_colour) {
             self.primary.write_pix(x, masked_colour);
         }

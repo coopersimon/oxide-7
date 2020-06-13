@@ -207,6 +207,7 @@ impl SuperFX {
             0x3030 => self.set_status_flags(data),
             0x3033 => self.backup = data,
             0x3034 => {
+                //println!("Setting PB to {:X}", self.pb);
                 self.pb = data;
                 self.pb_next = data;
             },
@@ -422,10 +423,10 @@ impl SuperFX {
 
     fn jmp(&mut self, n: u8) {
         if self.flags.contains(FXFlags::ALT1) {
-            println!("LJMP");
+            //println!("LJMP to {:X}_{:X}", lo!(self.regs[n as usize]), self.regs[self.src]);
             self.pc_next = self.regs[self.src];
             self.pb_next = lo!(self.regs[n as usize]);
-            self.cache.set_cbr(0);
+            self.cache.set_cbr(self.pc_next & 0xFFF0);
         } else {
             self.set_pc_reg(self.regs[n as usize]);
         }
@@ -496,8 +497,8 @@ impl SuperFX {
 
         self.set_dst_reg(match self.alt() {
             0 => data as u16,
-            1 => set_hi!(self.regs[self.dst], data),
-            2 => set_lo!(self.regs[self.dst], data),
+            1 => set_hi!(self.regs[self.src], data),
+            2 => set_lo!(self.regs[self.src], data),
             3 => ((data as i8) as i16) as u16,
             _ => unreachable!(),
         });
@@ -999,13 +1000,15 @@ impl SuperFX {
 
     fn read_rom(&mut self, bank: u8, addr: u16) -> u8 {
         let data = self.mem.fx_read(bank, addr);
-        self.clock_inc(if self.clock_select {5} else {3});
+        //self.clock_inc(if self.clock_select {5} else {3});
+        self.clock_inc(1);
         data
     }
 
     fn read_ram(&mut self, addr: u16) -> u8 {
         let data = self.mem.fx_read(self.ramb + 0x70, addr);
-        self.clock_inc(if self.clock_select {5} else {3});
+        //self.clock_inc(if self.clock_select {5} else {3});
+        self.clock_inc(1);
         data
     }
 

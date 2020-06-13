@@ -137,8 +137,9 @@ impl DMAChannel {
         if line_count == 0 {
             false
         } else {
-            self.hdma_line_count = (line_count & 0x7F).wrapping_sub(1) & 0x7F;
-            self.hdma_repeat = test_bit!(line_count, 7, u8);
+            let repeat_line_count = line_count.wrapping_sub(1);
+            self.hdma_line_count = repeat_line_count & 0x7F;
+            self.hdma_repeat = test_bit!(repeat_line_count, 7, u8);
             self.hdma_table_addr = self.hdma_table_addr.wrapping_add(1);
             true
         }
