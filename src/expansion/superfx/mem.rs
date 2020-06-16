@@ -57,7 +57,7 @@ impl FXMem {
                 let bank_addr = ((bank as u32) % 0x8) * 0x10000;
                 self.sram.read(bank_addr + (addr as u32))
             },
-            _ => unreachable!(),
+            _ => panic!("Trying to read from {:X}_{:X}", bank, addr),
         }
     }
 
@@ -72,7 +72,7 @@ impl FXMem {
                 let bank_addr = ((bank as u32) % 0x8) * 0x10000;
                 self.sram.write(bank_addr + (addr as u32), data)
             },
-            _ => unreachable!(),
+            _ => panic!("Trying to write to {:X}_{:X}", bank, addr),
         }
     }
 

@@ -68,7 +68,9 @@ impl InstructionCache {
     pub fn fill(&mut self, addr: u16, data: u8) {
         //println!("Fill cache with {:X} at {:X}", data, addr);
         let cache_addr = addr.wrapping_sub(self.cbr);
+        //if cache_addr < CACHE_SIZE {
         self.lines[(cache_addr >> 4) as usize].data[(cache_addr & 0xF) as usize] = data;
+        //}
     }
 
     // Read whatever happens to be at the cache location.
@@ -84,11 +86,11 @@ impl InstructionCache {
     pub fn write(&mut self, addr: u16, data: u8) {
         let offset = self.cbr % CACHE_SIZE;
         let cache_addr = (addr - offset) % CACHE_SIZE;
+        println!("Writing to cache position {:X}, CBR: {:X}, result: {:X}", addr, self.cbr, cache_addr);
         self.lines[(cache_addr >> 4) as usize].data[(cache_addr & 0xF) as usize] = data;
     }
 
     pub fn set_cbr(&mut self, data: u16) {
-        //println!("Set CBR to {:X}", data);
         self.cbr = data;
         for line in &mut self.lines {
             line.clear();
