@@ -230,7 +230,10 @@ fn main() {
 
         let mut last_frame_time = chrono::Utc::now();
         let frame_time = chrono::Duration::nanoseconds(1_000_000_000 / 60);
-
+    
+        // AUDIO
+        run_audio(&mut snes);
+        
         event_loop.run(move |event, _, _| {
             match event {
                 Event::MainEventsCleared => {
@@ -342,4 +345,66 @@ fn make_save_name(cart_name: &str) -> String {
         Some(pos) => cart_name[0..pos].to_string() + ".sav",
         None      => cart_name.to_string() + ".sav"
     }
+}
+
+fn run_audio(snes: &mut SNES) {
+    use cpal::traits::{
+        DeviceTrait,
+        HostTrait,
+        EventLoopTrait
+    };
+
+    let host = cpal::default_host();
+    let event_loop = host.event_loop();
+    let device = host.default_output_device().expect("no output device available.");
+    let mut supported_formats_range = device.supported_output_formats()
+        .expect("error while querying formats");
+    let format = supported_formats_range.next()
+        .expect("No supported format")
+        .with_max_sample_rate();
+    let stream_id = event_loop.build_output_stream(&device, &format).unwrap();
+    let sample_rate = format.sample_rate.0 as usize;
+
+    let mut audio_handler = snes.enable_audio(sample_rate as f64);
+    std::thread::spawn(move || {
+        event_loop.play_stream(stream_id).expect("Stream could not start.");
+
+        event_loop.run(move |_stream_id, stream_result| {
+            use cpal::StreamData::*;
+            use cpal::UnknownTypeOutputBuffer::*;
+
+            let stream_data = match stream_result {
+                Ok(data) => data,
+                Err(e) => {
+                    eprintln!("An error occurred in audio handler: {}", e);
+                    return;
+                }
+            };
+
+            match stream_data {
+                Output { buffer: U16(mut buffer) } => {
+                    let mut packet = vec![0.0; buffer.len()];
+                    audio_handler.get_audio_packet(&mut packet);
+                    for (out, p) in buffer.chunks_exact_mut(2).zip(packet.chunks_exact(2)) {
+                        for (elem, f) in out.iter_mut().zip(p.iter()) {
+                            *elem = (f * u16::max_value() as f32) as u16
+                        }
+                    }
+                },
+                Output { buffer: I16(mut buffer) } => {
+                    let mut packet = vec![0.0; buffer.len()];
+                    audio_handler.get_audio_packet(&mut packet);
+                    for (out, p) in buffer.chunks_exact_mut(2).zip(packet.chunks_exact(2)) {
+                        for (elem, f) in out.iter_mut().zip(p.iter()) {
+                            *elem = (f * i16::max_value() as f32) as i16
+                        }
+                    }
+                },
+                Output { buffer: F32(mut buffer) } => {
+                    audio_handler.get_audio_packet(&mut buffer);
+                },
+                _ => {},
+            }
+        });
+    });
 }

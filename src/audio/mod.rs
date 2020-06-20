@@ -2,15 +2,16 @@
 // Consists of a CPU interface, the SPC-700 8-bit processor, and an 8-channel DSP.
 
 mod dsp;
-mod generator;
 mod mem;
+mod resampler;
 mod spc;
 mod spcthread;
 
 use crossbeam_channel::{
     bounded,
     unbounded,
-    Sender
+    Sender,
+    Receiver
 };
 
 use sample::frame::Stereo;
@@ -25,11 +26,13 @@ use std::sync::{
 
 use spcthread::SPCCommand;
 
-type SamplePacket = Box<[Stereo<f32>]>;
+pub type SamplePacket = Box<[Stereo<f32>]>;
+pub use resampler::Resampler;
 
 // CPU-side of APU. Sends and receives to/from audio thread, direct connection with CPU.
 pub struct APU {
     command_tx:         Sender<SPCCommand>,
+    signal_rx:          Option<Receiver<SamplePacket>>, // Receiver that will be used on the audio thread.
 
     ports_cpu_to_apu:   [Arc<AtomicU8>; 4],
     ports_apu_to_cpu:   [Arc<AtomicU8>; 4],
@@ -44,14 +47,19 @@ impl APU {
         let ports_apu_to_cpu = [Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0))];
 
         spcthread::start(command_rx, signal_tx, ports_cpu_to_apu.clone(), ports_apu_to_cpu.clone());
-        generator::start(signal_rx);
+        //generator::start(signal_rx);
 
         APU {
             command_tx:         command_tx,
+            signal_rx:          Some(signal_rx),
 
             ports_cpu_to_apu:   [ports_cpu_to_apu[0].clone(), ports_cpu_to_apu[1].clone(), ports_cpu_to_apu[2].clone(), ports_cpu_to_apu[3].clone()],
             ports_apu_to_cpu:   [ports_apu_to_cpu[0].clone(), ports_apu_to_cpu[1].clone(), ports_apu_to_cpu[2].clone(), ports_apu_to_cpu[3].clone()],
         }
+    }
+
+    pub fn get_rx(&mut self) -> Option<Receiver<SamplePacket>> {
+        std::mem::replace(&mut self.signal_rx, None)
     }
 
     pub fn clock(&mut self, cycles: usize) {

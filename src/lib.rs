@@ -12,6 +12,7 @@ mod expansion;
 #[cfg(feature = "debug")]
 pub mod debug;
 
+use audio::Resampler;
 use cpu::CPU;
 use mem::AddrBusA;
 use video::RenderTarget;
@@ -72,6 +73,16 @@ impl SNES {
         frame.copy_from_slice(&(*frame_in));
     }
 
+    /// Call this at the start to enable audio.
+    /// It creates a SNESAudioHandler that can be sent to the audio thread.
+    pub fn enable_audio(&mut self, sample_rate: f64) -> SNESAudioHandler {
+        let rx = self.cpu.get_audio_rx().expect("Audio already enabled!");
+
+        SNESAudioHandler {
+            resampler: Resampler::new(rx, sample_rate),
+        }
+    }
+
     /// Sets a button on the specified joypad.
     pub fn set_button(&mut self, button: Button, val: bool, joypad: usize) {
         use joypad::Button as JB;
@@ -94,6 +105,24 @@ impl SNES {
     /// Get the name of the ROM currently running.
     pub fn rom_name(&self) -> String {
         self.cpu.rom_name()
+    }
+}
+
+/// Created by a SNES.
+/// Call to receive the 
+pub struct SNESAudioHandler {
+    resampler:    Resampler,
+}
+
+impl SNESAudioHandler {
+    /// Fill the provided buffer with samples.
+    /// The format is PCM interleaved stereo.
+    pub fn get_audio_packet(&mut self, buffer: &mut [f32]) {
+        for (o_frame, i_frame) in buffer.chunks_exact_mut(2).zip(&mut self.resampler) {
+            for (o, i) in o_frame.iter_mut().zip(i_frame.iter()) {
+                *o = *i;
+            }
+        }
     }
 }
 

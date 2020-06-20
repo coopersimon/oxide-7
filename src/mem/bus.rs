@@ -74,6 +74,10 @@ impl AddrBusA {
         self.cart.flush();
     }
 
+    pub fn get_audio_rx(&mut self) -> Option<crossbeam_channel::Receiver<crate::audio::SamplePacket>> {
+        self.bus_b.apu.get_rx()
+    }
+
     pub fn rom_name(&self) -> String {
         self.cart.name()
     }

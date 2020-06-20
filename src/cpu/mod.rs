@@ -118,6 +118,10 @@ impl CPU<AddrBusA> {
         self.mem.start_frame(frame);
     }
 
+    pub fn get_audio_rx(&mut self) -> Option<crossbeam_channel::Receiver<crate::audio::SamplePacket>> {
+        self.mem.get_audio_rx()
+    }
+
     pub fn rom_name(&self) -> String {
         self.mem.rom_name()
     }

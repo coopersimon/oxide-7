@@ -12,7 +12,7 @@ pub struct Resampler {
 }
 
 impl Resampler {
-    pub fn new(receiver: Receiver<super::super::SamplePacket>, target_sample_rate: f64) -> Self {
+    pub fn new(receiver: Receiver<super::SamplePacket>, target_sample_rate: f64) -> Self {
         let sinc = Sinc::new(Fixed::from([Stereo::equilibrium(); 2]));
         Resampler {
             converter: Source::new(receiver).from_hz_to_hz(sinc, 32_000.0, target_sample_rate)
@@ -31,14 +31,14 @@ impl Iterator for Resampler {
 
 // TODO: replace this with an async stream?
 struct Source {
-    receiver:   Receiver<super::super::SamplePacket>,
+    receiver:   Receiver<super::SamplePacket>,
 
-    current:    super::super::SamplePacket,
+    current:    super::SamplePacket,
     n:          usize,
 }
 
 impl Source {
-    fn new(receiver: Receiver<super::super::SamplePacket>) -> Self {
+    fn new(receiver: Receiver<super::SamplePacket>) -> Self {
         Source {
             receiver:   receiver,
 
