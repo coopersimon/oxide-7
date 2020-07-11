@@ -349,7 +349,6 @@ fn make_save_name(cart_name: &str) -> String {
 
 fn run_audio(snes: &mut SNES) {
     use cpal::traits::{
-        DeviceTrait,
         HostTrait,
         EventLoopTrait
     };
@@ -357,11 +356,12 @@ fn run_audio(snes: &mut SNES) {
     let host = cpal::default_host();
     let event_loop = host.event_loop();
     let device = host.default_output_device().expect("no output device available.");
-    let mut supported_formats_range = device.supported_output_formats()
+    /*let mut supported_formats_range = device.supported_output_formats()
         .expect("error while querying formats");
     let format = supported_formats_range.next()
         .expect("No supported format")
-        .with_max_sample_rate();
+        .with_max_sample_rate();*/
+    let format = pick_output_format(&device).with_max_sample_rate();
     let stream_id = event_loop.build_output_stream(&device, &format).unwrap();
     let sample_rate = format.sample_rate.0 as usize;
 
@@ -407,4 +407,25 @@ fn run_audio(snes: &mut SNES) {
             }
         });
     });
+}
+
+fn pick_output_format(device: &cpal::Device) -> cpal::SupportedFormat {
+    use cpal::traits::DeviceTrait;
+
+    const MIN: u32 = 32_000;
+
+    let supported_formats_range = device.supported_output_formats()
+        .expect("error while querying formats");
+
+    for format in supported_formats_range {
+        let cpal::SampleRate(v) = format.max_sample_rate;
+        if v >= MIN {
+            return format;
+        }
+    }
+
+    device.supported_output_formats()
+        .expect("error while querying formats")
+        .next()
+        .expect("No supported format")
 }

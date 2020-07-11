@@ -1085,12 +1085,12 @@ impl<B: SPCMem> SPC<B> {
 
     fn sleep(&mut self) {
         // TODO
-        panic!("Unsupported SPC instruction: SLEEP");
+        unimplemented!("Unsupported SPC instruction: SLEEP");
     }
 
     fn stop(&mut self) {
         // TODO
-        panic!("Unsupported SPC instruction: STOP");
+        unimplemented!("Unsupported SPC instruction: STOP");
     }
 
     fn brk(&mut self) {
@@ -1108,7 +1108,7 @@ impl<B: SPCMem> SPC<B> {
 
         self.pc = make16!(pc_hi, pc_lo);
 
-        //panic!("BRK should not be called!");
+        panic!("BRK should not be called!");
     }
 }
 
