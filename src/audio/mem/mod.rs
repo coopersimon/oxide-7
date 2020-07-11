@@ -4,14 +4,6 @@ mod timer;
 use bitflags::bitflags;
 use crossbeam_channel::Sender;
 
-use std::sync::{
-    Arc,
-    atomic::{
-        AtomicU8,
-        Ordering
-    }
-};
-
 use crate::mem::RAM;
 use timer::Timer;
 use super::dsp::DSP;
@@ -57,10 +49,10 @@ pub struct SPCBus {
     dsp:                DSP,
 
     // Port data sent in from CPU.
-    ports_cpu_to_apu:   [Arc<AtomicU8>; 4],
+    ports_cpu_to_apu:   [u8; 4],
 
     // Port data sent out from APU.
-    ports_apu_to_cpu:   [Arc<AtomicU8>; 4],
+    ports_apu_to_cpu:   [u8; 4],
 
     timer_0:            Timer,
     timer_1:            Timer,
@@ -68,7 +60,7 @@ pub struct SPCBus {
 }
 
 impl SPCBus {
-    pub fn new(signal_tx: Sender<super::SamplePacket>, ports_cpu_to_apu: [Arc<AtomicU8>; 4], ports_apu_to_cpu: [Arc<AtomicU8>; 4]) -> Self {
+    pub fn new(signal_tx: Sender<super::SamplePacket>) -> Self {
         SPCBus {
             ram:        RAM::new(SPC_RAM_SIZE),
 
@@ -78,13 +70,21 @@ impl SPCBus {
             dsp_reg_addr:   0,
             dsp:            DSP::new(signal_tx),
 
-            ports_cpu_to_apu:   ports_cpu_to_apu,
-            ports_apu_to_cpu:   ports_apu_to_cpu,
+            ports_cpu_to_apu:   [0; 4],
+            ports_apu_to_cpu:   [0; 4],
 
             timer_0:        Timer::new(128),
             timer_1:        Timer::new(128),
             timer_2:        Timer::new(16),
         }
+    }
+
+    pub fn read_port(&self, port_num: usize) -> u8 {
+        self.ports_apu_to_cpu[port_num]
+    }
+
+    pub fn write_port(&mut self, port_num: usize, data: u8) {
+        self.ports_cpu_to_apu[port_num] = data;
     }
 }
 
@@ -96,26 +96,10 @@ impl SPCMem for SPCBus {
             0xF2 => self.dsp_reg_addr,
             0xF3 => self.dsp.read(self.dsp_reg_addr & 0x7F),
 
-            0xF4 => {
-                let data = self.ports_cpu_to_apu[0].load(Ordering::SeqCst);
-                //println!("APU Read {:X} from {:X}", data, addr);
-                data
-            },
-            0xF5 => {
-                let data = self.ports_cpu_to_apu[1].load(Ordering::SeqCst);
-                //println!("APU Read {:X} from {:X}", data, addr);
-                data
-            },
-            0xF6 => {
-                let data = self.ports_cpu_to_apu[2].load(Ordering::SeqCst);
-                //println!("APU Read {:X} from {:X}", data, addr);
-                data
-            },
-            0xF7 => {
-                let data = self.ports_cpu_to_apu[3].load(Ordering::SeqCst);
-                //println!("APU Read {:X} from {:X}", data, addr);
-                data
-            },
+            0xF4 => self.ports_cpu_to_apu[0],
+            0xF5 => self.ports_cpu_to_apu[1],
+            0xF6 => self.ports_cpu_to_apu[2],
+            0xF7 => self.ports_cpu_to_apu[3],
 
             0xFA..=0xFC => 0,
 
@@ -136,22 +120,10 @@ impl SPCMem for SPCBus {
             0xF2 => self.dsp_reg_addr = data,
             0xF3 => self.dsp.write(self.dsp_reg_addr & 0x7F, data, &self.ram),
 
-            0xF4 => {
-                //println!("APU Write {:X} to {:X}", data, addr);
-                self.ports_apu_to_cpu[0].store(data, Ordering::SeqCst)
-            },
-            0xF5 => {
-                //println!("APU Write {:X} to {:X}", data, addr);
-                self.ports_apu_to_cpu[1].store(data, Ordering::SeqCst)
-            },
-            0xF6 => {
-                //println!("APU Write {:X} to {:X}", data, addr);
-                self.ports_apu_to_cpu[2].store(data, Ordering::SeqCst)
-            },
-            0xF7 => {
-                //println!("APU Write {:X} to {:X}", data, addr);
-                self.ports_apu_to_cpu[3].store(data, Ordering::SeqCst)
-            },
+            0xF4 => self.ports_apu_to_cpu[0] = data,
+            0xF5 => self.ports_apu_to_cpu[1] = data,
+            0xF6 => self.ports_apu_to_cpu[2] = data,
+            0xF7 => self.ports_apu_to_cpu[3] = data,
 
             0xFA => self.timer_0.write_timer_modulo(data),
             0xFB => self.timer_1.write_timer_modulo(data),
@@ -188,13 +160,13 @@ impl SPCBus {
 
         if control.contains(SPCControl::CLEAR_PORT_10) {
             //println!("APU reset ports 0 and 1");
-            self.ports_cpu_to_apu[0].store(0, Ordering::SeqCst);
-            self.ports_cpu_to_apu[1].store(0, Ordering::SeqCst);
+            self.ports_cpu_to_apu[0] = 0;
+            self.ports_cpu_to_apu[1] = 0;
         }
         if control.contains(SPCControl::CLEAR_PORT_32) {
             //println!("APU reset ports 2 and 3");
-            self.ports_cpu_to_apu[2].store(0, Ordering::SeqCst);
-            self.ports_cpu_to_apu[3].store(0, Ordering::SeqCst);
+            self.ports_cpu_to_apu[2] = 0;
+            self.ports_cpu_to_apu[3] = 0;
         }
 
         self.control = control;

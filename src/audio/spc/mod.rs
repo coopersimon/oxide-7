@@ -3,7 +3,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-use super::mem::SPCMem;
+use super::mem::{SPCMem, SPCBus};
 use types::*;
 
 pub struct SPC<B: SPCMem> {
@@ -43,6 +43,17 @@ impl<B: SPCMem> SPC<B> {
         let cycles_passed = self.cycle_count;
         self.cycle_count = 0;
         cycles_passed
+    }
+}
+
+// CPU-side operations.
+impl SPC<SPCBus> {
+    pub fn read_port(&self, port_num: usize) -> u8 {
+        self.bus.read_port(port_num)
+    }
+
+    pub fn write_port(&mut self, port_num: usize, data: u8) {
+        self.bus.write_port(port_num, data);
     }
 }
 

@@ -5,56 +5,43 @@ mod dsp;
 mod mem;
 mod resampler;
 mod spc;
-mod spcthread;
 
 use crossbeam_channel::{
-    bounded,
     unbounded,
-    Sender,
     Receiver
 };
 
 use sample::frame::Stereo;
 
-use std::sync::{
-    Arc,
-    atomic::{
-        AtomicU8,
-        Ordering
-    }
-};
+use crate::constants;
 
-use spcthread::SPCCommand;
+use spc::SPC;
+use mem::SPCBus;
 
 pub type SamplePacket = Box<[Stereo<f32>]>;
 pub use resampler::Resampler;
+    
+const SPC_CLOCK_RATE: usize = 1_024_000;
+const SPC_RATIO: f64 = (SPC_CLOCK_RATE as f64) / (constants::timing::MASTER_HZ as f64); // Around 1/21
 
-// CPU-side of APU. Sends and receives to/from audio thread, direct connection with CPU.
+// The APU processes SPC instructions and generates audio.
 pub struct APU {
-    command_tx:         Sender<SPCCommand>,
-    signal_rx:          Option<Receiver<SamplePacket>>, // Receiver that will be used on the audio thread.
+    signal_rx:      Option<Receiver<SamplePacket>>, // Receiver that will be used on the audio thread.
 
-    ports_cpu_to_apu:   [Arc<AtomicU8>; 4],
-    ports_apu_to_cpu:   [Arc<AtomicU8>; 4],
+    spc:            SPC<SPCBus>,
+    cycle_count:    f64,
 }
 
 impl APU {
     pub fn new() -> Self {
-        let (command_tx, command_rx) = bounded(10);
         let (signal_tx, signal_rx) = unbounded();
-
-        let ports_cpu_to_apu = [Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0))];
-        let ports_apu_to_cpu = [Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0)), Arc::new(AtomicU8::new(0))];
-
-        spcthread::start(command_rx, signal_tx, ports_cpu_to_apu.clone(), ports_apu_to_cpu.clone());
-        //generator::start(signal_rx);
+        let bus = SPCBus::new(signal_tx);
 
         APU {
-            command_tx:         command_tx,
-            signal_rx:          Some(signal_rx),
+            signal_rx:      Some(signal_rx),
 
-            ports_cpu_to_apu:   [ports_cpu_to_apu[0].clone(), ports_cpu_to_apu[1].clone(), ports_cpu_to_apu[2].clone(), ports_cpu_to_apu[3].clone()],
-            ports_apu_to_cpu:   [ports_apu_to_cpu[0].clone(), ports_apu_to_cpu[1].clone(), ports_apu_to_cpu[2].clone(), ports_apu_to_cpu[3].clone()],
+            spc:            SPC::new(bus),
+            cycle_count:    0.0
         }
     }
 
@@ -63,50 +50,26 @@ impl APU {
     }
 
     pub fn clock(&mut self, cycles: usize) {
-        self.command_tx.send(SPCCommand::Clock(cycles)).unwrap();
+        self.cycle_count += calc_cycles(cycles);
+
+        while self.cycle_count > 0.0 {
+            let cycles_passed = self.spc.step() as f64;
+            self.cycle_count -= cycles_passed;
+        }
     }
 
-    pub fn read_port_0(&mut self) -> u8 {
-        let data = self.ports_apu_to_cpu[0].load(Ordering::SeqCst);
-        //println!("CPU Read {:X} from port 0", data);
-        data
+    pub fn read_port(&self, port_num: usize) -> u8 {
+        self.spc.read_port(port_num)
     }
 
-    pub fn read_port_1(&mut self) -> u8 {
-        let data = self.ports_apu_to_cpu[1].load(Ordering::SeqCst);
-        //println!("CPU Read {:X} from port 1", data);
-        data
+    pub fn write_port(&mut self, port_num: usize, data: u8) {
+        self.spc.write_port(port_num, data);
     }
+}
 
-    pub fn read_port_2(&mut self) -> u8 {
-        let data = self.ports_apu_to_cpu[2].load(Ordering::SeqCst);
-        //println!("CPU Read {:X} from port 2", data);
-        data
-    }
-
-    pub fn read_port_3(&mut self) -> u8 {
-        let data = self.ports_apu_to_cpu[3].load(Ordering::SeqCst);
-        //println!("CPU Read {:X} from port 3", data);
-        data
-    }
-
-    pub fn write_port_0(&mut self, data: u8) {
-        self.ports_cpu_to_apu[0].store(data, Ordering::SeqCst);
-        //println!("CPU Write {:X} to port 0", data);
-    }
-
-    pub fn write_port_1(&mut self, data: u8) {
-        self.ports_cpu_to_apu[1].store(data, Ordering::SeqCst);
-        //println!("CPU Write {:X} to port 1", data);
-    }
-
-    pub fn write_port_2(&mut self, data: u8) {
-        self.ports_cpu_to_apu[2].store(data, Ordering::SeqCst);
-        //println!("CPU Write {:X} to port 2", data);
-    }
-
-    pub fn write_port_3(&mut self, data: u8) {
-        self.ports_cpu_to_apu[3].store(data, Ordering::SeqCst);
-        //println!("CPU Write {:X} to port 3", data);
-    }
+// Convert master cycles into SPC cycles.
+// SNES clock: 21_442_080 Hz
+// SPC clock: 1_024_000 Hz
+fn calc_cycles(master_cycles: usize) -> f64 {
+    (master_cycles as f64) * SPC_RATIO
 }

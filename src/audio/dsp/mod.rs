@@ -39,7 +39,7 @@ impl Default for DSPFlags {
 
 //const VIDEO_FRAME_CYCLES: f32 = (super::spcthread::SPC_CLOCK_RATE as f32) / 60.0;
 const SPC_SAMPLE_RATE: usize = 32_000;
-const SAMPLE_CYCLES: usize = super::spcthread::SPC_CLOCK_RATE / SPC_SAMPLE_RATE;
+const SAMPLE_CYCLES: usize = super::SPC_CLOCK_RATE / SPC_SAMPLE_RATE;
 const SAMPLE_BATCH_SIZE: usize = 512;
 
 #[derive(Default, Clone)]

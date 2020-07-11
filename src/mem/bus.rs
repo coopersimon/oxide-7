@@ -403,15 +403,10 @@ impl AddrBusA {
     }
 }
 
-// Amount of cycles to wait before telling the APU to clock.
-const APU_CYCLE_BATCH: usize = 100;
-
 // Address Bus B, used for hardware registers.
 struct AddrBusB {
     ppu:        PPU,
     apu:        APU,
-
-    apu_cycle_count:    usize,
 
     open_bus:   u8
 }
@@ -422,8 +417,6 @@ impl AddrBusB {
             ppu: PPU::new(),
             apu: APU::new(),
 
-            apu_cycle_count:    0,
-
             open_bus:   0,
         }
     }
@@ -433,10 +426,10 @@ impl AddrBusB {
             0x37        => self.ppu.latch_hv(),
             0x34..=0x3F => self.ppu.read_mem(addr),
             0x40..=0x7F => match addr % 4 {
-                0   => self.apu.read_port_0(),
-                1   => self.apu.read_port_1(),
-                2   => self.apu.read_port_2(),
-                3   => self.apu.read_port_3(),
+                0   => self.apu.read_port(0),
+                1   => self.apu.read_port(1),
+                2   => self.apu.read_port(2),
+                3   => self.apu.read_port(3),
                 _   => unreachable!(),
             },
             _ => self.open_bus//unreachable!("Reading from open bus: {:X}", addr)
@@ -447,10 +440,10 @@ impl AddrBusB {
         match addr {
             0x00..=0x33 => self.ppu.write_mem(addr, data),
             0x40..=0x7F => match addr % 4 {
-                0   => self.apu.write_port_0(data),
-                1   => self.apu.write_port_1(data),
-                2   => self.apu.write_port_2(data),
-                3   => self.apu.write_port_3(data),
+                0   => self.apu.write_port(0, data),
+                1   => self.apu.write_port(1, data),
+                2   => self.apu.write_port(2, data),
+                3   => self.apu.write_port(3, data),
                 _   => unreachable!(),
             },
             0x34..=0x3F => {},
@@ -459,14 +452,8 @@ impl AddrBusB {
         self.open_bus = data;
     }
 
-    // Increase APU cycle count and send message if threshold is reached.
+    // Clock the APU (SPC and DSP)
     fn clock_apu(&mut self, cycles: usize) {
-        self.apu_cycle_count += cycles;
-
-        if self.apu_cycle_count >= APU_CYCLE_BATCH {
-            self.apu.clock(self.apu_cycle_count);
-
-            self.apu_cycle_count = 0;
-        }
+        self.apu.clock(cycles);
     }
 }

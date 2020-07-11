@@ -15,8 +15,6 @@ const BENT_STEP: i16 = 8;     // Bent line slow increase gain adjustment per ste
 const BENT_MAX: i16 = 1536;        // Point at which bent line switches from fast to slow increase.
 
 pub struct Envelope {
-    // sample_rate:    f64, 32_000
-
     adsr:           ADSRSettings,
     sustain:        i16,
 
