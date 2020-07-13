@@ -65,12 +65,11 @@ SA-1 Games
 * PGA European Tour (Intro and music look ok (some crackling in audio), select menu works. Actual gameplay just shows black screen and stops.)
 * PGA Tour 96 (Intro and music look ok, select menu works. Actual gameplay just shows black screen and stops.)
 
-
 Super FX Games
 * Yoshi's Island (intro looks ok in some scenes, BG3 is offset strangely though. audio sounds good. title looks good, with some odd lines on screen. gameplay doesn't seem to work at all yet.)
 * StarFox (intro stars look ok but it ends too early. Ship is not visible in title or in control select. Starting main game seems to break completely. Training works ok, frame rate is very questionable. Music/sound effects sounds ok, but are heavily delayed.)
 * Doom (title loads up ok. Intro music sounds mostly good. Main game is very broken (LJMP?))
-* Stunt Race FX (all graphics look good, including rotating 3d car models. Music/effects sound ok. Main game uses interlace so it crashes.)
+* Stunt Race FX (all graphics look good, including rotating 3d car models. Music/effects sound ok. Main game gets stuck in the FX.)
 
 ### TODO:
 
@@ -83,7 +82,8 @@ Super FX Games
 - Ensure offset change per tile correctness (only test so far is with Chrono Trigger)
 
 ##### Bugs
-- Some background corruption.
+- Some background corruption (FF2, Punch-Out, Super ghouls n ghosts)
+- DMA issues (causing trouble with FF3, maybe ghouls n ghosts)
 
 ##### Audio
 - Echo: test

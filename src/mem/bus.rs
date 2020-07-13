@@ -340,7 +340,7 @@ impl AddrBusA {
     // Transfers a single block of HDMA data. Called during H-blank.
     fn hdma_transfer(&mut self) {
         for chan in 0..8 {
-            if test_bit!(self.hdma_active, chan, u8) {
+            if test_bit!(self.hdma_active, chan, u8) && test_bit!(self.hdma_enable, chan, u8) {
 
                 if self.dma_channels[chan].hdma_step_line() {
                     if self.dma_channels[chan].should_repeat() {
