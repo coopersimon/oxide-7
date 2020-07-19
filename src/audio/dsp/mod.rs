@@ -37,10 +37,9 @@ impl Default for DSPFlags {
     }
 }
 
-//const VIDEO_FRAME_CYCLES: f32 = (super::spcthread::SPC_CLOCK_RATE as f32) / 60.0;
 const SPC_SAMPLE_RATE: usize = 32_000;
 const SAMPLE_CYCLES: usize = super::SPC_CLOCK_RATE / SPC_SAMPLE_RATE;
-const SAMPLE_BATCH_SIZE: usize = 512;
+const SAMPLE_BATCH_SIZE: usize = 64;
 
 #[derive(Default, Clone)]
 pub struct DSPRegisters {
@@ -153,7 +152,7 @@ impl DSP {
             0x6D => self.regs.echo_offset,
             0x7D => self.regs.echo_delay,
 
-            _ if lo_nybble!(addr) == 0xF => self.regs.echo_fir_coefs[(hi_nybble!(addr) as usize) & 0x7] as u8,
+            _ if lo_nybble!(addr) == 0xF => self.regs.echo_fir_coefs[(hi_nybble!(addr) & 0x7) as usize] as u8,
 
             0x00..=0x7F => self.voices[(addr >> 4) as usize].read(addr),
 
@@ -180,7 +179,7 @@ impl DSP {
             0x6D => self.regs.echo_offset = data,
             0x7D => self.set_echo_delay(data),
 
-            _ if lo_nybble!(addr) == 0xF => self.regs.echo_fir_coefs[(hi_nybble!(addr) as usize) & 0x7] = data as i8,
+            _ if lo_nybble!(addr) == 0xF => self.regs.echo_fir_coefs[(hi_nybble!(addr) & 0x7) as usize] = data as i8,
 
             0x00..=0x7F => self.voices[(addr >> 4) as usize].write(addr, data),
 

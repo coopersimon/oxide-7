@@ -109,7 +109,7 @@ impl SPCMem for SPCBus {
 
             0xFFC0..=0xFFFF if self.control.contains(SPCControl::ROM_ENABLE) => self.ipl_rom[(addr - 0xFFC0) as usize],
 
-            _ => self.ram.read(addr as u32)
+            _ => self.ram.read(addr.into())
         }
     }
 
@@ -131,7 +131,7 @@ impl SPCMem for SPCBus {
 
             0xFD..=0xFF => {},
 
-            _ => self.ram.write(addr as u32, data)
+            _ => self.ram.write(addr.into(), data)
         }
     }
 

@@ -67,7 +67,7 @@ impl ADSRSettings {
     }
 
     pub fn sustain_release(&self) -> Option<usize> {
-        let sr = (*self & ADSRSettings::RELEASE).bits() >> 8;
-        super::gain::step_size(sr as u8)
+        let sr = (*self & ADSRSettings::RELEASE).bits();
+        super::gain::step_size(hi!(sr))
     }
 }

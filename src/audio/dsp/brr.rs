@@ -65,7 +65,7 @@ pub fn decode_samples(start: u16, ram: &RAM) -> (Box<[i16]>, bool) {
     let mut last1 = 0;
     let mut last2 = 0;
 
-    for sample in &ram.iter(start as usize).chunks(9) {
+    for sample in &ram.iter(start.into()).chunks(9) {
         let mut sample_iter = sample.into_iter();
         let head = BRRHead::from_bits_truncate(sample_iter.next().unwrap());
         for d in sample_iter {

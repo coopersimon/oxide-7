@@ -743,10 +743,10 @@ impl Renderer {
         let mut sub_window = [true; H_RES];
         window_regs.bg_window(BG::_2, Screen::Sub, &mut sub_window);
 
-        let bg_y = actual_y + (regs.get_mode7_scroll_y() as usize) % 1024;
+        let bg_y = (actual_y + (regs.get_mode7_scroll_y() as usize)) % 1024;
 
         for (x, (main, sub)) in main_line.iter_mut().zip(sub_line.iter_mut()).enumerate() {
-            let bg_x = x + (regs.get_mode7_scroll_x() as usize) % 1024;
+            let bg_x = (x + (regs.get_mode7_scroll_x() as usize)) % 1024;
             // TODO: does this use reflect ?
             let pix = get_mode_7_texel(vram, bg_x, bg_y);
             if main_window[x] { // If pixel shows through main window.

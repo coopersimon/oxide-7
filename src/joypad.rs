@@ -139,7 +139,7 @@ impl Joypad {
     // Latch data into internal register.
     // Important!: buttons must be set for the previous frame before this is done, or there will be a delay.
     fn latch(&mut self) {
-        self.register = self.buttons.bits() as u16;
+        self.register = self.buttons.bits();
     }
 
     // Shift a single bit out (old-style read).
