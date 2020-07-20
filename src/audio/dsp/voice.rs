@@ -1,13 +1,10 @@
 // A single audio channel
 
-use super::envelope::Envelope;
-
-#[derive(Clone, Copy)]
-// These indicate the current BRR sample number.
-enum SampleSource {
-    Samp(usize),
-    Loop(usize)
-}
+use super::{
+    brr::SampleBlock,
+    envelope::Envelope
+};
+use crate::mem::RAM;
 
 pub struct Voice {
     left_vol:   i8,
@@ -23,6 +20,7 @@ pub struct Voice {
     noise:      bool,   // Should this voice generate noise
     pitch_mod:  bool,
     echo:       bool,
+    endx:       bool,
 
     // Read
     envx:       u8,
@@ -30,11 +28,16 @@ pub struct Voice {
 
     // Internal: sample generation
     // TODO: separate this?
-    current_s:      Option<SampleSource>,
-    sample:         Box<[i16]>, // Sample data
-    s_loop:         Box<[i16]>, // Sample loop data
+    loop_addr:      u16,
+    current_addr:   u16,
+
+    sample_num:     usize,
+    sample_block:   SampleBlock,
+
     envelope:       Envelope,
     freq_counter:   u16,
+
+    gauss_prev:     [i32; 3]
 }
 
 impl Voice {
@@ -53,15 +56,21 @@ impl Voice {
             noise:      false,
             pitch_mod:  false,
             echo:       false,
+            endx:       false,
 
             envx:       0,
             outx:       0,
 
-            current_s:      None,
-            sample:         Box::new([]),
-            s_loop:         Box::new([]),
+            loop_addr:      0,
+            current_addr:   0,
+
+            sample_num:     0,
+            sample_block:   SampleBlock::new(),
+
             envelope:       Envelope::new(0, 0),
             freq_counter:   0,
+
+            gauss_prev:     [0; 3],
         }
     }
 
@@ -99,12 +108,18 @@ impl Voice {
     }
 
     // Key on / off
-    pub fn key_on(&mut self, sample: Box<[i16]>, s_loop: Box<[i16]>) {
-        self.sample = sample;
-        self.s_loop = s_loop;
-        self.current_s = Some(SampleSource::Samp(0));
+    pub fn key_on(&mut self, ram: &RAM, sample_addr: u16, loop_addr: u16) {
+        self.loop_addr = loop_addr;
+        self.current_addr = sample_addr;
+        self.sample_num = 0;
+        self.gauss_prev = [0; 3];
+
         self.envelope = Envelope::new(self.adsr, self.gain);
         self.freq_counter = 0;
+        self.endx = false;
+
+        //self.sample_block.reinit();
+        self.sample_block.decode_samples(ram, sample_addr);
     }
 
     pub fn key_off(&mut self) {
@@ -135,12 +150,9 @@ impl Voice {
         self.echo
     }
 
-    // Is this channel currently keyed on?
-    pub fn is_on(&self) -> bool {
-        match self.current_s {
-            Some(SampleSource::Samp(_)) => true,
-            _ => false
-        }
+    // Has this channel indicated it will terminate?
+    pub fn endx(&self) -> bool {
+        self.endx
     }
 
     pub fn read_left_vol(&self) -> i32 {
@@ -154,18 +166,19 @@ impl Voice {
 
 // Generator
 impl Voice {
-    pub fn generate(&mut self, pitch_mod: i16, noise: i16) -> Option<i16> {
-        if let Some(s) = self.current_s {
-            let sample = self.generate_sample();
+    pub fn generate(&mut self, ram: &RAM, pitch_mod: i16, noise: i16) -> Option<i16> {
+        if !self.envelope.muted() {
+            let samples = self.get_samples();
+            let out_sample = self.generate_sample(samples);
             let step = if self.pitch_mod {
                 let factor = ((pitch_mod >> 4) + 0x400) as u32;
                 let step = ((self.pitch as u32) * factor) >> 10;
-                step & 0x3FFF
+                clamp!(step, 0, 0x3FFF)
             } else {
                 self.pitch as u32
             };
-            self.freq_step(s, step);
-            self.apply_envelope(if self.noise {noise} else {sample})
+            self.freq_step(ram, step);
+            self.apply_envelope(if self.noise {noise} else {out_sample})
         } else {
             None
         }
@@ -174,13 +187,22 @@ impl Voice {
 
 // Internal: sample gen
 impl Voice {
+    // Fetch the current samples.
+    fn get_samples(&mut self) -> [i32; 4] {
+        let sample_index = ((self.freq_counter >> 12) & 0xF) as usize;
+        let current = self.sample_block.read(sample_index).into();
+        let prev_0 = if sample_index > 1 {self.sample_block.read(sample_index - 1).into()} else {self.gauss_prev[0]};
+        let prev_1 = if sample_index > 2 {self.sample_block.read(sample_index - 2).into()} else {self.gauss_prev[1]};
+        let prev_2 = if sample_index > 3 {self.sample_block.read(sample_index - 3).into()} else {self.gauss_prev[2]};
+        [current, prev_0, prev_1, prev_2]
+    }
+
     // Mix sample using gaussian filter.
-    fn generate_sample(&self) -> i16 {
+    fn generate_sample(&self, samples: [i32; 4]) -> i16 {
         const MIN: i32 = std::i16::MIN as i32;
         const MAX: i32 = std::i16::MAX as i32;
 
         let gauss_index = ((self.freq_counter >> 4) & 0xFF) as usize;
-        let samples = self.get_samples();
         let mut out = (samples[3] * GAUSS_TABLE[0xFF - gauss_index]) >> 10;
         out += (samples[2] * GAUSS_TABLE[0x1FF - gauss_index]) >> 10;
         out += clamp!((samples[1] * GAUSS_TABLE[0x100 + gauss_index]) >> 10, MIN, MAX);
@@ -188,57 +210,33 @@ impl Voice {
         (clamp!(out, MIN, MAX) >> 1) as i16
     }
 
-    // Get the current sample, and the previous 3.
-    fn get_samples(&self) -> [i32; 4] {
-        let s = self.current_s.expect("Get samples called on 'off' voice.");
-        match s {
-            SampleSource::Samp(i) => {
-                let current = self.sample[i] as i32;
-                let prev_0 = if i > 0 { self.sample[i - 1] } else { 0 } as i32;
-                let prev_1 = if i > 1 { self.sample[i - 2] } else { 0 } as i32;
-                let prev_2 = if i > 2 { self.sample[i - 3] } else { 0 } as i32;
-                [current, prev_0, prev_1, prev_2]
-            },
-            SampleSource::Loop(i) => {
-                let max_idx = self.s_loop.len() - 1;
-                let current = self.s_loop[i] as i32;
-                let prev_0 = if i > 0 { self.s_loop[i - 1] } else { self.s_loop[max_idx] } as i32;
-                let prev_1 = if i > 1 { self.s_loop[i - 2] } else { self.s_loop[max_idx + i - 1] } as i32;
-                let prev_2 = if i > 2 { self.s_loop[i - 3] } else { self.s_loop[max_idx + i - 2] } as i32;
-                [current, prev_0, prev_1, prev_2]
+    // Step after outputting each sample, and figure out if the next block must be decoded.
+    fn freq_step(&mut self, ram: &RAM, step: u32) {
+        let counter = (self.freq_counter as u32) + step;
+        self.freq_counter = counter as u16;
+        // If counter has overflowed, we need to get the next block.
+        if test_bit!(counter, 16, u32) {
+            if self.sample_block.do_loop() {
+                self.endx = true;
+                self.save_samples();
+                self.current_addr = self.loop_addr;
+                self.sample_block.decode_samples(ram, self.current_addr);
+            } else if self.sample_block.end() {
+                self.endx = true;
+                self.envelope.off();
+            } else {
+                self.current_addr += 9;
+                self.save_samples();
+                self.sample_block.decode_samples(ram, self.current_addr);
             }
         }
     }
 
-    // Step after outputting each sample.
-    fn freq_step(&mut self, old_s: SampleSource, step: u32) {
-        let counter = (self.freq_counter as u32) + step;
-        // Sample index is the sample number in the current or next BRR block.
-        let sample_index = ((counter >> 12) as usize) & 0x1F;
-        let sample_number = sample_index & 0xF;
-        self.current_s = match old_s {
-            SampleSource::Samp(i) => {
-                let block_number = (i >> 4) + (sample_index >> 4);
-                let block_offset = block_number << 4;
-                if block_offset >= self.sample.len() {   // If sample has ended...
-                    if self.s_loop.is_empty() {
-                        None    // No loop: end playback.
-                    } else {
-                        Some(SampleSource::Loop(sample_number))
-                    }
-                } else {
-                    let index = block_offset + sample_number;
-                    Some(SampleSource::Samp(index))
-                }
-            },
-            SampleSource::Loop(i) => {
-                let block_number = (i >> 4) + (sample_index >> 4);
-                let block_offset = block_number << 4;
-                let index = block_offset + sample_number;
-                Some(SampleSource::Loop(index % self.s_loop.len()))
-            }
-        };
-        self.freq_counter = counter as u16;
+    // Take the last 3 samples of the previous block, incase we need them for the gaussian filter.
+    fn save_samples(&mut self) {
+        self.gauss_prev[0] = self.sample_block.read(15).into();
+        self.gauss_prev[1] = self.sample_block.read(14).into();
+        self.gauss_prev[2] = self.sample_block.read(13).into();
     }
 
     // Check that the envelope indicates the sample is "on", and multiply the sample by the envelope.
@@ -254,7 +252,6 @@ impl Voice {
             self.outx = ((env_samp >> OUTX_SHIFT) & 0xFF) as u8;
             Some(env_samp)
         } else {
-            self.current_s = None;
             self.envx = 0;
             self.outx = 0;
             None

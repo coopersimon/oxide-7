@@ -1,7 +1,6 @@
 // Decoding the bit rate reduction format.
 
 use bitflags::bitflags;
-use itertools::Itertools;
 
 use crate::mem::RAM;
 
@@ -54,11 +53,76 @@ impl BRRHead {
     fn shift(&self) -> u8 {
         (*self & BRRHead::RANGE).bits() >> 4
     }
+
+    fn end(&self) -> bool {
+        self.contains(BRRHead::END)
+    }
+
+    fn do_loop(&self) -> bool {
+        self.contains(BRRHead::LOOP)
+    }
+}
+
+// A block of 16 BRR-decoded samples.
+pub struct SampleBlock {
+    samples:    [i16; 16],
+    prev_0:     i16,
+    prev_1:     i16,
+
+    end:        bool,
+    do_loop:    bool,
+}
+
+impl SampleBlock {
+    pub fn new() -> Self {
+        Self {
+            samples:    [0; 16],
+            prev_0:     0,
+            prev_1:     0,
+
+            end:        false,
+            do_loop:    false,
+        }
+    }
+
+    // Decode samples.
+    pub fn decode_samples(&mut self, ram: &RAM, addr: u16) {
+        let head = BRRHead::from_bits_truncate(ram.read(addr.into()));
+        let ram_iter = ram.iter((addr + 1).into()).take(8);
+        let sample_iter = self.samples.chunks_mut(2);
+        for (data, sample) in ram_iter.zip(sample_iter) {
+            let first = hi_nybble!(data);
+            let s = decompress_sample(head, first, self.prev_0, self.prev_1);
+            self.prev_1 = self.prev_0;
+            self.prev_0 = s;
+            sample[0] = s;
+
+            let second = lo_nybble!(data);
+            let s = decompress_sample(head, second, self.prev_0, self.prev_1);
+            self.prev_1 = self.prev_0;
+            self.prev_0 = s;
+            sample[1] = s;
+        }
+        self.end = head.end();
+        self.do_loop = head.do_loop();
+    }
+
+    pub fn read(&self, index: usize) -> i16 {
+        self.samples[index]
+    }
+
+    pub fn end(&self) -> bool {
+        self.end
+    }
+
+    pub fn do_loop(&self) -> bool {
+        self.do_loop && self.end
+    }
 }
 
 // Decode BRR samples. Returns a slice of 16-bit PCM,
 // and a bool that indicates whether the sample should loop or not.
-#[inline]
+/*#[inline]
 pub fn decode_samples(start: u16, ram: &RAM) -> (Box<[i16]>, bool) {
     let mut data = Vec::new();
     let mut should_loop = false;
@@ -88,7 +152,7 @@ pub fn decode_samples(start: u16, ram: &RAM) -> (Box<[i16]>, bool) {
     }
 
     (data.into_boxed_slice(), should_loop)
-}
+}*/
 
 #[inline]
 fn decompress_sample(head: BRRHead, encoded: u8, last1: i16, last2: i16) -> i16 {

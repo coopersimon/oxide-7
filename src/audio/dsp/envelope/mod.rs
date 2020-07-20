@@ -48,6 +48,10 @@ impl Envelope {
         self.count = 0;
         self.state = EnvelopeState::Fade;
     }
+
+    pub fn muted(&self) -> bool {
+        self.state == EnvelopeState::Fade && self.gain <= 0
+    }
 }
 
 impl Iterator for Envelope {
@@ -159,15 +163,12 @@ impl Iterator for Envelope {
             },
 
             // Fade
-            EnvelopeState::Fade => {
+            EnvelopeState::Fade if self.gain > 0 => {
                 let out = self.gain;
                 self.gain -= BENT_STEP;
-                if self.gain <= 0 {
-                    None
-                } else {
-                    Some(out)
-                }
+                Some(out)
             },
+            EnvelopeState::Fade => None,    // if gain <= 0
 
             // Static
             EnvelopeState::Static(val) => Some(val),
@@ -177,7 +178,7 @@ impl Iterator for Envelope {
 
 // States along with the step time for each change.
 // The associated values here are the step size; i.e. how many samples should be emitted before altering gain.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum EnvelopeState {
     // ADSR
     Attack(usize),  // Increase of 1/64 per step.

@@ -201,7 +201,7 @@ impl DSP {
         let mut echo_right = 0;
 
         for voice in &mut self.voices {
-            if let Some(v) = voice.generate(prev, self.noise_level) {
+            if let Some(v) = voice.generate(&ram, prev, self.noise_level) {
                 prev = v;
 
                 let v_samp = v as i32;
@@ -312,13 +312,7 @@ impl DSP {
         self.regs.key_on = val;
         for v in 0..8 {
             if test_bit!(val, v, u8) {
-                let (sample, should_loop) = brr::decode_samples(self.get_sample_addr(v, ram), ram);
-                let s_loop = if should_loop {
-                    let (s_loop, _) = brr::decode_samples(self.get_loop_addr(v, ram), ram);
-                    s_loop
-                } else { Box::new([]) };
-
-                self.voices[v].key_on(sample, s_loop);
+                self.voices[v].key_on(ram, self.get_sample_addr(v, ram), self.get_loop_addr(v, ram));
             }
         }
     }
@@ -350,7 +344,7 @@ impl DSP {
 
     fn read_endx(&self) -> u8 {
         (0..8).fold(0, |acc, v| {
-            let end = if self.voices[v].is_on() { 0 } else { bit!(v) };
+            let end = if self.voices[v].endx() { bit!(v) } else { 0 };
             acc | end
         })
     }
