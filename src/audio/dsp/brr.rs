@@ -120,40 +120,6 @@ impl SampleBlock {
     }
 }
 
-// Decode BRR samples. Returns a slice of 16-bit PCM,
-// and a bool that indicates whether the sample should loop or not.
-/*#[inline]
-pub fn decode_samples(start: u16, ram: &RAM) -> (Box<[i16]>, bool) {
-    let mut data = Vec::new();
-    let mut should_loop = false;
-    let mut last1 = 0;
-    let mut last2 = 0;
-
-    for sample in &ram.iter(start.into()).chunks(9) {
-        let mut sample_iter = sample.into_iter();
-        let head = BRRHead::from_bits_truncate(sample_iter.next().unwrap());
-        for d in sample_iter {
-            let first = hi_nybble!(d);
-            let samp = decompress_sample(head, first, last1, last2);
-            data.push(samp);
-            last2 = last1;
-            last1 = samp;
-
-            let second = lo_nybble!(d);
-            let samp = decompress_sample(head, second, last1, last2);
-            data.push(samp);
-            last2 = last1;
-            last1 = samp;
-        }
-        should_loop = head.contains(BRRHead::LOOP);
-        if head.contains(BRRHead::END) {
-            break;
-        }
-    }
-
-    (data.into_boxed_slice(), should_loop)
-}*/
-
 #[inline]
 fn decompress_sample(head: BRRHead, encoded: u8, last1: i16, last2: i16) -> i16 {
     let unpacked = sign_extend_4(encoded) as i16;
