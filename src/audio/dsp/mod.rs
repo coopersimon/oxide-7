@@ -20,7 +20,10 @@ use sample::frame::{
 
 pub use voice::*;
 
-use crate::mem::RAM;
+use crate::{
+    constants::timing,
+    mem::RAM
+};
 
 bitflags! {
     pub struct DSPFlags: u8 {
@@ -38,7 +41,7 @@ impl Default for DSPFlags {
 }
 
 const SPC_SAMPLE_RATE: usize = 32_000;
-const SAMPLE_CYCLES: usize = super::SPC_CLOCK_RATE / SPC_SAMPLE_RATE;
+const SAMPLE_CYCLES: usize = timing::SPC_CLOCK_RATE / SPC_SAMPLE_RATE;
 const SAMPLE_BATCH_SIZE: usize = 64;
 
 #[derive(Default, Clone)]

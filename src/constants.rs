@@ -30,7 +30,11 @@ pub mod timing {
     pub const PAUSE_START: usize = 536;
 
     // Clock rate of CPU.
-    pub const MASTER_HZ: usize = SCANLINE * screen::NUM_SCANLINES * 60;
+    pub const MASTER_HZ: usize = SCANLINE * screen::NUM_SCANLINES * 60; // Clock rate of emulated CPU.
+    pub const REAL_HZ: f64 = 21_477_270.0;                              // Clock rate of real CPU.
+
+    // Clock rate of SPC-700
+    pub const SPC_CLOCK_RATE: usize = 1_024_000;
 }
 
 // Interrupt vector locations. Each contains a 16-bit address.

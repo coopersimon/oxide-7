@@ -13,16 +13,15 @@ use crossbeam_channel::{
 
 use sample::frame::Stereo;
 
-use crate::constants;
+use crate::constants::timing;
 
 use spc::SPC;
 use mem::SPCBus;
 
 pub type SamplePacket = Box<[Stereo<f32>]>;
 pub use resampler::Resampler;
-    
-const SPC_CLOCK_RATE: usize = 1_024_000;
-const SPC_RATIO: f64 = (SPC_CLOCK_RATE as f64) / (constants::timing::MASTER_HZ as f64); // Around 1/21
+
+const SPC_RATIO: f64 = (timing::SPC_CLOCK_RATE as f64) / timing::REAL_HZ; // Around 1/21
 
 // The APU processes SPC instructions and generates audio.
 pub struct APU {
