@@ -235,13 +235,13 @@ fn main() {
     
         // AUDIO
         let audio_stream = make_audio_stream(&mut snes);
-        audio_stream.play();
+        audio_stream.play().expect("Couldn't start audio stream");
+
+        let mut in_focus = true;
         
         event_loop.run(move |event, _, _| {
             match event {
-                Event::MainEventsCleared => {
-                    window.request_redraw();
-                },
+                Event::MainEventsCleared if in_focus => window.request_redraw(),
                 Event::WindowEvent {
                     window_id: _,
                     event: w,
@@ -259,6 +259,7 @@ fn main() {
                             ElementState::Released => false,
                         };
                         match k.virtual_keycode {
+                            Some(VirtualKeyCode::G)         => snes.set_button(Button::A, pressed, 0),
                             Some(VirtualKeyCode::X)         => snes.set_button(Button::A, pressed, 0),
                             Some(VirtualKeyCode::Z)         => snes.set_button(Button::B, pressed, 0),
                             Some(VirtualKeyCode::D)         => snes.set_button(Button::X, pressed, 0),
@@ -278,6 +279,14 @@ fn main() {
                         swapchain_desc.width = size.width;
                         swapchain_desc.height = size.height;
                         swapchain = device.create_swap_chain(&surface, &swapchain_desc);
+                    },
+                    WindowEvent::Focused(focused) => {
+                        in_focus = focused;
+                        if !in_focus {
+                            audio_stream.pause().expect("Couldn't pause audio stream");
+                        } else {
+                            audio_stream.play().expect("Couldn't restart audio stream");
+                        }
                     },
                     _ => {}
                 },
