@@ -9,14 +9,14 @@ A SNES emulator written in Rust.
 * Super Metroid (Looks good. Audio sounds good.)
 * Link to the Past (Graphics seems ok. Audio sounds good.)
 * Final Fantasy 2 (IV) (There is some sort of corrupted overlay (I think BG3 in Mode 1). Otherwise video looks fine. Audio sounds good.)
-* Final Fantasy 3 (VI) (Title looks ok, reads out of bounds after. If this is ignored then the first "scene" doesn't show as memory reads are too slow. Then they look _mostly_ ok. Audio is ok, but some serious ringing artifacts.)
+* Final Fantasy 3 (VI) (Title looks ok, reads out of bounds after (I think this is a bug in the game). Sprite pattern mem has lots of artifacts where it should be empty. Audio is mostly ok, but some moderate ringing artifacts, and the wind sound effect is kinda broken.)
 * Earthbound (Works pretty well. Audio sounds good. Lowest line of pixels looks odd (might not be a bug - this appears in a few games. Might just need to mask this line).)
 * Super Castlevania IV (Works pretty well. Audio sounds good.)
 * Mortal Kombat (looks and plays well now. Audio sounds mostly good.)
 * SimCity (visuals are fine. Audio is fine.)
 * Super Mario All-Stars (works pretty well. sound is pretty good too.)
-* Aladdin (intro works, title screen looks fine now, gameplay seems to work ok - occasional black frames. sound is pretty good now, but seems a bit off (extra sounds/intensity?).)
-* Zombies Ate My Neighbors! (works pretty well. Audio is mostly fine but with some glitches.)
+* Aladdin (intro works, title screen looks fine now, gameplay seems to work ok - occasional black frames, and background layers scrolling by themselves. sound is pretty good now.)
+* Zombies Ate My Neighbors! (works pretty well. Audio is mostly fine (sounds kinda odd but is actually accurate).)
 * Mega Man X (Intro works, and title screen looks ok. The bottom line is incorrect. Audio sounds pretty good but seems to cut out in intro)
 * Tetris & Dr. Mario (fixed anti-piracy screen (SRAM issue), now works great)
 * Super Ghouls 'n Ghosts (Intro and title seem fine, except for mode 7 in intro. Gameplay mostly appears fine but seems to flicker a bit, and the background looks a bit odd sometimes. Audio sounds mostly fine.)
@@ -25,7 +25,7 @@ A SNES emulator written in Rust.
 * Chrono Trigger (works pretty well. Audio is better timed now.)
 * Super Baseball 2020 (looks and sounds good)
 * Dragon Quest 3 (now works. Graphics look good. Audio is mostly good.)
-* Final Fantasy V (mostly looks fine. Some weird instances of colour math not looking quite right. sound is mostly fine but some bass sounds are incorrect)
+* Final Fantasy V (mostly looks fine. Audio sounds a lot better.)
 * FZero (looks good now. audio sounds pretty good.)
 * Gradius III (looks mostly ok, some odd graphical glitches, audio sounds pretty good.)
 * Mario Paint (title shows up ok, might need SNES mouse to see anything else. audio also sounds ok.)
@@ -35,7 +35,7 @@ A SNES emulator written in Rust.
 * Prince of Persia 2 (intro shows up and looks _mostly_ fine. Gameplay is black except when paused (?). audio repeats the same broken loop.)
 * Shadowrun (Intro is fine, when gameplay begins sprites are bugged, audio sounds decent.)
 * International Superstar Soccer (Intro and menus look good. Audio also sounds good)
-* Super Star Wars (looks mostly fine. Audio is pretty good but some timings seem a bit off).
+* Super Star Wars (looks mostly fine. Audio is good).
 * Super Street Fighter II (Looks good (not entirely sure when it started being ok). Audio works good.)
 * Ultima VI (title screen, name select and intro look good. audio sounds good. Now loads ok. Not sure when that changed...)
 * Ultima VII (intro, title screen looks good. audio sounds _mostly_ ok. Main gameplay menus show up but sprites appear not to.)
@@ -86,11 +86,9 @@ Super FX Games
 - DMA issues (causing trouble with FF3, maybe ghouls n ghosts)
 
 ##### Audio
-- Echo: test
-- Pitch modulation: test
-- Fix the slight lag on audio (resampler delay?)
-- SPC timing is still off - most noticeable in Chrono Trigger but some games have occasional random notes.
-    - Apparently Square games are notorious for this - FF3(VI) and Super Mario RPG also have audio trouble.
+- Some notable issues:
+    - Wind sound near the start of FF3 (& in chrono trigger)
+    - Artifacts in FF3 intro music
 
 ##### System
 - Cleanup BCD mode

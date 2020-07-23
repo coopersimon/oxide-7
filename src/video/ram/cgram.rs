@@ -1,7 +1,7 @@
 // CGRAM: contains palette information.
 
 pub struct CGRAM {
-    data:       Vec<u8>,
+    data:       Box<[u8]>,
     addr:       u8,
     hi_byte:    bool,
     buffer:     u8,
@@ -13,7 +13,7 @@ pub struct CGRAM {
 impl CGRAM {
     pub fn new() -> Self {
         CGRAM {
-            data:       vec![0; 512],
+            data:       Box::new([0; 512]),
             addr:       0,
             hi_byte:    false,
             buffer:     0,

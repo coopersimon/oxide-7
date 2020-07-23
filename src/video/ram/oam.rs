@@ -41,7 +41,7 @@ impl From<ObjectAttributes> for SpritePriority {
 }
 
 // A single object in memory.
-#[derive(Clone, Default)]
+#[derive(Clone, Copy, Default)]
 pub struct Object {
     pub x:          i16,
     pub y:          u8,
@@ -119,7 +119,7 @@ impl Object {
 }
 
 pub struct OAM {
-    objects:    Vec<Object>,
+    objects:    Box<[Object]>,
 
     addr_lo:    u8, // Cached internal address values
     addr_hi:    u8,
@@ -132,7 +132,7 @@ pub struct OAM {
 impl OAM {
     pub fn new() -> Self {
         OAM {
-            objects:    vec![Object::default(); NUM_OBJECTS],
+            objects:    Box::new([Object::default(); NUM_OBJECTS]),
 
             addr_lo:    0,
             addr_hi:    0,

@@ -19,7 +19,7 @@ const INC_RATE_32: u8 = 1;
 const VRAM_SIZE: usize = 64 * 1024;
 
 pub struct VRAM {
-    data:           Vec<u8>,
+    data:           Box<[u8]>,
 
     port_control:   PortControl,
     byte_addr:      u16,
@@ -31,7 +31,7 @@ pub struct VRAM {
 impl VRAM {
     pub fn new() -> Self {
         VRAM {
-            data:           vec![0; VRAM_SIZE],
+            data:           Box::new([0; VRAM_SIZE]),
 
             port_control:   PortControl::default(),
             byte_addr:      0,
@@ -49,22 +49,21 @@ impl VRAM {
         let old_word_addr = self.byte_addr / 2;
         let new_word_addr = set_lo!(old_word_addr, addr);
         self.byte_addr = new_word_addr * 2;
+        self.do_read();
     }
 
     pub fn set_addr_hi(&mut self, addr: u8) {
         let old_word_addr = self.byte_addr / 2;
         let new_word_addr = set_hi!(old_word_addr, addr);
         self.byte_addr = new_word_addr * 2;
+        self.do_read();
     }
 
     pub fn read_lo(&mut self) -> u8 {
         let ret = lo!(self.read_buffer);
 
         if !self.port_control.contains(PortControl::INC) {
-            let remapped_addr = self.remap_addr() as usize;
-            let lo = self.data[remapped_addr];
-            let hi = self.data[remapped_addr.wrapping_add(1)];
-            self.read_buffer = make16!(hi, lo);
+            self.do_read();
             self.inc_addr();
         }
 
@@ -75,10 +74,7 @@ impl VRAM {
         let ret = hi!(self.read_buffer);
 
         if self.port_control.contains(PortControl::INC) {
-            let remapped_addr = self.remap_addr() as usize;
-            let lo = self.data[remapped_addr];
-            let hi = self.data[remapped_addr.wrapping_add(1)];
-            self.read_buffer = make16!(hi, lo);
+            self.do_read();
             self.inc_addr();
         }
 
@@ -189,5 +185,13 @@ impl VRAM {
             },
             _ => unreachable!()
         }
+    }
+
+    // Read into the buffer.
+    fn do_read(&mut self) {
+        let remapped_addr = self.remap_addr() as usize;
+        let lo = self.data[remapped_addr];
+        let hi = self.data[remapped_addr.wrapping_add(1)];
+        self.read_buffer = make16!(hi, lo);
     }
 }

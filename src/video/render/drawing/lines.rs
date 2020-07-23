@@ -77,7 +77,7 @@ impl Renderer {
                 (true, true, _)         => SUB_MAP_D_OFFSET,
             };
             let inner_offset = (submap_y * SUB_MAP_LEN * 2) + (submap_x * 2);
-            let addr = start_addr + submap_offset + inner_offset;
+            let addr = (start_addr + submap_offset + inner_offset) & 0xFFFF;
 
             let tile_num_lo = mem.get_vram()[addr];
             let tile_attrs = TileAttributes::from_bits_truncate(mem.get_vram()[(addr + 1)]);
