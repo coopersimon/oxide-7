@@ -13,6 +13,8 @@ use winit::{
     window::WindowBuilder
 };
 
+use cpal::traits::StreamTrait;
+
 use clap::{clap_app, crate_version};
 
 use oxide7::*;
@@ -232,7 +234,8 @@ fn main() {
         let frame_time = chrono::Duration::nanoseconds(1_000_000_000 / 60);
     
         // AUDIO
-        run_audio(&mut snes);
+        let audio_stream = make_audio_stream(&mut snes);
+        audio_stream.play();
         
         event_loop.run(move |event, _, _| {
             match event {
@@ -347,85 +350,48 @@ fn make_save_name(cart_name: &str) -> String {
     }
 }
 
-fn run_audio(snes: &mut SNES) {
+fn make_audio_stream(snes: &mut SNES) -> cpal::Stream {
     use cpal::traits::{
-        HostTrait,
-        EventLoopTrait
+        DeviceTrait,
+        HostTrait
     };
 
     let host = cpal::default_host();
-    let event_loop = host.event_loop();
     let device = host.default_output_device().expect("no output device available.");
-    /*let mut supported_formats_range = device.supported_output_formats()
-        .expect("error while querying formats");
-    let format = supported_formats_range.next()
-        .expect("No supported format")
-        .with_max_sample_rate();*/
-    let format = pick_output_format(&device).with_max_sample_rate();
-    let stream_id = event_loop.build_output_stream(&device, &format).unwrap();
-    let sample_rate = format.sample_rate.0 as usize;
 
-    let mut audio_handler = snes.enable_audio(sample_rate as f64);
-    std::thread::spawn(move || {
-        event_loop.play_stream(stream_id).expect("Stream could not start.");
+    let config = pick_output_config(&device).with_max_sample_rate();
+    let sample_rate = config.sample_rate().0 as f64;
+    println!("Audio sample rate {}", sample_rate);
+    let mut audio_handler = snes.enable_audio(sample_rate);
 
-        event_loop.run(move |_stream_id, stream_result| {
-            use cpal::StreamData::*;
-            use cpal::UnknownTypeOutputBuffer::*;
-
-            let stream_data = match stream_result {
-                Ok(data) => data,
-                Err(e) => {
-                    eprintln!("An error occurred in audio handler: {}", e);
-                    return;
-                }
-            };
-
-            match stream_data {
-                Output { buffer: U16(mut buffer) } => {
-                    let mut packet = vec![0.0; buffer.len()];
-                    audio_handler.get_audio_packet(&mut packet);
-                    for (out, p) in buffer.chunks_exact_mut(2).zip(packet.chunks_exact(2)) {
-                        for (elem, f) in out.iter_mut().zip(p.iter()) {
-                            *elem = (f * u16::max_value() as f32) as u16
-                        }
-                    }
-                },
-                Output { buffer: I16(mut buffer) } => {
-                    let mut packet = vec![0.0; buffer.len()];
-                    audio_handler.get_audio_packet(&mut packet);
-                    for (out, p) in buffer.chunks_exact_mut(2).zip(packet.chunks_exact(2)) {
-                        for (elem, f) in out.iter_mut().zip(p.iter()) {
-                            *elem = (f * i16::max_value() as f32) as i16
-                        }
-                    }
-                },
-                Output { buffer: F32(mut buffer) } => {
-                    audio_handler.get_audio_packet(&mut buffer);
-                },
-                _ => {},
-            }
-        });
-    });
+    device.build_output_stream(
+        &config.into(),
+        move |data: &mut [f32], _| {
+            audio_handler.get_audio_packet(data);
+        },
+        move |err| {
+            println!("Error occurred: {}", err);
+        }
+    ).unwrap()
 }
 
-fn pick_output_format(device: &cpal::Device) -> cpal::SupportedFormat {
+fn pick_output_config(device: &cpal::Device) -> cpal::SupportedStreamConfigRange {
     use cpal::traits::DeviceTrait;
 
     const MIN: u32 = 32_000;
 
-    let supported_formats_range = device.supported_output_formats()
-        .expect("error while querying formats");
+    let supported_configs_range = device.supported_output_configs()
+        .expect("error while querying configs");
 
-    for format in supported_formats_range {
-        let cpal::SampleRate(v) = format.max_sample_rate;
+    for config in supported_configs_range {
+        let cpal::SampleRate(v) = config.max_sample_rate();
         if v >= MIN {
-            return format;
+            return config;
         }
     }
 
-    device.supported_output_formats()
+    device.supported_output_configs()
         .expect("error while querying formats")
         .next()
-        .expect("No supported format")
+        .expect("No supported config")
 }

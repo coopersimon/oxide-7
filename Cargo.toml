@@ -21,7 +21,7 @@ bitflags = "1.1.0"
 chrono = "0.4"
 crossbeam-channel = "0.4.2"
 fixed = "0.5.4"
-cpal = "0.11"
+cpal = "0.12"
 sample = "0.10"
 
 bytemuck = "1.2.0"
