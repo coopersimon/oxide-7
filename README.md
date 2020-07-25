@@ -8,8 +8,8 @@ A SNES emulator written in Rust.
 * Super Mario World (video: some bugged sprites, audio sounds good.)
 * Super Metroid (Looks good. Audio sounds good.)
 * Link to the Past (Graphics seems ok. Audio sounds good.)
-* Final Fantasy 2 (IV) (There is some sort of corrupted overlay (I think BG3 in Mode 1). Otherwise video looks fine. Audio sounds good.)
-* Final Fantasy 3 (VI) (Title looks ok, reads out of bounds after (I think this is a bug in the game). Sprite pattern mem has lots of artifacts where it should be empty. Audio is mostly ok, but some moderate ringing artifacts, and the wind sound effect is kinda broken.)
+* Final Fantasy 2 (IV) (Looks and sounds good.)
+* Final Fantasy 3 (VI) (Title looks ok, reads out of bounds after (I think this is a bug in the game). Audio is mostly ok, but some moderate ringing artifacts, and the wind sound effect is kinda broken.)
 * Earthbound (Works pretty well. Audio sounds good. Lowest line of pixels looks odd (might not be a bug - this appears in a few games. Might just need to mask this line).)
 * Super Castlevania IV (Works pretty well. Audio sounds good.)
 * Mortal Kombat (looks and plays well now. Audio sounds mostly good.)
@@ -19,7 +19,7 @@ A SNES emulator written in Rust.
 * Zombies Ate My Neighbors! (works pretty well. Audio is mostly fine (sounds kinda odd but is actually accurate).)
 * Mega Man X (Intro works, and title screen looks ok. The bottom line is incorrect. Audio sounds pretty good but seems to cut out in intro)
 * Tetris & Dr. Mario (fixed anti-piracy screen (SRAM issue), now works great)
-* Super Ghouls 'n Ghosts (Intro and title seem fine, except for mode 7 in intro. Gameplay mostly appears fine but seems to flicker a bit, and the background looks a bit odd sometimes. Audio sounds mostly fine.)
+* Super Ghouls 'n Ghosts (Intro and title seem fine. Gameplay mostly appears fine but seems to flicker a bit, and the background looks a bit odd sometimes (worse again now). Audio sounds mostly fine.)
 * Donkey Kong Country (looks good. audio sounds great now.)
 * Donkey Kong Country 2 (same as above.)
 * Chrono Trigger (works pretty well. Audio is better timed now.)
@@ -27,12 +27,12 @@ A SNES emulator written in Rust.
 * Dragon Quest 3 (now works. Graphics look good. Audio is mostly good.)
 * Final Fantasy V (mostly looks fine. Audio sounds a lot better.)
 * FZero (looks good now. audio sounds pretty good.)
-* Gradius III (looks mostly ok, some odd graphical glitches, audio sounds pretty good.)
+* Gradius III (looks ok, audio sounds pretty good.)
 * Mario Paint (title shows up ok, might need SNES mouse to see anything else. audio also sounds ok.)
 * Super Punch-out!! (sound seems to work fine, menu graphics look OK, in game looks completely messed up)
 * Warios Woods (audio seems fine, graphics look ok now.)
 * Prince of Persia (graphics look good, audio sounds good, now gameplay is ok.)
-* Prince of Persia 2 (intro shows up and looks _mostly_ fine. Gameplay is black except when paused (?). audio repeats the same broken loop.)
+* Prince of Persia 2 (intro shows up and looks _mostly_ fine. Gameplay is black except when paused (?). audio sounds good now.)
 * Shadowrun (Intro is fine, when gameplay begins sprites are bugged, audio sounds decent.)
 * International Superstar Soccer (Intro and menus look good. Audio also sounds good)
 * Super Star Wars (looks mostly fine. Audio is good).
@@ -80,10 +80,11 @@ Super FX Games
 - Ensure IRQ correctness.
 - Mode 7 mosaic support.
 - Ensure offset change per tile correctness (only test so far is with Chrono Trigger)
+- Check interrupts during DMA.
 
 ##### Bugs
-- Some background corruption (FF2, Punch-Out, Super ghouls n ghosts)
-- DMA issues (causing trouble with FF3, maybe ghouls n ghosts)
+- Some background corruption (Punch-Out, Super ghouls n ghosts)
+- Start HDMA mid-line (Super Ghouls n Ghosts)
 
 ##### Audio
 - Some notable issues:

@@ -263,76 +263,18 @@ impl AddrBusA {
 
     // DMA
     // Keeps cycling until the transfer is done. This pauses the CPU operation.
-    fn dma_transfer(&mut self, mut channels: u8) {
+    fn dma_transfer(&mut self, channels: u8) {
         for chan in 0..8 {
-            while test_bit!(channels, chan, u8) {
-                let (src_addr, dst_addr) = {
-                    let channel = &mut self.dma_channels[chan];
-                    if channel.control.contains(DMAControl::TRANSFER_DIR) {
-                        (channel.get_b_bus_addr(), channel.get_a_bus_addr())
-                    } else {
-                        (channel.get_a_bus_addr(), channel.get_b_bus_addr())
-                    }
-                };
+            if test_bit!(channels, chan, u8) {
+                for i in 0..self.dma_channels[chan].get_count() {
+                    let src_addr = self.dma_channels[chan].get_src_addr(i);
+                    let dst_addr = self.dma_channels[chan].get_dst_addr(i);
 
-                match (self.dma_channels[chan].control & DMAControl::TRANSFER_MODE).bits() {
-                    0 => {
-                        let data = self.read(src_addr).0;
-                        self.write(dst_addr, data);
+                    let data = self.read(src_addr).0;
+                    self.write(dst_addr, data);
 
-                        if self.dma_channels[chan].decrement_count() {
-                            channels ^= bit!(chan);
-                        }
-                    },
-                    1 => for i in 0..2 {
-                        let data = self.read(src_addr + i).0;
-                        self.write(dst_addr + i, data);
-
-                        if self.dma_channels[chan].decrement_count() {
-                            channels ^= bit!(chan);
-                            break;
-                        }
-                    },
-                    2 | 6 => for i in 0..2 {
-                        let data = self.read(src_addr + i).0;
-                        self.write(dst_addr, data);
-
-                        if self.dma_channels[chan].decrement_count() {
-                            channels ^= bit!(chan);
-                            break;
-                        }
-                    },
-                    3 | 7 => for i in 0..4 {
-                        let data = self.read(src_addr + i).0;
-                        self.write(dst_addr + (i / 2), data);
-
-                        if self.dma_channels[chan].decrement_count() {
-                            channels ^= bit!(chan);
-                            break;
-                        }
-                    },
-                    4 => for i in 0..4 {
-                        let data = self.read(src_addr + i).0;
-                        self.write(dst_addr + i, data);
-
-                        if self.dma_channels[chan].decrement_count() {
-                            channels ^= bit!(chan);
-                            break;
-                        }
-                    },
-                    5 => for i in 0..4 {
-                        let data = self.read(src_addr + i).0;
-                        self.write(dst_addr + (i % 2), data);
-
-                        if self.dma_channels[chan].decrement_count() {
-                            channels ^= bit!(chan);
-                            break;
-                        }
-                    },
-                    _ => unreachable!()
+                    self.clock(8);  // TODO: interrupt?
                 }
-
-                self.clock(self.dma_channels[chan].get_cycles());
             }
         }
     }

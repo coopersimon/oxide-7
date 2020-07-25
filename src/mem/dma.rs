@@ -91,22 +91,22 @@ impl DMAChannel {
         }
     }
 
-    pub fn get_a_bus_addr(&mut self) -> u32 {
-        let ret = make24!(self.a_bus_bank, self.a_bus_addr);
-
-        if !self.control.contains(DMAControl::FIXED_ADDR) {
-            if !self.control.contains(DMAControl::ADDR_DEC) {
-                self.a_bus_addr = self.a_bus_addr.wrapping_add(self.bytes_per_cycle);
-            } else {
-                self.a_bus_addr = self.a_bus_addr.wrapping_sub(self.bytes_per_cycle);
-            }
+    // Get the source addr for DMA transfer, for each byte.
+    pub fn get_src_addr(&mut self, i: usize) -> u32 {
+        if self.control.contains(DMAControl::TRANSFER_DIR) {
+            self.get_b_bus_addr(i as u8)
+        } else {
+            self.get_a_bus_addr()
         }
-
-        ret
     }
 
-    pub fn get_b_bus_addr(&mut self) -> u32 {
-        make24!(0, 0x21, self.b_bus_addr)
+    // Get the destination addr for DMA transfer, for each byte.
+    pub fn get_dst_addr(&mut self, i: usize) -> u32 {
+        if self.control.contains(DMAControl::TRANSFER_DIR) {
+            self.get_a_bus_addr()
+        } else {
+            self.get_b_bus_addr(i as u8)
+        }
     }
 
     // Cycles for a single transfer block.
@@ -119,11 +119,14 @@ impl DMAChannel {
         }
     }
 
-    // Decrement the bytes left and return true if the transfer is complete.
-    pub fn decrement_count(&mut self) -> bool {
-        self.count = self.count.wrapping_sub(1);
-
-        self.count == 0
+    // Return the number of bytes to transfer.
+    pub fn get_count(&mut self) -> usize {
+        let count = std::mem::replace(&mut self.count, 0);
+        if count == 0 {
+            0x10000
+        } else {
+            count as usize
+        }
     }
 
     // HDMA
@@ -180,6 +183,35 @@ impl DMAChannel {
             let addr = self.get_hdma_table_addr();
             self.hdma_table_addr = self.hdma_table_addr.wrapping_add(self.bytes_per_cycle);
             addr
+        }
+    }
+}
+
+// Internal
+impl DMAChannel {
+    // Get the A-bus address and increment or decrement as specified.
+    fn get_a_bus_addr(&mut self) -> u32 {
+        let ret = make24!(self.a_bus_bank, self.a_bus_addr);
+
+        if !self.control.contains(DMAControl::FIXED_ADDR) {
+            if !self.control.contains(DMAControl::ADDR_DEC) {
+                self.a_bus_addr = self.a_bus_addr.wrapping_add(1);
+            } else {
+                self.a_bus_addr = self.a_bus_addr.wrapping_sub(1);
+            }
+        }
+
+        ret
+    }
+
+    // Get the B-bus address, modified by the current byte of the transfer and the transfer mode.
+    fn get_b_bus_addr(&mut self, i: u8) -> u32 {
+        match (self.control & DMAControl::TRANSFER_MODE).bits() {
+            0 | 2 | 6 => make24!(0, 0x21, self.b_bus_addr),
+            1 | 5 => make24!(0, 0x21, self.b_bus_addr + (i % 2)),
+            4 => make24!(0, 0x21, self.b_bus_addr + (i % 4)),
+            3 | 7 => make24!(0, 0x21, self.b_bus_addr + ((i / 2) % 2)),
+            _ => unreachable!()
         }
     }
 }
