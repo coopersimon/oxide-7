@@ -398,7 +398,7 @@ impl<B: SPCMem> SPC<B> {
         let op2 = self.read_op(op2_mode);
         let (op1, op1_addr) = self.read_op_and_addr(op1_mode);
 
-        let result = self.arith(op1 as u16, op2 as u16);
+        let result = self.arith(op1.into(), op2.into());
 
         self.write_op(op1_addr, result);
     }
@@ -408,7 +408,7 @@ impl<B: SPCMem> SPC<B> {
         let op2 = self.read_op(op2_mode);
         let (op1, op1_addr) = self.read_op_and_addr(op1_mode);
 
-        let result = self.arith(op1 as u16, !op2 as u16);
+        let result = self.arith(op1.into(), (!op2).into());
 
         self.write_op(op1_addr, result);
     }

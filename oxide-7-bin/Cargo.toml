@@ -1,0 +1,20 @@
+[package]
+name = "oxide-7-bin"
+version = "0.3.0"
+authors = ["Simon Cooper <simon.d.cooper@hotmail.co.uk>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = "0.4"
+bytemuck = "1.2.0"
+futures = "0.3.5"
+wgpu = "0.5.0"
+winit = "0.22"
+clap = "2.33"
+cpal = "0.12"
+
+[dependencies.oxide-7]
+path = "../oxide-7"
+features = ["debug"]

@@ -1,34 +1,6 @@
-[package]
-name = "oxide-7"
-version = "0.2.0"
-authors = ["Simon Cooper <simon.d.cooper@hotmail.co.uk>"]
-edition = "2018"
-default-run = "oxide7-bin"
+[workspace]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[lib]
-name = "oxide7"
-path = "src/lib.rs"
-
-[[bin]]
-name = "oxide7-bin"
-path = "src/bin/main.rs"
-required-features = ["debug"]
-
-[dependencies]
-bitflags = "1.1.0"
-chrono = "0.4"
-crossbeam-channel = "0.4.2"
-fixed = "0.5.4"
-cpal = "0.12"
-sample = "0.10"
-
-bytemuck = "1.2.0"
-futures = "0.3.5"
-wgpu = "0.5.0"
-winit = "0.22"
-clap = "2.33"
-
-[features]
-debug = []
+members = [
+    "oxide-7",
+    "oxide-7-bin"
+]

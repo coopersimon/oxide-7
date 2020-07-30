@@ -32,7 +32,7 @@ impl TestSPCMem {
 
         let mut buffer = vec![0; 1024 * 64];
 
-        reader.read(&mut buffer[0x400..]);
+        reader.read(&mut buffer[0x400..]).unwrap();
 
         Self {
             ram:    buffer

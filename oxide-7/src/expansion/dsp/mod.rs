@@ -63,7 +63,7 @@ impl DSP {
 
             tr: 0,
             trb: 0,
-            sr: StatusFlags::default(),
+            sr: StatusFlags::RQM,
             dr: 0,
             _si: 0,
             _so: 0,
@@ -80,19 +80,19 @@ impl DSP {
 
     pub fn step(&mut self) {
         //if !self.sr.contains(StatusFlags::RQM) {
-        if !self.wait_for_rqm_clear {
+        //if !self.wait_for_rqm_clear {
+            //let pc = self.pc;
             let instr = Instruction::from_bits_truncate(self.fetch_instr());
+            //println!("Instr: {:X} at PC: {:X}", instr.bits(), pc);
 
             if instr.is_alu() {
                 self.alu_instr(instr);
+            } else if instr.is_jp() {
+                self.jp_instr(instr);
             } else {
-                if instr.is_jp() {
-                    self.jp_instr(instr);
-                } else {
-                    self.ld_instr(instr);
-                }
+                self.ld_instr(instr);
             }
-        }
+        //}
     }
 
     // Set RST pin
@@ -121,6 +121,7 @@ impl DSP {
             // 8-bit mode.
             self.sr.remove(StatusFlags::RQM);
             self.wait_for_rqm_clear = false;
+            //println!("Reading8 {:X}", lo!(self.dr));
             lo!(self.dr)
         } else {
             // 16-bit mode.
@@ -129,6 +130,7 @@ impl DSP {
             } else {
                 self.sr.remove(StatusFlags::RQM);
                 self.wait_for_rqm_clear = false;
+                //println!("Reading {:X}", self.dr);
                 hi!(self.dr)
             };
             self.sr.toggle(StatusFlags::DRS);
@@ -138,6 +140,7 @@ impl DSP {
 
     pub fn write_dr(&mut self, data: u8) {
         if self.sr.contains(StatusFlags::DRC) {
+            //println!("Writing8 {:X}", data);
             // 8-bit mode.
             self.sr.remove(StatusFlags::RQM);
             self.wait_for_rqm_clear = false;
@@ -149,17 +152,21 @@ impl DSP {
             } else {
                 self.sr.remove(StatusFlags::RQM);
                 self.wait_for_rqm_clear = false;
-                set_hi!(self.dr, data)
+                let dr = set_hi!(self.dr, data);
+                //println!("Writing {:X}", dr);
+                dr
             };
             self.sr.toggle(StatusFlags::DRS);
         }
     }
 
     pub fn read_sr(&mut self) -> u8 {
+        //println!("Reading sr: {:X}", self.sr);
         hi!(self.sr.bits())
     }
 
     pub fn write_sr(&mut self, data: u8) {
+        //println!("Writing sr: {:X}", data);
         let new_sr = set_hi!(self.sr.bits(), data);
         self.store_sr(new_sr);
     }
@@ -271,10 +278,9 @@ impl DSP {
             0x0BC if !self.sr.contains(StatusFlags::RQM) => self.jump(instr),
             0x0BE if self.sr.contains(StatusFlags::RQM) => {
                 self.jump(instr);
-                self.wait_for_rqm_clear = true;
             },
 
-            0x0..=0x1FF => {},  // Undefined 9-bit jump op
+            0x0..=0x1FF => {},//panic!("Undefined jump op: {:X}", x),  // Undefined 9-bit jump op
             _ => unreachable!()
         }
     }
