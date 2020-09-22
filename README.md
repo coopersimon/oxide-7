@@ -2,7 +2,8 @@
 A SNES emulator written in Rust.
 
 ### How to run me
-`cargo run --release --features="debug" -- [ROM NAME] [--debug (if desired)]`
+The bin is found in the oxide-7-bin folder.
+`cargo run --release -- [ROM NAME] [--debug (if desired)]`
 
 ### Games tested:
 * Super Mario World (video: some bugged sprites, audio sounds good.)
