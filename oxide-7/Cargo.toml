@@ -14,7 +14,10 @@ path = "src/lib.rs"
 bitflags = "1.1.0"
 crossbeam-channel = "0.4.2"
 fixed = "0.5.4"
-sample = "0.10"
+
+[dependencies.dasp]
+version = "0.11"
+features = ["interpolate", "interpolate-sinc", "ring_buffer", "signal"]
 
 [features]
 debug = []

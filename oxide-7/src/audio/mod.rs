@@ -11,7 +11,7 @@ use crossbeam_channel::{
     Receiver
 };
 
-use sample::frame::Stereo;
+use dasp::frame::Stereo;
 
 use crate::constants::timing;
 

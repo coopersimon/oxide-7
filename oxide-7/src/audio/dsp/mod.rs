@@ -13,7 +13,7 @@ mod voice;
 
 use bitflags::bitflags;
 use crossbeam_channel::Sender;
-use sample::frame::{
+use dasp::frame::{
     Frame,
     Stereo
 };
@@ -99,7 +99,7 @@ impl DSP {
 
             echo_buffer_size:   0,
 
-            fir_buffer:         [Stereo::equilibrium(); 8],
+            fir_buffer:         [Stereo::EQUILIBRIUM; 8],
             fir_buffer_index:   0,
 
             noise_level:        -0x4000,
@@ -227,7 +227,7 @@ impl DSP {
         let echo = self.generate_echo(ram, echo_left as i16, echo_right as i16);
 
         let frame = if self.is_mute() {
-            Stereo::equilibrium()
+            Stereo::EQUILIBRIUM
         } else {
             let mut left = clamp!((main_left * (self.regs.main_vol_left as i32)) >> 7, MIN, MAX);
             let mut right = clamp!((main_right * (self.regs.main_vol_right as i32)) >> 7, MIN, MAX);
@@ -276,7 +276,7 @@ impl DSP {
     fn calculate_fir(&mut self, new_sample: Stereo<i16>) -> Stereo<i16> {
         self.fir_buffer[self.fir_buffer_index] = new_sample;
 
-        let out = (0..8).fold(Stereo::equilibrium(), |acc: Stereo<i32>, i| {
+        let out = (0..8).fold(Stereo::EQUILIBRIUM, |acc: Stereo<i32>, i| {
             let index = self.fir_buffer_index.wrapping_sub(7 - i) & 7;
             let buffer_sample = self.fir_buffer[index];
             let fir_coef = self.regs.echo_fir_coefs[i] as i32;
