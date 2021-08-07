@@ -3,7 +3,6 @@ mod header;
 mod sram;
 
 use std::{
-    collections::HashMap,
     io::{
         BufReader,
         Read,
@@ -23,6 +22,7 @@ use header::*;
 use sram::*;
 pub use sram::SRAM;
 
+const LOROM_LARGE_SIZE: usize = 1 << 21;
 const LOROM_RAM_BANK_SIZE: u32 = 0x8000;
 const HIROM_RAM_BANK_SIZE: u32 = 0x2000;
 
@@ -39,25 +39,38 @@ pub fn create_cart(cart_path: &str, save_path: &str, dsp_path: Option<&str>) -> 
         let sram = create_sram(save_path, header.sram_size()).expect("Couldn't make save file.");
         let name = header.rom_name();
 
-        if header.rom_size() > (1 << 21) {
+        if header.rom_size() > LOROM_LARGE_SIZE {
             println!("LOROM Large {:X}: {}", header.rom_mapping(), name);
             Cart::new_lorom_large(reader, sram)
         } else {
             println!("LOROM {:X}: {}", header.rom_mapping(), name);
             Cart::new_lorom(reader, sram)
-        }.named(name).fast_rom(header.fast_rom())
+        }.named(name)
+            .fast_rom(header.fast_rom())
+
+    } else if header.try_exhi(&mut reader) {
+        let sram = create_sram(save_path, header.sram_size()).expect("Couldn't make save file.");
+        let name = header.rom_name();
+
+        println!("EXHIROM {:X}: {}", header.rom_mapping(), name);
+        Cart::new_exhirom(reader, sram)
+            .named(name)
+            .fast_rom(header.fast_rom())
+
     } else if header.try_hi(&mut reader) {
         let sram = create_sram(save_path, header.sram_size()).expect("Couldn't make save file.");
         let name = header.rom_name();
+
         println!("HIROM {:X}: {}", header.rom_mapping(), name);
         Cart::new_hirom(reader, sram)
             .named(name)
             .fast_rom(header.fast_rom())
+
     } else {
         panic!("Unrecognised ROM: {:X}", header.rom_mapping());
     };
 
-    match header.rom_type().enhancement_chip() {
+    let cart_with_ext = match header.rom_type().enhancement_chip() {
         Some(EnhancementChip::DSP) => {
             let dsp_path = dsp_path.expect("Must specify DSP ROM path!");
             let dsp_rom_file = File::open(dsp_path).expect(&format!("Couldn't open DSP ROM file {}", dsp_path));
@@ -70,43 +83,32 @@ pub fn create_cart(cart_path: &str, save_path: &str, dsp_path: Option<&str>) -> 
         Some(EnhancementChip::SuperFX) => cart.with_superfx(),
         Some(e) => panic!("Unsupported enhancement chip {:?}", e),
         None => cart,
-    }.build()
+    };
+
+    cart_with_ext.build()
 }
 
-// ROM banks.
+// ROM.
 pub struct ROM {
-    rom_file:   BufReader<File>,
-    banks:      HashMap<u8, Vec<u8>>,
+    data:       Vec<u8>,
     bank_size:  usize
 }
 
 impl ROM {
-    fn new(cart_file: BufReader<File>, bank_size: usize) -> Self {
+    fn new(mut cart_file: BufReader<File>, bank_size: usize) -> Self {
         // read and store
+        let mut buffer = Vec::new();
+        cart_file.seek(SeekFrom::Start(0)).expect("couldn't seek in file");
+        cart_file.read_to_end(&mut buffer).expect("couldn't read file");
         ROM {
-            rom_file:   cart_file,
-            banks:      HashMap::new(),
+            data:       buffer,
             bank_size:  bank_size
         }
     }
 
     pub fn read(&mut self, bank: u8, addr: u16) -> u8 {
-        if let Some(data) = self.banks.get(&bank) {
-            data[addr as usize]
-        } else {
-            let mut buf = vec![0; self.bank_size];
-
-            let offset = (bank as u64) * (self.bank_size as u64);
-            self.rom_file.seek(SeekFrom::Start(offset))
-                .expect("Couldn't swap in bank");
-
-            self.rom_file.read_exact(&mut buf)
-                .expect(&format!("Couldn't swap in bank at pos ${:X}-${:X}, bank: ${:X}, addr: ${:X}", offset, offset + self.bank_size as u64, bank, addr));
-
-            let data = buf[addr as usize];
-            self.banks.insert(bank, buf);
-            data
-        }
+        let bank_offset = (bank as usize) * self.bank_size;
+        self.data[bank_offset + (addr as usize)]
     }
 }
 
@@ -120,6 +122,7 @@ enum CartMappingMode {
     Lo,
     LoLarge,
     Hi,
+    ExHi,
     SA,
     SuperFX
 }
@@ -253,6 +256,13 @@ impl CartBuilder {
                 self.mappings.insert(2, CartMapping::new(0x40, 0x7F, 0, |bank, addr| CartDevice::ROM(bank - 0x40, addr)));
                 self.mappings.insert(3, CartMapping::new(0xC0, 0xFF, 0, |bank, addr| CartDevice::ROM(bank - 0xC0, addr)));
             },
+            ExHi => {
+                self.mappings.push(CartMapping::new(0x00, 0x1F, 0x8000, |bank, addr| CartDevice::ROM(bank + 0x40, addr)));
+                self.mappings.push(CartMapping::new(0x80, 0xBF, 0x8000, |bank, addr| CartDevice::ROM(bank - 0x80, addr)));
+
+                self.mappings.push(CartMapping::new(0x40, 0x5F, 0, |bank, addr| CartDevice::ROM(bank, addr)));
+                self.mappings.push(CartMapping::new(0xC0, 0xFF, 0, |bank, addr| CartDevice::ROM(bank - 0xC0, addr)));
+            },
             SA => {
                 self.mappings.push(CartMapping::new(0x00, 0x3F, 0x2200, |bank, addr| CartDevice::Expansion(bank, addr)));
                 self.mappings.push(CartMapping::new(0x80, 0xBF, 0x2200, |bank, addr| CartDevice::Expansion(bank, addr)));
@@ -277,7 +287,7 @@ impl CartBuilder {
                     CartDevice::RAM(ram_bank + addr as u32)
                 }));
             },
-            Hi => {
+            Hi | ExHi => {
                 self.mappings.push(CartMapping::new(0x20, 0x3F, 0x6000, |bank, addr| {
                     let ram_bank = ((bank % 0x10) as u32) * HIROM_RAM_BANK_SIZE;
                     CartDevice::RAM(ram_bank + (addr as u32 - 0x6000))
@@ -336,6 +346,14 @@ impl Cart {
 
     fn new_hirom(cart_file: BufReader<File>, ram: Box<dyn SRAM>) -> CartBuilder {
         let mut builder = CartBuilder::new(CartMappingMode::Hi);
+        builder.rom = Some(ROM::new(cart_file, 0x10000));
+        builder.ram = Some(ram);
+
+        builder
+    }
+
+    fn new_exhirom(cart_file: BufReader<File>, ram: Box<dyn SRAM>) -> CartBuilder {
+        let mut builder = CartBuilder::new(CartMappingMode::ExHi);
         builder.rom = Some(ROM::new(cart_file, 0x10000));
         builder.ram = Some(ram);
 

@@ -11,7 +11,7 @@ use std::{
 };
 
 const SA1_MAPPING_MASK: u8 = 0xEB;
-const ROM_MAPPING_MASK: u8 = 0xE9;
+const ROM_MAPPING_MASK: u8 = 0xED;
 
 pub struct ROMHeader {
     data: [u8; 50]
@@ -35,6 +35,18 @@ impl ROMHeader {
 
         (self.rom_mapping() & ROM_MAPPING_MASK) == LO_ROM || 
         (self.rom_mapping() & SA1_MAPPING_MASK) == LO_ROM_SA1
+    }
+
+    /// Set the header to the EXHIROM position, and check if it is a exhirom header.
+    pub fn try_exhi(&mut self, reader: &mut BufReader<File>) -> bool {
+        // TODO: also check 0x40FFB0
+        const EXHI_ROM_HEADER_START: u64 = 0xFFB0;
+        const EXHI_ROM: u8 = 0x25;
+
+        reader.seek(SeekFrom::Start(EXHI_ROM_HEADER_START)).expect("Couldn't seek to cartridge header.");
+        reader.read_exact(&mut self.data).expect("Couldn't read cartridge header.");
+
+        (self.rom_mapping() & ROM_MAPPING_MASK) == EXHI_ROM
     }
 
     /// Set the header to the HIROM position, and check if it is a hirom header.
