@@ -85,6 +85,11 @@ impl SampleBlock {
         }
     }
 
+    pub fn reinit(&mut self) {
+        self.prev_0 = 0;
+        self.prev_1 = 0;
+    }
+
     // Decode samples.
     pub fn decode_samples(&mut self, ram: &RAM, addr: u16) {
         let head = BRRHead::from_bits_truncate(ram.read(addr.into()));

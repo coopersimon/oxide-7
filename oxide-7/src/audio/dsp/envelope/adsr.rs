@@ -54,14 +54,14 @@ impl ADSRSettings {
     // Gives the fraction to sustain at.
     pub fn sustain_level(&self) -> i16 {
         match (*self & ADSRSettings::SUSTAIN_LEVEL).bits() >> 13 {
-            0x0 => 255,
-            0x1 => 511,
-            0x2 => 767,
-            0x3 => 1023,
-            0x4 => 1279,
-            0x5 => 1535,
-            0x6 => 1791,
-            0x7 => 2047,
+            0x0 => 0xFF,
+            0x1 => 0x1FF,
+            0x2 => 0x2FF,
+            0x3 => 0x3FF,
+            0x4 => 0x4FF,
+            0x5 => 0x5FF,
+            0x6 => 0x6FF,
+            0x7 => 0x7FF,
             _ => unreachable!()
         }
     }

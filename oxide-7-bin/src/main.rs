@@ -55,7 +55,7 @@ fn main() {
     let mut snes = SNES::new(&cart_path, &save_file_path, cmd_args.value_of("dsprom"));
 
     if cmd_args.is_present("debug") {
-        #[cfg(feature = "debug")]
+        //#[cfg(feature = "debug")]
         debug::debug_mode(&mut snes);
     } else {
         let event_loop = EventLoop::new();

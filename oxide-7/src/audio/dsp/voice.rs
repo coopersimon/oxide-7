@@ -118,7 +118,7 @@ impl Voice {
         self.freq_counter = 0;
         self.endx = false;
 
-        //self.sample_block.reinit();
+        self.sample_block.reinit();
         self.sample_block.decode_samples(ram, sample_addr);
     }
 
@@ -224,6 +224,9 @@ impl Voice {
             } else if self.sample_block.end() {
                 self.endx = true;
                 self.envelope.off();
+                self.save_samples();
+                self.current_addr = self.loop_addr;
+                self.sample_block.decode_samples(ram, self.current_addr);
             } else {
                 self.current_addr += 9;
                 self.save_samples();
