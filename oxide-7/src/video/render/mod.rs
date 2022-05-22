@@ -9,12 +9,6 @@ use std::sync::{
     Arc, Mutex
 };
 
-use crossbeam_channel::{
-    bounded,
-    Sender,
-    Receiver
-};
-
 // Renderer trait.
 pub trait Renderable {
     fn frame_start(&mut self);
@@ -107,69 +101,33 @@ impl Colour {
     }*/
 }
 
-// Messages to send to the render thread.
-enum RendererMessage {
-    StartFrame(RenderTarget),   // Begin frame, and target the provided byte array.
-    DrawLine(usize),
+/// Reads from video memory and renders a bitmap to a target.
+pub struct Renderer {
+    target:     Option<RenderTarget>,
+    renderer:   drawing::Renderer,
 }
 
-// Renderer for video that spawns a thread to render on.
-pub struct RenderThread {
-    sender:     Sender<RendererMessage>,
-    receiver:   Receiver<()>,
-}
-
-impl RenderThread {
-    pub fn new(mem: super::VRamRef) -> Self {
-        let (send_msg, recv_msg) = bounded(224);
-        let (send_reply, recv_reply) = bounded(224);
-
-        std::thread::spawn(move || {
-            use RendererMessage::*;
-            let mut target = None;
-            let mut renderer = drawing::Renderer::new();
-
-            while let Ok(msg) = recv_msg.recv() {
-                match msg {
-                    StartFrame(data) => {
-                        target = Some(data);
-                    },
-                    DrawLine(y) => {
-                        let mut mem = mem.lock().unwrap();
-                        send_reply.send(()).unwrap();
-                        if !mem.get_bg_registers().in_fblank() {
-                            renderer.setup_caches(&mut mem);
-                            let mut t = target.as_ref().unwrap().lock().unwrap();
-                            renderer.draw_line(&mem, &mut t, y);
-                        } else {
-                            let mut t = target.as_ref().unwrap().lock().unwrap();
-                            clear_line(&mut t, y);
-                        }
-                    }
-                }
-            }
-        });
-
-        RenderThread {
-            sender:     send_msg,
-            receiver:   recv_reply,
+impl Renderer {
+    pub fn new() -> Self {
+        Self {
+            target:     None,
+            renderer:   drawing::Renderer::new(),
         }
     }
 
     pub fn start_frame(&mut self, target: RenderTarget) {
-        self.sender
-            .send(RendererMessage::StartFrame(target))
-            .expect("Couldn't send start frame message!");
+        self.target = Some(target);
     }
 
-    pub fn draw_line(&mut self, y: usize) {
-        self.sender
-            .send(RendererMessage::DrawLine(y))
-            .expect("Couldn't send draw line message!");
-
-        self.receiver
-            .recv()
-            .expect("Draw line");
+    pub fn draw_line(&mut self, mem: &mut super::VideoMem, y: usize) {
+        if !mem.get_bg_registers().in_fblank() {
+            self.renderer.setup_caches(mem);
+            let mut t = self.target.as_ref().unwrap().lock().unwrap();
+            self.renderer.draw_line(&mem, &mut t, y);
+        } else {
+            let mut t = self.target.as_ref().unwrap().lock().unwrap();
+            clear_line(&mut t, y);
+        }
     }
 }
 

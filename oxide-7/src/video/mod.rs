@@ -4,11 +4,6 @@
 mod ram;
 mod render;
 
-use std::sync::{
-    Arc,
-    Mutex
-};
-
 use bitflags::bitflags;
 
 use crate::{
@@ -21,8 +16,6 @@ use crate::{
 
 use ram::VideoMem;
 pub use render::RenderTarget;
-
-type VRamRef = Arc<Mutex<VideoMem>>;
 
 bitflags! {
     #[derive(Default)]
@@ -90,7 +83,7 @@ impl BG {
 pub struct PPU {
     state:          PPUState,
 
-    mem:            VRamRef,
+    mem:            VideoMem,
 
     cycle_count:    usize,  // Current cycle count, into the scanline (0-1364)
     scanline:       usize,  // Current scanline
@@ -104,16 +97,14 @@ pub struct PPU {
     v_timer:        u16,    // $4209-a, for triggering IRQ.
     h_irq_latch:    bool,   // Latched if the horizontal IRQ is triggered.
 
-    renderer:       render::RenderThread,
+    renderer:       render::Renderer,
 }
 
 impl PPU {
     pub fn new() -> Self {
-        let mem = Arc::new(Mutex::new(VideoMem::new()));
-
         PPU {
             state:          PPUState::VBlank,
-            mem:            mem.clone(),
+            mem:            VideoMem::new(),
 
             cycle_count:    0,
             scanline:       0,
@@ -127,7 +118,7 @@ impl PPU {
             v_timer:        0,
             h_irq_latch:    false,
 
-            renderer:       render::RenderThread::new(mem),
+            renderer:       render::Renderer::new(),
         }
     }
 
@@ -137,11 +128,11 @@ impl PPU {
 
     // Memory access from CPU / B Bus
     pub fn read_mem(&mut self, addr: u8) -> u8 {
-        self.mem.lock().unwrap().read(addr)
+        self.mem.read(addr)
     }
 
     pub fn write_mem(&mut self, addr: u8, data: u8) {
-        self.mem.lock().unwrap().write(addr, data);
+        self.mem.write(addr, data);
     }
 
     // Misc
@@ -150,7 +141,7 @@ impl PPU {
     }
 
     pub fn latch_hv(&mut self) -> u8 {
-        self.mem.lock().unwrap().set_latched_hv(
+        self.mem.set_latched_hv(
             (self.cycle_count / timing::DOT_TIME) as u16,   // H
             self.scanline as u16                            // V
         );
@@ -281,7 +272,7 @@ impl PPU {
             },
             ExitHBlank => {
                 self.toggle_hblank(false);
-                self.renderer.draw_line((self.scanline - 1) as usize);
+                self.renderer.draw_line(&mut self.mem, (self.scanline - 1) as usize);
                 self.state = PPUState::DrawingBeforePause;
                 PPUSignal::None
             },
@@ -290,10 +281,7 @@ impl PPU {
                 self.toggle_vblank(true);
                 self.toggle_hblank(false);
 
-                {
-                    let mut mem = self.mem.lock().unwrap();
-                    mem.oam_reset();
-                }
+                self.mem.oam_reset();
 
                 self.state = PPUState::VBlank;
                 self.trigger_nmi()
