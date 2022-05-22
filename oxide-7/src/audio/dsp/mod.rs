@@ -346,10 +346,12 @@ impl DSP {
     }
 
     fn read_endx(&self) -> u8 {
-        (0..8).fold(0, |acc, v| {
+        let ret = (0..8).fold(0, |acc, v| {
             let end = if self.voices[v].endx() { bit!(v) } else { 0 };
             acc | end
-        })
+        });
+        println!("endx: {:X}", ret);
+        ret
     }
 
     fn set_flags(&mut self, val: u8) {

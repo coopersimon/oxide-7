@@ -16,9 +16,9 @@ const BENT_MAX: i16 = 1536;        // Point at which bent line switches from fas
 
 pub struct Envelope {
     adsr:           ADSRSettings,
-    sustain:        i16,
+    pub sustain:        i16,
 
-    state:          EnvelopeState,
+    pub state:          EnvelopeState,
     count:          usize,
 
     gain:           i16,

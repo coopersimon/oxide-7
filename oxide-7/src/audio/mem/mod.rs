@@ -154,9 +154,15 @@ impl SPCBus {
     fn set_control(&mut self, data: u8) {
         let control = SPCControl::from_bits_truncate(data);
 
-        self.timer_0.reset();
-        self.timer_1.reset();
-        self.timer_2.reset();
+        if !control.contains(SPCControl::ENABLE_TIMER_0) {
+            self.timer_0.reset();
+        }
+        if !control.contains(SPCControl::ENABLE_TIMER_1) {
+            self.timer_1.reset();
+        }
+        if !control.contains(SPCControl::ENABLE_TIMER_2) {
+            self.timer_2.reset();
+        }
 
         if control.contains(SPCControl::CLEAR_PORT_10) {
             //println!("APU reset ports 0 and 1");

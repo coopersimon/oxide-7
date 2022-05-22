@@ -40,9 +40,7 @@ impl<B: SPCMem> SPC<B> {
     // Run a single instruction and return how many cycles passed.
     pub fn step(&mut self) -> usize {
         self.execute_instruction();
-        let cycles_passed = self.cycle_count;
-        self.cycle_count = 0;
-        cycles_passed
+        std::mem::replace(&mut self.cycle_count, 0)
     }
 }
 
@@ -828,7 +826,9 @@ impl<B: SPCMem> SPC<B> {
     fn mov_no_flags(&mut self, dst_mode: DataMode, src_mode: DataMode) {
         let data = self.read_op(src_mode);
 
-        self.write_op(dst_mode, data);
+        let (_, dst_addr) = self.read_op_and_addr(dst_mode);
+
+        self.write_op(dst_addr, data);
     }
 
     // Move within direct page of mem.
@@ -873,8 +873,6 @@ impl<B: SPCMem> SPC<B> {
     fn movw_dir(&mut self) {
         let addr = self.fetch();
         let ya = self.get_ya();
-
-        //self.clock_inc(SPC_OP);   // TODO - check
 
         self.write_op_16(addr, ya);
     }
@@ -1236,7 +1234,11 @@ impl<B: SPCMem> SPC<B> {
     }
 
     fn write_op_16(&mut self, addr_lo: u8, data: u16) {
-        self.write_data(self.direct_page(addr_lo), lo!(data));
+        let addr = self.direct_page(addr_lo);
+
+        let _ = self.read_data(addr);   // Dummy read.
+
+        self.write_data(addr, lo!(data));
         self.write_data(self.direct_page(addr_lo.wrapping_add(1)), hi!(data));
     }
 
