@@ -220,9 +220,9 @@ impl PixelCache {
         let y_idx = ((y % 8) * 2) as u32;
         
         self.screen_base + match self.bpp {
-            BPP::_2 => (tile_num * 0x10),
-            BPP::_4 => (tile_num * 0x20),
-            BPP::_8 => (tile_num * 0x40),
+            BPP::_2 => tile_num * 0x10,
+            BPP::_4 => tile_num * 0x20,
+            BPP::_8 => tile_num * 0x40,
         } + y_idx
     }
 

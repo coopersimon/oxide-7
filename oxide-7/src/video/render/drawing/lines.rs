@@ -80,7 +80,7 @@ impl Renderer {
             let addr = (start_addr + submap_offset + inner_offset) & 0xFFFF;
 
             let tile_num_lo = mem.get_vram()[addr];
-            let tile_attrs = TileAttributes::from_bits_truncate(mem.get_vram()[(addr + 1)]);
+            let tile_attrs = TileAttributes::from_bits_truncate(mem.get_vram()[addr + 1]);
 
             // Use tile data to find correct texel.
             let mut tile_num = make16!((tile_attrs & TileAttributes::TILE_NUM).bits(), tile_num_lo) as usize;

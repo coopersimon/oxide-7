@@ -394,7 +394,9 @@ impl Cart {
                     CartDevice::RAM(addr) => self.ram.write(addr, data),
                     CartDevice::Expansion(bank, addr) => {
                         //println!("Writing {:X} to {:X}", data, addr);
-                        self.expansion.as_mut().map_or((), |e| e.write(bank, addr, data));
+                        if let Some(e) = self.expansion.as_mut() {
+                            e.write(bank, addr, data);
+                        }
                     },
                 }
             }
@@ -410,7 +412,9 @@ impl Cart {
 
     // Write to expansion port slot.
     pub fn write_exp(&mut self, addr: u16, data: u8) {
-        self.expansion.as_mut().map_or((), |e| e.write(0, addr, data));
+        if let Some(e) = self.expansion.as_mut() {
+            e.write(0, addr, data);
+        }
     }
 
     pub fn flush(&mut self) {
