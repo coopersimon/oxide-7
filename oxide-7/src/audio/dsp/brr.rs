@@ -136,11 +136,7 @@ fn decompress_sample(head: BRRHead, encoded: u8, last1: i16, last2: i16) -> i16 
 // Sign extend a 4-bit signed value to 8 bits.
 #[inline]
 fn sign_extend_4(val: u8) -> i8 {
-    if test_bit!(val, 3, u8) {
-        (val | 0xF0) as i8
-    } else {
-        val as i8
-    }
+    ((val as i8) << 4) >> 4
 }
 
 // Take the lower 15 bits of a value and sign extend to 16 bits.

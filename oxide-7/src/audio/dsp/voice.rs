@@ -191,9 +191,9 @@ impl Voice {
     fn get_samples(&mut self) -> [i32; 4] {
         let sample_index = ((self.freq_counter >> 12) & 0xF) as usize;
         let current = self.sample_block.read(sample_index).into();
-        let prev_0 = if sample_index > 1 {self.sample_block.read(sample_index - 1).into()} else {self.gauss_prev[0]};
-        let prev_1 = if sample_index > 2 {self.sample_block.read(sample_index - 2).into()} else {self.gauss_prev[1]};
-        let prev_2 = if sample_index > 3 {self.sample_block.read(sample_index - 3).into()} else {self.gauss_prev[2]};
+        let prev_0 = if sample_index > 0 {self.sample_block.read(sample_index - 1).into()} else {self.gauss_prev[0]};
+        let prev_1 = if sample_index > 1 {self.sample_block.read(sample_index - 2).into()} else {self.gauss_prev[1 - sample_index]};
+        let prev_2 = if sample_index > 2 {self.sample_block.read(sample_index - 3).into()} else {self.gauss_prev[2 - sample_index]};
         [current, prev_0, prev_1, prev_2]
     }
 

@@ -27,10 +27,10 @@ impl GainSettings {
         } else {
             let param = (*self & GainSettings::GAIN_PARAM).bits();
             match (*self & GainSettings::GAIN_MODE).bits() {    // TODO: what should "none" do here? Off or Static(_)?
-                LINEAR_INCREASE     => step_size(param).map_or(EnvelopeState::Static(0), |v| EnvelopeState::LinearIncrease(v)),
-                BENT_LINE_INCREASE  => step_size(param).map_or(EnvelopeState::Static(0), |v| EnvelopeState::BentLineIncrease(v)),
-                LINEAR_DECREASE     => step_size(param).map_or(EnvelopeState::Static(super::MAX_GAIN), |v| EnvelopeState::LinearDecrease(v)),
-                EXP_DECREASE        => step_size(param).map_or(EnvelopeState::Static(super::MAX_GAIN), |v| EnvelopeState::ExpDecrease(v)),
+                LINEAR_INCREASE     => step_size(param).map_or(EnvelopeState::Static(0), EnvelopeState::LinearIncrease),
+                BENT_LINE_INCREASE  => step_size(param).map_or(EnvelopeState::Static(0), EnvelopeState::BentLineIncrease),
+                LINEAR_DECREASE     => step_size(param).map_or(EnvelopeState::Static(super::MAX_GAIN), EnvelopeState::LinearDecrease),
+                EXP_DECREASE        => step_size(param).map_or(EnvelopeState::Static(super::MAX_GAIN), EnvelopeState::ExpDecrease),
                 _ => unreachable!()
             }
         }
