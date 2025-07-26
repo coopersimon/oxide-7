@@ -1,16 +1,14 @@
 mod debug;
 
+use wgpu::util::DeviceExt;
 use winit::{
-    dpi::{
-        Size, LogicalSize
-    },
-    event::{
-        Event, WindowEvent,
-        ElementState,
-        VirtualKeyCode,
-    },
-    event_loop::EventLoop,
-    window::WindowBuilder
+    application::ApplicationHandler, dpi::{
+        LogicalSize, Size, PhysicalSize
+    }, event::{
+        ElementState, WindowEvent
+    }, event_loop::{
+        EventLoop
+    }, window::Window, keyboard::{PhysicalKey, KeyCode}
 };
 
 use cpal::traits::StreamTrait;
@@ -28,6 +26,339 @@ struct Vertex {
 
 unsafe impl bytemuck::Zeroable for Vertex {}
 unsafe impl bytemuck::Pod for Vertex {}
+
+const FRAME_TIME: chrono::Duration = chrono::Duration::nanoseconds(1_000_000_000 / 60);
+
+struct WindowState {
+    window:         std::sync::Arc<Window>,
+    surface:        wgpu::Surface<'static>,
+    surface_config: wgpu::SurfaceConfiguration,
+}
+
+impl WindowState {
+    fn resize_surface(&mut self, size: PhysicalSize<u32>, device: &wgpu::Device) {
+        self.surface_config.width = size.width;
+        self.surface_config.height = size.height;
+        self.surface.configure(device, &self.surface_config);
+    }
+}
+
+struct App {
+    window: Option<WindowState>,
+    snes:   SNES,
+
+    // WGPU params
+    instance:        wgpu::Instance,
+    adapter:         wgpu::Adapter,
+    device:          wgpu::Device,
+    queue:           wgpu::Queue,
+    texture_extent:  wgpu::Extent3d,
+    texture:         wgpu::Texture,
+    bind_group:      wgpu::BindGroup,
+    vertex_buffer:   wgpu::Buffer,
+    render_pipeline: wgpu::RenderPipeline,
+
+    screen_buffer: Vec<u8>,
+    last_frame_time: chrono::DateTime<chrono::Utc>,
+
+    audio_stream: cpal::Stream
+}
+
+impl App {
+    fn new(mut snes: SNES) -> Self {
+        // Setup wgpu
+        let instance = wgpu::Instance::new(&Default::default());
+
+        let adapter = futures::executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::default(),
+            force_fallback_adapter: false,
+            compatible_surface: None,
+        })).expect("Failed to find appropriate adapter");
+
+        let (device, queue) = futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            ..Default::default()
+        })).expect("Failed to create device");
+
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                    },
+                    count: None
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None
+                },
+            ]
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[]
+        });
+
+        let texture_extent = wgpu::Extent3d {
+            width: 512,
+            height: 224,
+            depth_or_array_layers: 1
+        };
+
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: texture_extent,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb]
+        });
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter:     wgpu::FilterMode::Nearest,
+            min_filter:     wgpu::FilterMode::Linear,
+            mipmap_filter:  wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_view)
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler)
+                }
+            ],
+            label: None
+        });
+
+        let vertices = vec![
+            Vertex{position: [-1.0, -1.0], tex_coord: [0.0, 1.0]},
+            Vertex{position: [1.0, -1.0], tex_coord: [1.0, 1.0]},
+            Vertex{position: [-1.0, 1.0], tex_coord: [0.0, 0.0]},
+            Vertex{position: [1.0, 1.0], tex_coord: [1.0, 0.0]},
+        ];
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::VERTEX
+        });
+
+        let shader_module = device.create_shader_module(wgpu::include_wgsl!("./shaders/shader.wgsl"));
+
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader_module,
+                entry_point: Some("vs_main"),
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &[
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x2,
+                            offset: 0,
+                            shader_location: 0,
+                        },
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x2,
+                            offset: 4 * 2,
+                            shader_location: 1,
+                        },
+                    ]
+                }],
+                compilation_options: Default::default()
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                .. Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader_module,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default()
+            }),
+            multiview: None,
+            cache: None
+        });
+
+        let screen_tex_size = 512 * 224 * 4;
+        let audio_stream = make_audio_stream(&mut snes);
+        
+        Self {
+            window: None,
+            snes,
+
+            instance,
+            adapter,
+            device,
+            queue,
+            texture_extent,
+            texture,
+            bind_group,
+            vertex_buffer,
+            render_pipeline,
+
+            screen_buffer: vec![0_u8; screen_tex_size],
+            last_frame_time: chrono::Utc::now(),
+
+            audio_stream: audio_stream
+        }
+    }
+}
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        let window_attrs = Window::default_attributes()
+            .with_inner_size(Size::Logical(LogicalSize{width: 512_f64, height: 448_f64}))
+            .with_title("Oxide-7: ".to_owned() + &self.snes.rom_name());
+        let window = std::sync::Arc::new(event_loop.create_window(window_attrs).unwrap());
+
+        // Setup wgpu
+        let surface = self.instance.create_surface(window.clone()).expect("Failed to create surface");
+
+        let size = window.inner_size();
+        let surface_config = surface.get_default_config(&self.adapter, size.width, size.height).expect("Could not get default surface config");
+        surface.configure(&self.device, &surface_config);
+
+        self.window = Some(WindowState {
+            window, surface, surface_config
+        });
+
+        self.last_frame_time = chrono::Utc::now();
+    
+        // AUDIO
+        self.audio_stream.play().expect("Couldn't start audio stream");
+
+        //let mut in_focus = true;
+    }
+
+    fn window_event(
+            &mut self,
+            event_loop: &winit::event_loop::ActiveEventLoop,
+            _window_id: winit::window::WindowId,
+            event: WindowEvent,
+        ) {
+        match event {
+            WindowEvent::CloseRequested => {
+                event_loop.exit();
+            },
+            WindowEvent::Resized(size) => {
+                self.window.as_mut().unwrap().resize_surface(size, &self.device);
+            },
+            WindowEvent::RedrawRequested => {
+                let now = chrono::Utc::now();
+                if now.signed_duration_since(self.last_frame_time) >= FRAME_TIME {
+                    self.last_frame_time = now;
+    
+                    self.snes.frame(&mut self.screen_buffer);
+    
+                    self.queue.write_texture(
+                        self.texture.as_image_copy(),
+                        &self.screen_buffer, 
+                        wgpu::TexelCopyBufferLayout {
+                            offset: 0,
+                            bytes_per_row: Some(4 * self.texture_extent.width),
+                            rows_per_image: None,
+                        },
+                        self.texture_extent
+                    );
+    
+                    let frame = self.window.as_ref().unwrap().surface.get_current_texture().expect("Timeout when acquiring next swapchain tex.");
+                    let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {label: None});
+    
+                    {
+                        let view = frame.texture.create_view(&Default::default());
+                        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                            label: None,
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view: &view,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                                    store: wgpu::StoreOp::Store,
+                                },
+                                depth_slice: None,
+                                resolve_target: None,
+                            })],
+                            depth_stencil_attachment: None,
+                            ..Default::default()
+                        });
+                        rpass.set_pipeline(&self.render_pipeline);
+                        rpass.set_bind_group(0, &self.bind_group, &[]);
+                        rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                        rpass.draw(0..4, 0..1);
+                    }
+    
+                    self.queue.submit([encoder.finish()]);
+                    frame.present();
+                }
+                self.window.as_ref().unwrap().window.request_redraw();
+            },
+            WindowEvent::KeyboardInput { device_id: _, event, is_synthetic: _ } => {
+                let pressed = match event.state {
+                    ElementState::Pressed => true,
+                    ElementState::Released => false,
+                };
+                match event.physical_key {
+                    PhysicalKey::Code(KeyCode::KeyG)        => self.snes.set_button(Button::A, pressed, 0),
+                    PhysicalKey::Code(KeyCode::KeyX)        => self.snes.set_button(Button::A, pressed, 0),
+                    PhysicalKey::Code(KeyCode::KeyZ)        => self.snes.set_button(Button::B, pressed, 0),
+                    PhysicalKey::Code(KeyCode::KeyD)        => self.snes.set_button(Button::X, pressed, 0),
+                    PhysicalKey::Code(KeyCode::KeyC)        => self.snes.set_button(Button::Y, pressed, 0),
+                    PhysicalKey::Code(KeyCode::KeyA)        => self.snes.set_button(Button::L, pressed, 0),
+                    PhysicalKey::Code(KeyCode::KeyS)        => self.snes.set_button(Button::R, pressed, 0),
+                    PhysicalKey::Code(KeyCode::Space)       => self.snes.set_button(Button::Select, pressed, 0),
+                    PhysicalKey::Code(KeyCode::Enter)       => self.snes.set_button(Button::Start, pressed, 0),
+                    PhysicalKey::Code(KeyCode::ArrowUp)     => self.snes.set_button(Button::Up, pressed, 0),
+                    PhysicalKey::Code(KeyCode::ArrowDown)   => self.snes.set_button(Button::Down, pressed, 0),
+                    PhysicalKey::Code(KeyCode::ArrowLeft)   => self.snes.set_button(Button::Left, pressed, 0),
+                    PhysicalKey::Code(KeyCode::ArrowRight)  => self.snes.set_button(Button::Right, pressed, 0),
+                    _ => {},
+                }
+            }
+            /*WindowEvent::Focused(focused) => {
+                in_focus = focused;
+                if !in_focus {
+                    audio_stream.pause().expect("Couldn't pause audio stream");
+                } else {
+                    audio_stream.play().expect("Couldn't restart audio stream");
+                }
+            },*/
+            _ => {}
+        }
+    }
+}
 
 fn main() {
     let app = clap_app!(oxide7 =>
@@ -58,297 +389,11 @@ fn main() {
         //#[cfg(feature = "debug")]
         debug::debug_mode(&mut snes);
     } else {
-        let event_loop = EventLoop::new();
-        let window = WindowBuilder::new()
-            .with_inner_size(Size::Logical(LogicalSize{width: 512_f64, height: 448_f64}))
-            .with_title("Oxide-7: ".to_owned() + &snes.rom_name())
-            .build(&event_loop).unwrap();
+        let event_loop = EventLoop::new().expect("Failed to create event loop");
 
-        // Setup wgpu
-        let surface = wgpu::Surface::create(&window);
-
-        let adapter = futures::executor::block_on(wgpu::Adapter::request(
-            &wgpu::RequestAdapterOptions {
-                power_preference:   wgpu::PowerPreference::Default,
-                compatible_surface: Some(&surface)
-            },
-            wgpu::BackendBit::PRIMARY
-        )).unwrap();
-
-        let (device, queue) = futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            extensions: wgpu::Extensions {
-                anisotropic_filtering: false,
-            },
-            limits: wgpu::Limits::default()
-        }));
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            bindings: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::SampledTexture {
-                        multisampled: false,
-                        component_type: wgpu::TextureComponentType::Uint,
-                        dimension: wgpu::TextureViewDimension::D2,
-                    },
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler { comparison: false },
-                },
-            ],
-            label: None
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            bind_group_layouts: &[&bind_group_layout],
-        });
-
-        let texture_extent = wgpu::Extent3d {
-            width: 512,
-            height: 224,
-            depth: 1
-        };
-
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: texture_extent,
-            array_layer_count: 1,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
-            label: None,
-        });
-        let texture_view = texture.create_default_view();
-
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter:     wgpu::FilterMode::Nearest,
-            min_filter:     wgpu::FilterMode::Linear,
-            mipmap_filter:  wgpu::FilterMode::Nearest,
-            lod_min_clamp:  0.0,
-            lod_max_clamp:  100.0,
-            compare:        wgpu::CompareFunction::Undefined,
-        });
-
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
-            bindings: &[
-                wgpu::Binding {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture_view)
-                },
-                wgpu::Binding {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler)
-                }
-            ],
-            label: None
-        });
-
-        let size = window.inner_size();
-
-        let mut swapchain_desc = wgpu::SwapChainDescriptor {
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-            format: wgpu::TextureFormat::Bgra8UnormSrgb,
-            width: size.width,
-            height: size.height,
-            present_mode: wgpu::PresentMode::Fifo
-        };
-
-        let mut swapchain = device.create_swap_chain(&surface, &swapchain_desc);
-
-        let vertices = vec![
-            Vertex{position: [-1.0, -1.0], tex_coord: [0.0, 1.0]},
-            Vertex{position: [1.0, -1.0], tex_coord: [1.0, 1.0]},
-            Vertex{position: [-1.0, 1.0], tex_coord: [0.0, 0.0]},
-            Vertex{position: [1.0, 1.0], tex_coord: [1.0, 0.0]},
-        ];
-
-        let vertex_buf = device.create_buffer_with_data(
-            bytemuck::cast_slice(&vertices),
-            wgpu::BufferUsage::VERTEX
-        );
-
-        let vs = include_bytes!("shaders/shader.vert.spv");
-        let vs_module = device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs[..])).unwrap());
-
-        let fs = include_bytes!("shaders/shader.frag.spv");
-        let fs_module = device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs[..])).unwrap());
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            layout: &pipeline_layout,
-            vertex_stage: wgpu::ProgrammableStageDescriptor {
-                module: &vs_module,
-                entry_point: "main",
-            },
-            fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
-                module: &fs_module,
-                entry_point: "main",
-            }),
-            rasterization_state: Some(wgpu::RasterizationStateDescriptor {
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: wgpu::CullMode::None,
-                depth_bias: 0,
-                depth_bias_slope_scale: 0.0,
-                depth_bias_clamp: 0.0,
-            }),
-            primitive_topology: wgpu::PrimitiveTopology::TriangleStrip,
-            color_states: &[wgpu::ColorStateDescriptor {
-                format: wgpu::TextureFormat::Bgra8UnormSrgb,
-                color_blend: wgpu::BlendDescriptor::REPLACE,
-                alpha_blend: wgpu::BlendDescriptor::REPLACE,
-                write_mask: wgpu::ColorWrite::ALL,
-            }],
-            depth_stencil_state: None,
-            vertex_state: wgpu::VertexStateDescriptor {
-                index_format: wgpu::IndexFormat::Uint16,
-                vertex_buffers: &[wgpu::VertexBufferDescriptor {
-                    stride: std::mem::size_of::<Vertex>() as u64,
-                    step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &[
-                        wgpu::VertexAttributeDescriptor {
-                            format: wgpu::VertexFormat::Float2,
-                            offset: 0,
-                            shader_location: 0,
-                        },
-                        wgpu::VertexAttributeDescriptor {
-                            format: wgpu::VertexFormat::Float2,
-                            offset: 4 * 2,
-                            shader_location: 1,
-                        },
-                    ]
-                }],
-            },
-            sample_count: 1,
-            sample_mask: !0,
-            alpha_to_coverage_enabled: false,
-        });
-
-        let mut last_frame_time = chrono::Utc::now();
-        let frame_time = chrono::Duration::nanoseconds(1_000_000_000 / 60);
-    
-        // AUDIO
-        let audio_stream = make_audio_stream(&mut snes);
-        audio_stream.play().expect("Couldn't start audio stream");
-
-        let mut in_focus = true;
-        
-        event_loop.run(move |event, _, _| {
-            match event {
-                Event::MainEventsCleared if in_focus => window.request_redraw(),
-                Event::WindowEvent {
-                    window_id: _,
-                    event: w,
-                } => match w {
-                    WindowEvent::CloseRequested => {
-                        ::std::process::exit(0);
-                    },
-                    WindowEvent::KeyboardInput {
-                        device_id: _,
-                        input: k,
-                        is_synthetic: _,
-                    } => {
-                        let pressed = match k.state {
-                            ElementState::Pressed => true,
-                            ElementState::Released => false,
-                        };
-                        match k.virtual_keycode {
-                            Some(VirtualKeyCode::G)         => snes.set_button(Button::A, pressed, 0),
-                            Some(VirtualKeyCode::X)         => snes.set_button(Button::A, pressed, 0),
-                            Some(VirtualKeyCode::Z)         => snes.set_button(Button::B, pressed, 0),
-                            Some(VirtualKeyCode::D)         => snes.set_button(Button::X, pressed, 0),
-                            Some(VirtualKeyCode::C)         => snes.set_button(Button::Y, pressed, 0),
-                            Some(VirtualKeyCode::A)         => snes.set_button(Button::L, pressed, 0),
-                            Some(VirtualKeyCode::S)         => snes.set_button(Button::R, pressed, 0),
-                            Some(VirtualKeyCode::Space)     => snes.set_button(Button::Select, pressed, 0),
-                            Some(VirtualKeyCode::Return)    => snes.set_button(Button::Start, pressed, 0),
-                            Some(VirtualKeyCode::Up)        => snes.set_button(Button::Up, pressed, 0),
-                            Some(VirtualKeyCode::Down)      => snes.set_button(Button::Down, pressed, 0),
-                            Some(VirtualKeyCode::Left)      => snes.set_button(Button::Left, pressed, 0),
-                            Some(VirtualKeyCode::Right)     => snes.set_button(Button::Right, pressed, 0),
-                            _ => {},
-                        }
-                    },
-                    WindowEvent::Resized(size) => {
-                        swapchain_desc.width = size.width;
-                        swapchain_desc.height = size.height;
-                        swapchain = device.create_swap_chain(&surface, &swapchain_desc);
-                    },
-                    WindowEvent::Focused(focused) => {
-                        in_focus = focused;
-                        if !in_focus {
-                            audio_stream.pause().expect("Couldn't pause audio stream");
-                        } else {
-                            audio_stream.play().expect("Couldn't restart audio stream");
-                        }
-                    },
-                    _ => {}
-                },
-                Event::RedrawRequested(_) => {
-                    let now = chrono::Utc::now();
-                    if now.signed_duration_since(last_frame_time) >= frame_time {
-                        last_frame_time = now;
-
-                        let mut buf = device.create_buffer_mapped(&wgpu::BufferDescriptor {
-                            label: None,
-                            size: FRAME_BUFFER_SIZE as u64,
-                            usage: wgpu::BufferUsage::COPY_SRC | wgpu::BufferUsage::MAP_WRITE
-                        });
-        
-                        snes.frame(&mut buf.data);
-        
-                        let tex_buffer = buf.finish();
-        
-                        let frame = swapchain.get_next_texture().expect("Timeout when acquiring next swapchain tex.");
-                        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {label: None});
-        
-                        encoder.copy_buffer_to_texture(
-                            wgpu::BufferCopyView {
-                                buffer: &tex_buffer,
-                                offset: 0,
-                                bytes_per_row: 4 * texture_extent.width,
-                                rows_per_image: 0
-                            },
-                            wgpu::TextureCopyView {
-                                texture: &texture,
-                                mip_level: 0,
-                                array_layer: 0,
-                                origin: wgpu::Origin3d::ZERO,
-                            },
-                            texture_extent
-                        );
-        
-                        {
-                            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                                    attachment: &frame.view,
-                                    resolve_target: None,
-                                    load_op: wgpu::LoadOp::Clear,
-                                    store_op: wgpu::StoreOp::Store,
-                                    clear_color: wgpu::Color::WHITE,
-                                }],
-                                depth_stencil_attachment: None,
-                            });
-                            rpass.set_pipeline(&render_pipeline);
-                            rpass.set_bind_group(0, &bind_group, &[]);
-                            rpass.set_vertex_buffer(0, &vertex_buf, 0, 0);
-                            rpass.draw(0..4, 0..1);
-                        }
-        
-                        queue.submit(&[encoder.finish()]);
-                    }
-                    
-                },
-                _ => {},
-            }
-
-        });
+        let mut app = App::new(snes);
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+        event_loop.run_app(&mut app).unwrap();
     }
 }
 
