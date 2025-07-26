@@ -60,9 +60,19 @@ impl Signal for Source {
             self.n += 1;
             out
         } else {
-            self.current = self.receiver.recv().unwrap();
-            self.n = 1;
-            self.current[0]
+            if let Ok(current) = self.receiver.try_recv() {
+                self.current = current;
+                self.n = 1;
+                self.current[0]
+            } else if !self.current.is_empty() {
+                // Gradual damping when no audio samples are available.
+                let frame = &mut self.current[self.current.len() - 1];
+                frame[0] = frame[0] * 0.99;
+                frame[1] = frame[1] * 0.99;
+                frame.clone()
+            } else {
+                Stereo::EQUILIBRIUM
+            }
         }
     }
 }
