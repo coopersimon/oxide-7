@@ -65,18 +65,20 @@ impl Iterator for Envelope {
     fn next(&mut self) -> Option<Self::Item> {
         match self.state {
             EnvelopeState::Attack => {
-                let step_len = self.adsr.attack();
                 let out = self.current_gain;
-                self.count += 1;
-
-                // TODO: step_len == 0: instant decay?
-                if self.count >= step_len {
-                    self.current_gain += GAIN_STEP;
-                    self.count = 0;
-                    if self.current_gain >= MAX_ATTACK {
-                        self.current_gain = MAX_ATTACK;
-                        self.state = EnvelopeState::Decay;
+                if let Some(step_len) = self.adsr.attack() {
+                    self.count += 1;
+                    if self.count >= step_len {
+                        self.current_gain += GAIN_STEP;
+                        self.count = 0;
+                        if self.current_gain >= MAX_ATTACK {
+                            self.current_gain = MAX_ATTACK;
+                            self.state = EnvelopeState::Decay;
+                        }
                     }
+                } else {
+                    self.current_gain = MAX_ATTACK;
+                    self.state = EnvelopeState::Decay;
                 }
                 Some(out)
             },
@@ -92,12 +94,13 @@ impl Iterator for Envelope {
                 }
                 if self.current_gain <= sustain_level {
                     self.state = EnvelopeState::Sustain;
+                    self.current_gain = self.adsr.sustain_level();
                     self.count = 0;
                 }
                 Some(out)
             },
             EnvelopeState::Sustain => {
-                let out = self.adsr.sustain_level();
+                let out = self.current_gain;
                 if let Some(step_len) = self.adsr.sustain_release() {
                     self.count += 1;
                     if self.count >= step_len {
