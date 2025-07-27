@@ -164,6 +164,7 @@ impl DSP {
     }
 
     pub fn write(&mut self, addr: u8, data: u8, ram: &RAM) {
+        //println!("Write to DSP: {:X} => {:X}", data, addr);
         match addr {
             0x0C => self.set_main_vol_left(data),
             0x1C => self.set_main_vol_right(data),
@@ -172,7 +173,11 @@ impl DSP {
             0x4C => self.set_key_on(data, ram),
             0x5C => self.set_key_off(data),
             0x6C => self.set_flags(data),
-            0x7C => self.regs.endx = data,
+            0x7C => {
+                for voice in &mut self.voices {
+                    voice.reset_endx();
+                }
+            },
 
             0x0D => self.regs.echo_feedback = data as i8,
             0x2D => self.set_pitch_mod(data),

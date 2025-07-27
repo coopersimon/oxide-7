@@ -164,6 +164,10 @@ impl Voice {
         self.endx
     }
 
+    pub fn reset_endx(&mut self) {
+        self.endx = false;
+    }
+
     pub fn read_left_vol(&self) -> i32 {
         self.left_vol as i32
     }
@@ -234,7 +238,7 @@ impl Voice {
                 self.endx = true;
                 self.envelope.off();
                 self.save_samples();
-                self.current_addr = self.loop_addr;
+                //self.current_addr = self.loop_addr;
                 self.sample_block.decode_samples(ram, self.current_addr);
             } else {
                 self.current_addr += 9;

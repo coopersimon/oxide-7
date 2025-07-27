@@ -128,7 +128,13 @@ impl SampleBlock {
 #[inline]
 fn decompress_sample(head: BRRHead, encoded: u8, last1: i16, last2: i16) -> i16 {
     let unpacked = sign_extend_4(encoded) as i16;
-    let base = (unpacked << head.shift()) >> 1;
+    let shift = head.shift();
+
+    let base = if shift > 12 {
+        (unpacked >> 3) << 11
+    } else {
+        (unpacked << head.shift()) >> 1
+    };
     let samp = base + head.calc_coef_a(last1) + head.calc_coef_b(last2);
     sign_extend_15(samp)
 }
