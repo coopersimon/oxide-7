@@ -22,24 +22,31 @@ impl GainSettings {
         const EXP_DECREASE: u8          = 1 << 5;
 
         if !self.contains(GainSettings::DIRECT) {
-            let param = (*self & GainSettings::DIRECT_PARAM).bits() as i16;
-            EnvelopeState::Static(param * 16)
+            EnvelopeState::Direct
         } else {
-            let param = (*self & GainSettings::GAIN_PARAM).bits();
             match (*self & GainSettings::GAIN_MODE).bits() {    // TODO: what should "none" do here? Off or Static(_)?
-                LINEAR_INCREASE     => step_size(param).map_or(EnvelopeState::Static(0), EnvelopeState::LinearIncrease),
-                BENT_LINE_INCREASE  => step_size(param).map_or(EnvelopeState::Static(0), EnvelopeState::BentLineIncrease),
-                LINEAR_DECREASE     => step_size(param).map_or(EnvelopeState::Static(super::MAX_GAIN), EnvelopeState::LinearDecrease),
-                EXP_DECREASE        => step_size(param).map_or(EnvelopeState::Static(super::MAX_GAIN), EnvelopeState::ExpDecrease),
+                LINEAR_INCREASE     => EnvelopeState::LinearIncrease,
+                BENT_LINE_INCREASE  => EnvelopeState::BentLineIncrease,
+                LINEAR_DECREASE     => EnvelopeState::LinearDecrease,
+                EXP_DECREASE        => EnvelopeState::ExpDecrease,
                 _ => unreachable!()
             }
         }
+    }
+
+    pub fn direct_param(&self) -> i16 {
+        let param = (*self & GainSettings::DIRECT_PARAM).bits() as i16;
+        param * 16
+    }
+
+    pub fn gain_param(&self) -> Option<usize> {
+        let param = (*self & GainSettings::GAIN_PARAM).bits();
+        step_size(param)
     }
 }
 
 // Calculations:
 // Param specifies the number of outputs needed before the envelope changes.
-
 pub fn step_size(param: u8) -> Option<usize> {
     match param {
         0x00 => None,

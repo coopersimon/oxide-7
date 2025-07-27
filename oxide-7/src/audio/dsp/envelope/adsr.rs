@@ -14,24 +14,24 @@ bitflags! {
 
 impl ADSRSettings {
     // Step size (0 -> MAX)
-    pub fn attack(&self) -> Option<usize> {
+    pub fn attack(&self) -> usize {
         match (*self & ADSRSettings::ATTACK).bits() {
-            0x0 => Some(2048),
-            0x1 => Some(1280),
-            0x2 => Some(768),
-            0x3 => Some(512),
-            0x4 => Some(320),
-            0x5 => Some(192),
-            0x6 => Some(128),
-            0x7 => Some(80),
-            0x8 => Some(48),
-            0x9 => Some(32),
-            0xA => Some(20),
-            0xB => Some(12),
-            0xC => Some(8),
-            0xD => Some(5),
-            0xE => Some(3),
-            0xF => None,
+            0x0 => 2048,
+            0x1 => 1280,
+            0x2 => 768,
+            0x3 => 512,
+            0x4 => 320,
+            0x5 => 192,
+            0x6 => 128,
+            0x7 => 80,
+            0x8 => 48,
+            0x9 => 32,
+            0xA => 20,
+            0xB => 12,
+            0xC => 8,
+            0xD => 5,
+            0xE => 3,
+            0xF => 0,
             _ => unreachable!()
         }
     }

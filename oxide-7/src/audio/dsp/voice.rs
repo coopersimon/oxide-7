@@ -98,9 +98,18 @@ impl Voice {
             0x2 => self.pitch = set_lo!(self.pitch, data),
             0x3 => self.pitch = set_hi!(self.pitch, data & 0x3F),
             0x4 => self.src_num = data,
-            0x5 => self.adsr = set_lo!(self.adsr, data),
-            0x6 => self.adsr = set_hi!(self.adsr, data),
-            0x7 => self.gain = data,
+            0x5 => {
+                self.adsr = set_lo!(self.adsr, data);
+                self.envelope.set_adsr(self.adsr);
+            },
+            0x6 => {
+                self.adsr = set_hi!(self.adsr, data);
+                self.envelope.set_adsr(self.adsr);
+            },
+            0x7 => {
+                self.gain = data;
+                self.envelope.set_gain(self.gain);
+            },
             0x8 => self.envx = data,
             0x9 => self.outx = data,
             _ => panic!("Writing to DSP {:X}", addr),
