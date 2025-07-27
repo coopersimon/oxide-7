@@ -477,24 +477,26 @@ impl<B: SPCMem> SPC<B> {
     }
 
     fn div(&mut self) {
-        if self.x == 0 {
-            self.ps.insert(PSFlags::N | PSFlags::V);
-
-            self.y = 0;
-            self.a = 0xFF;
-        } else {
-            let ya = self.get_ya();
-            let result = ya.wrapping_div(self.x as u16);
-            let result8 = lo!(result);
-            let modulo = ya % (self.x as u16);
-
-            self.ps.set(PSFlags::N, test_bit!(result8, 7, u8));
-            self.ps.set(PSFlags::V, test_bit!(modulo, 8));
-            self.ps.set(PSFlags::Z, result8 == 0);
-
-            self.y = lo!(modulo);
-            self.a = result8;
+        let mut ya = self.get_ya() as u32;
+        let x = (self.x as u32) << 9;
+        for _ in 0..9 {
+            ya = (ya << 1) | (ya >> 16);
+            ya = ya & 0x1FFFF;
+            if ya >= x {
+                ya ^= 1;
+            }
+            if ya & 1 == 1 {
+                ya -= x;
+            }
         }
+        self.a = ya as u8;
+
+        self.ps.set(PSFlags::N, test_bit!(self.a, 7, u8));
+        self.ps.set(PSFlags::V, test_bit!(ya, 8, u32));
+        self.ps.set(PSFlags::H, (self.x & 0xF) <= (self.y & 0xF));
+        self.ps.set(PSFlags::Z, self.a == 0);
+
+        self.y = (ya >> 9) as u8;
 
         self.clock_inc(SPC_OP * 11);
     }

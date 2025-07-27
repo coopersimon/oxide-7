@@ -802,6 +802,9 @@ impl<B: MemBus> CPU<B> {
         let imm = self.fetch();
 
         self.p &= PFlags::from_bits_truncate(!imm);
+        if self.pe {
+            self.p |= PFlags::X | PFlags::M;
+        }
         self.clock_inc(self.internal_op_cycles);
     }
 
@@ -906,14 +909,22 @@ impl<B: MemBus> CPU<B> {
         self.db = self.fetch();
         let src_bank = self.fetch();
 
-        let src_addr = make24!(src_bank, self.x);
-        let dst_addr = make24!(self.db, self.y);
+        let (src_addr, dst_addr) = if self.is_x_set() {
+            (make24!(src_bank, 0, lo!(self.x)), make24!(self.db, 0, lo!(self.y)))
+        } else {
+            (make24!(src_bank, self.x), make24!(self.db, self.y))
+        };
 
         let byte = self.read_data(src_addr);
         self.write_data(dst_addr, byte);
 
         self.x = self.x.wrapping_add(1);
         self.y = self.y.wrapping_add(1);
+
+        if self.is_x_set() {
+            self.x = self.x & 0xFF;
+            self.y = self.y & 0xFF;
+        }
 
         self.a = self.a.wrapping_sub(1);
 
@@ -928,14 +939,22 @@ impl<B: MemBus> CPU<B> {
         self.db = self.fetch();
         let src_bank = self.fetch();
 
-        let src_addr = make24!(src_bank, self.x);
-        let dst_addr = make24!(self.db, self.y);
+        let (src_addr, dst_addr) = if self.is_x_set() {
+            (make24!(src_bank, 0, lo!(self.x)), make24!(self.db, 0, lo!(self.y)))
+        } else {
+            (make24!(src_bank, self.x), make24!(self.db, self.y))
+        };
 
         let byte = self.read_data(src_addr);
         self.write_data(dst_addr, byte);
 
         self.x = self.x.wrapping_sub(1);
         self.y = self.y.wrapping_sub(1);
+
+        if self.is_x_set() {
+            self.x = self.x & 0xFF;
+            self.y = self.y & 0xFF;
+        }
 
         self.a = self.a.wrapping_sub(1);
 
@@ -1157,35 +1176,35 @@ impl<B: MemBus> CPU<B> {
             } else {nybble_hi};
 
             self.p.set(PFlags::N, test_bit!(result, 7));
-            // V..?
+            self.p.set(PFlags::V, test_bit!(!(acc ^ add_op) & (acc ^ result), 7));
             self.p.set(PFlags::Z, lo!(result) == 0);
-            self.p.set(PFlags::C, test_bit!(result, 8));
+            self.p.set(PFlags::C, test_bit!(result, 8) || test_bit!(result, 9));
 
             self.a = set_lo!(self.a, lo!(result));
         } else {
             let acc = self.a as u32;
             let add_op = op as u32;
-            let mut nybble_0 = (acc & 0xF) + (add_op & 0xF) + (self.carry() as u32);    // TODO: wrapping add
+            let mut nybble_0 = (acc & 0xF).wrapping_add(add_op & 0xF).wrapping_add(self.carry() as u32);    // TODO: wrapping add
             if nybble_0 > 0x9 {
                 nybble_0 = nybble_0 + 0x6;
             }
-            let mut nybble_1 = (acc & 0xF0) + (add_op & 0xF0) + nybble_0;
+            let mut nybble_1 = (acc & 0xF0).wrapping_add(add_op & 0xF0).wrapping_add(nybble_0);
             if nybble_1 > 0x99 {
                 nybble_1 = nybble_1 + 0x60;
             }
-            let mut nybble_2 = (acc & 0xF00) + (add_op & 0xF00) + nybble_1;
+            let mut nybble_2 = (acc & 0xF00).wrapping_add(add_op & 0xF00).wrapping_add(nybble_1);
             if nybble_2 > 0x999 {
                 nybble_2 = nybble_2 + 0x600;
             }
-            let nybble_3 = (acc & 0xF000) + (add_op & 0xF000) + nybble_2;
+            let nybble_3 = (acc & 0xF000).wrapping_add(add_op & 0xF000).wrapping_add(nybble_2);
             let result = if nybble_3 > 0x9999 {
                 nybble_3 + 0x6000
             } else {nybble_3};
 
             self.p.set(PFlags::N, test_bit!(result, 15, u32));
-            // V..?
+            self.p.set(PFlags::V, test_bit!(!(acc ^ add_op) & (acc ^ result), 15, u32));
             self.p.set(PFlags::Z, lo32!(result) == 0);
-            self.p.set(PFlags::C, test_bit!(result, 16, u32));
+            self.p.set(PFlags::C, test_bit!(result, 16, u32) || test_bit!(result, 17, u32));
 
             self.a = lo32!(result);
         }
@@ -1205,7 +1224,7 @@ impl<B: MemBus> CPU<B> {
             } else {nybble_hi} as u16;
 
             self.p.set(PFlags::N, test_bit!(result, 7));    // this might always be 0
-            // V..?
+            self.p.set(PFlags::V, test_bit!(!(acc ^ !sub_op) & (acc ^ result), 7));
             self.p.set(PFlags::Z, lo!(result) == 0);
             self.p.set(PFlags::C, !test_bit!(result, 8));
 
@@ -1231,7 +1250,7 @@ impl<B: MemBus> CPU<B> {
             } else {nybble_3} as u32;
 
             self.p.set(PFlags::N, test_bit!(result, 15, u32));    // this might always be 0
-            // V..?
+            self.p.set(PFlags::V, test_bit!(!(acc ^ !sub_op) & (acc ^ result), 15, u32));
             self.p.set(PFlags::Z, lo32!(result) == 0);
             self.p.set(PFlags::C, !test_bit!(result, 16, u32));
 
